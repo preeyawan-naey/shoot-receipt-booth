@@ -35,6 +35,22 @@ body {
   user-select: none;
 }
 
+.home-header__logo {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+}
+
+.home-header_printer {
+  width: 40%;
+  height: 40%;
+  object-fit: contain;
+}
+
+.home-header_receipt {
+  width: 100px;
+}
+
 /* ---- Viewport scaling ---- */
 .viewport {
   width: 100vw;
@@ -139,15 +155,7 @@ body {
   border-radius: 2px;
 }
 
-.receipt-preview {
-  width: 38%;
-  background: var(--color-white);
-  padding: 3% 4% 4%;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  margin-top: -2px;
-  position: relative;
-  z-index: 1;
-}
+
 
 .receipt-preview__header {
   text-align: center;
