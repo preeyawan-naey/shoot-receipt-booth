@@ -653,126 +653,40 @@ body {
   overflow-y: auto;
 }
 
-.receipt-output {
-  width: clamp(200px, 52vw, 420px);
-  background: var(--color-white);
-  padding: clamp(12px, 2.5vw, 24px) clamp(10px, 2vw, 20px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+.frame-composite {
+  position: relative;
+  width: clamp(220px, 58vw, 460px);
+  aspect-ratio: 1152 / 2904;
+  overflow: hidden;
 }
 
-.receipt-output__header {
+.frame-composite__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.preview-qr-status {
+  font-size: clamp(12px, 2vw, 18px);
+  color: var(--color-brown);
   text-align: center;
-  margin-bottom: clamp(8px, 1.5vw, 16px);
+  margin-top: clamp(4px, 1vw, 8px);
 }
 
-.receipt-output__shoot {
-  display: block;
-  font-size: clamp(8px, 1.4vw, 14px);
-  font-weight: 600;
-  letter-spacing: 0.25em;
-  color: var(--color-text);
-}
-
-.receipt-output__title {
-  font-family: var(--font-script);
-  font-size: clamp(28px, 6vw, 56px);
-  font-weight: 400;
-  line-height: 1.1;
-  color: var(--color-text);
-}
-
-.receipt-output__booth {
-  display: block;
-  font-size: clamp(10px, 1.8vw, 18px);
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--color-text);
-}
-
-.receipt-output__meta {
-  display: flex;
-  justify-content: space-between;
-  font-family: "Courier New", Courier, monospace;
-  font-size: clamp(7px, 1.2vw, 12px);
-  color: var(--color-text);
-  padding: clamp(6px, 1vw, 12px) 0;
-  border-top: 1px dashed #aaa;
-  border-bottom: 1px dashed #aaa;
-  margin-bottom: clamp(8px, 1.5vw, 16px);
-}
-
-.receipt-output__photos {
+.frame-card__preview {
   width: 100%;
-}
-
-.receipt-output__photos.layout-single {
-  display: flex;
-  flex-direction: column;
-}
-
-.receipt-output__photos.layout-single img {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
+  aspect-ratio: 1152 / 2904;
+  object-fit: contain;
   display: block;
-}
-
-.receipt-output__photos.layout-stack {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(4px, 0.8vw, 8px);
-}
-
-.receipt-output__photos.layout-stack img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  display: block;
-}
-
-.receipt-output__photos.layout-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(4px, 0.8vw, 8px);
-}
-
-.receipt-output__photos.layout-grid img {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  display: block;
-}
-
-.receipt-output__thanks {
-  text-align: center;
-  font-family: "Courier New", Courier, monospace;
-  font-size: clamp(8px, 1.4vw, 14px);
-  letter-spacing: 0.1em;
-  margin: clamp(10px, 2vw, 20px) 0 clamp(8px, 1.5vw, 16px);
-  color: var(--color-text);
-}
-
-.receipt-output__barcode {
-  width: 90%;
-  height: clamp(24px, 4vw, 48px);
-  margin: 0 auto;
-  background: repeating-linear-gradient(
-    90deg,
-    #1a1a1a 0px,
-    #1a1a1a 2px,
-    transparent 2px,
-    transparent 4px,
-    #1a1a1a 4px,
-    #1a1a1a 5px,
-    transparent 5px,
-    transparent 9px
-  );
+  border-radius: 4px;
+  background: #fff;
 }
 
 .preview-actions {
   display: flex;
   gap: clamp(12px, 2.5vw, 24px);
-  width: clamp(200px, 52vw, 420px);
+  width: clamp(220px, 58vw, 460px);
 }
 
 .preview-btn {
@@ -799,12 +713,12 @@ body {
     visibility: hidden;
   }
 
-  #receipt-output,
-  #receipt-output * {
+  #receipt-composite,
+  #receipt-composite * {
     visibility: visible;
   }
 
-  #receipt-output {
+  #receipt-composite {
     position: absolute;
     left: 0;
     top: 0;

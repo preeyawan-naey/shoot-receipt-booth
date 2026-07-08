@@ -248,8 +248,9 @@ function finishCaptureSession() {
  * @param {object} payload
  */
 function navigateToProcess(payload) {
-  showPreviewPage(payload.photos, payload.frameId);
-  navigateTo("process");
+  showPreviewPage(payload.photos, payload.frameId).then(() => {
+    navigateTo("process");
+  });
 }
 
 document.addEventListener("DOMContentLoaded", initCameraModule);

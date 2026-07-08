@@ -112,20 +112,10 @@
         <!-- ==================== PREVIEW PAGE ==================== -->
         <section class="page" id="page-process" data-page="process">
           <div class="preview-page">
-            <article class="receipt-output" id="receipt-output">
-              <header class="receipt-output__header">
-                <span class="receipt-output__shoot">SHOOT</span>
-                <h2 class="receipt-output__title">Receipt</h2>
-                <span class="receipt-output__booth">BOOTH</span>
-              </header>
-              <div class="receipt-output__meta">
-                <span id="receipt-date">24/05/2026</span>
-                <span id="receipt-invoice">Invoice No. 00000143</span>
-              </div>
-              <div class="receipt-output__photos" id="receipt-photos"></div>
-              <p class="receipt-output__thanks">* THANK YOU *</p>
-              <div class="receipt-output__barcode" aria-hidden="true"></div>
-            </article>
+            <div class="frame-composite" id="receipt-composite">
+              <canvas class="frame-composite__canvas" id="receipt-canvas"></canvas>
+            </div>
+            <p class="preview-qr-status" id="preview-qr-status">กำลังสร้าง QR Code...</p>
 
             <div class="preview-actions">
               <button class="preview-btn" type="button" id="btn-retake">ถ่ายใหม่</button>
@@ -154,11 +144,10 @@
       </div>
     </div>
     
-    
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-    <script src="js/qrcode.js"></script>
     <script src="js/frames.js"></script>
     <script src="js/navigation.js"></script>
+    <script src="js/composite.js"></script>
     <script src="js/camera.js"></script>
     <script src="js/app.js"></script>
   </body>

@@ -27,8 +27,6 @@ function initFrameGrid() {
 }
 
 function buildFrameCard(frame) {
-  const slotsHtml = renderSlots(frame);
-
   return `
     <button
       class="frame-card"
@@ -37,36 +35,15 @@ function buildFrameCard(frame) {
       aria-label="เฟรม ${frame.label}"
     >
       <span class="frame-card__label">${frame.label}</span>
-      <div class="frame-card__strip">
-        <div class="strip-header">
-          <p class="strip-header__title">Receipt BOOTH</p>
-          <p class="strip-header__meta">24/05/2024<br />Invoice No. 000000142</p>
-        </div>
-        ${slotsHtml}
-        <div class="strip-footer">
-          <p class="strip-footer__thanks">- THANK YOU -</p>
-          <div class="strip-footer__barcode" aria-hidden="true"></div>
-        </div>
-      </div>
+      <img
+        class="frame-card__preview"
+        src="${frame.imagePath}"
+        alt="Frame ${frame.label}"
+      />
     </button>
   `;
 }
 
-function renderSlots(frame) {
-  if (frame.layout === "grid") {
-    const cells = frame.slots.map((n) => `<div class="strip-slot">${n}</div>`).join("");
-    return `<div class="strip-slots strip-slots--grid">${cells}</div>`;
-  }
-
-  const cells = frame.slots
-    .map((n) => {
-      const tallClass = frame.layout === "single" ? " strip-slot--tall" : "";
-      return `<div class="strip-slot${tallClass}">${n}</div>`;
-    })
-    .join("");
-
-  return `<div class="strip-slots">${cells}</div>`;
-}
 
 function selectFrame(frameId) {
   const frameGrid = document.getElementById("frame-grid");
@@ -106,6 +83,7 @@ function bindEvents() {
     sessionStorage.removeItem("selectedFrame");
     sessionStorage.removeItem("selectedFrameConfig");
     sessionStorage.removeItem("capturedPhotos");
+    sessionStorage.removeItem("downloadQR");
     goToHome();
   });
 
@@ -120,60 +98,64 @@ function bindEvents() {
     if (!frame) return;
 
     sessionStorage.removeItem("capturedPhotos");
+    sessionStorage.removeItem("downloadQR");
     navigateToCamera(frameId);
   });
 
   btnPrint?.addEventListener("click", async () => {
-    window.print();              // ปริ้นก่อน (ถ้าต้องการ)
-    await handlePrintAndShowQR(); // แล้วขึ้น QR
+    window.print();
+    await handlePrintAndShowQR();
   });
 }
 
 document.addEventListener("DOMContentLoaded", initApp);
 
 async function exportReceiptAsBase64() {
-  const receipt = document.getElementById("receipt-output");
-  const canvas = await html2canvas(receipt, { scale: 2, useCORS: true });
-  return canvas.toDataURL("image/jpeg", 0.9);
+  const frameId = sessionStorage.getItem("selectedFrame");
+  const frame = getFrameById(frameId);
+  const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
+  const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  if (!frame || !data.photos) return null;
+  return exportCompositeImage(frame, data.photos, qrData.qrCodeUrl || null);
 }
 
-// 1. ฟังก์ชันเปิด Popup และยิง API ไปหลังบ้าน
 async function handlePrintAndShowQR() {
-  // โชว์แผ่น Popup ขึ้นมาบนหน้าจอ (ใช้ flex เพื่อจัดให้อยู่กึ่งกลาง)
-  const popup = document.getElementById('qr-popup');
-  const qrImage = document.getElementById('qr-code-display');
-  const statusText = document.getElementById('upload-status');
-  
-  popup.style.display = 'flex';
-  qrImage.style.display = 'none'; // ซ่อนรูปคิวอาร์ไว้ก่อน รอโหลดเสร็จ
-  statusText.innerText = '📸 กำลังอัปโหลดรูปภาพและสร้าง QR Code...';
+  const popup = document.getElementById("qr-popup");
+  const qrImage = document.getElementById("qr-code-display");
+  const statusText = document.getElementById("upload-status");
+
+  popup.style.display = "flex";
+
+  const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+
+  if (cached.qrCodeUrl) {
+    qrImage.src = cached.qrCodeUrl;
+    qrImage.style.display = "block";
+    statusText.innerText = "สแกนเพื่อดาวน์โหลดรูปภาพ";
+    return;
+  }
+
+  qrImage.style.display = "none";
+  statusText.innerText = "📸 กำลังอัปโหลดรูปภาพและสร้าง QR Code...";
 
   try {
     const finalImageBase64 = await exportReceiptAsBase64();
+    const data = await uploadCompositeAndGetQR(finalImageBase64);
 
-      // ยิงไปหา Backend พอร์ต 3000 ที่เราทำไว้ร่วมกัน
-      const response = await fetch(`${API_BASE}/api/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: finalImageBase64 })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-          // เมื่อสร้างสำเร็จ นำภาพคิวอาร์มาแสดงผล
-          qrImage.src = data.qrCodeUrl;
-          qrImage.style.display = 'block';
-          statusText.innerText = '✨ สร้าง QR Code สำเร็จ!';
-          
-          // 🖨️ [แถมเพิ่ม] สามารถสั่งให้เบราว์เซอร์ปริ้นงานออกเครื่องพิมพ์ไปพร้อมกันได้เลยตรงนี้!
-          // window.print();
-      } else {
-          statusText.innerText = '❌ เกิดข้อผิดพลาด: ' + data.message;
-      }
+    if (data.success) {
+      sessionStorage.setItem(
+        "downloadQR",
+        JSON.stringify({ qrCodeUrl: data.qrCodeUrl, downloadUrl: data.downloadUrl })
+      );
+      qrImage.src = data.qrCodeUrl;
+      qrImage.style.display = "block";
+      statusText.innerText = "✨ สร้าง QR Code สำเร็จ!";
+    } else {
+      statusText.innerText = "❌ เกิดข้อผิดพลาด: " + data.message;
+    }
   } catch (error) {
-      console.error(error);
-      statusText.innerText = '❌ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+    console.error(error);
+    statusText.innerText = "❌ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้";
   }
 }
 
@@ -185,6 +167,7 @@ function closeQRPopup() {
   sessionStorage.removeItem("selectedFrame");
   sessionStorage.removeItem("selectedFrameConfig");
   sessionStorage.removeItem("capturedPhotos");
+  sessionStorage.removeItem("downloadQR");
 
-  goToHome(); // ฟังก์ชันนี้มีอยู่แล้วใน js/navigation.js
+  goToHome();
 }
