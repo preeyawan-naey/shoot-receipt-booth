@@ -30,15 +30,44 @@ const PUBLIC_HOST = `http://${LAN_IP}`;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+app.get("/api/qrcode", async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, message: "Missing url" });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return res.status(400).json({ success: false, message: "Invalid url" });
+    }
+
+    const allowedHosts = new Set(["127.0.0.1", "localhost", LAN_IP]);
+    const validPath = /^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname);
+
+    if (!allowedHosts.has(parsed.hostname) || Number(parsed.port) !== PORT || !validPath) {
+      return res.status(400).json({ success: false, message: "Invalid download url" });
+    }
+
+    const qrCodeDataUrl = await QRCode.toDataURL(url);
+    res.json({ success: true, qrCodeUrl: qrCodeDataUrl, downloadUrl: url });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.post("/api/upload", async (req, res) => {
   try {
-    const { imageBase64 } = req.body;
+    const { imageBase64, replaceId } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ success: false, message: "No image data provided" });
     }
 
-    const id = randomUUID();
+    const id = replaceId || randomUUID();
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     fs.writeFileSync(path.join(UPLOAD_DIR, `${id}.jpg`), base64Data, "base64");
 
