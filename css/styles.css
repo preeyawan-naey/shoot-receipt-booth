@@ -13,7 +13,7 @@
 :root {
   --screen-width: 1080;
   --screen-height: 1920;
-  --color-bg: #f2ede4;
+  --color-bg: #ffffff;
   --color-bg-card: #ebe6df;
   --color-text: #1a1a1a;
   --color-brown: #8a7355;
@@ -646,16 +646,64 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 5% 6%;
+  justify-content: flex-start;
+  padding: 4% 6% 5%;
   gap: clamp(16px, 3vw, 32px);
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.preview-dispenser {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+
+.preview-dispenser__printer {
+  width: clamp(160px, 38vw, 300px);
+  object-fit: contain;
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
+}
+
+.preview-dispenser__output {
+  width: clamp(200px, 52vw, 400px);
+  flex: 1;
+  min-height: 0;
+  margin-top: clamp(-12px, -2vw, -6px);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.preview-dispenser__receipt {
+  width: 100%;
+  aspect-ratio: 1152 / 2904;
+  transform: translateY(-100%);
+  will-change: transform;
+}
+
+
+.preview-dispenser__receipt--printing {
+  animation: receipt-print-out 2.4s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes receipt-print-out {
+  0%   { transform: translateY(-100%); }
+  15%  { transform: translateY(-88%); }   /* เริ่มช้า */
+  85%  { transform: translateY(-8%); }    /* กลางเร็ว */
+  100% { transform: translateY(0); }      /* จบช้า */
 }
 
 .frame-composite {
   position: relative;
-  width: clamp(220px, 58vw, 460px);
+  width: 100%;
   aspect-ratio: 1152 / 2904;
   overflow: hidden;
 }
@@ -667,11 +715,25 @@ body {
   object-fit: contain;
 }
 
+
+
 .preview-qr-status {
-  font-size: clamp(12px, 2vw, 18px);
-  color: var(--color-brown);
-  text-align: center;
-  margin-top: clamp(4px, 1vw, 8px);
+  display: none;
+}
+
+.print-receipt-wrapper {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#print-receipt-canvas {
+  display: block;
+  max-width: 100%;
 }
 
 .frame-card__preview {
@@ -713,16 +775,48 @@ body {
     visibility: hidden;
   }
 
-  #receipt-composite,
-  #receipt-composite * {
+  .print-receipt-wrapper,
+  .print-receipt-wrapper * {
     visibility: visible;
   }
 
-  #receipt-composite {
+  .print-receipt-wrapper {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
-    box-shadow: none;
+    height: auto;
+    overflow: visible;
+  }
+
+  #print-receipt-canvas {
+    width: 100%;
+    height: auto;
+  }
+}
+
+
+@page {
+  size: 80mm 240mm;  /* กว้าง x สูง — คำนวณจาก canvas จริง */
+  margin: 0;
+}
+
+@media print {
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-receipt-wrapper {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  #print-receipt-canvas {
+    width: 80mm;
+    height: auto;
+    display: block;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }

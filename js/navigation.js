@@ -10,7 +10,12 @@ function initNavigation() {
   pages["frame-select"] = document.getElementById("page-frame-select");
   pages.camera = document.getElementById("page-camera");
   pages.process = document.getElementById("page-process");
+  if (pages.home) {
+    pages.home.style.cursor = "pointer"; // เปลี่ยนเมาส์ให้เป็นรูปมือบอกให้รู้ว่ากดได้
+    pages.home.addEventListener("click", goToFrameSelect); // คลิกตรงไหนของหน้า home ก็จะไปหน้าเลือกเฟรมทันที
+  }
 }
+
 
 function navigateTo(pageName) {
   if (!pages[pageName]) return;

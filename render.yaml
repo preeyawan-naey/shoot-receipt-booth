@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: shoot-receipt-booth
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PUBLIC_URL
+        sync: false
+      - key: SUPABASE_ENABLED
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: photos

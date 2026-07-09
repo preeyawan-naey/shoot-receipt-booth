@@ -1,7 +1,6 @@
 /**
  * SHOOT Receipt BOOTH — Main Application
  */
-const API_BASE = `http://${window.location.hostname}:3000`;
 
 const appState = {
   selectedFrame: null,
@@ -103,8 +102,21 @@ function bindEvents() {
   });
 
   btnPrint?.addEventListener("click", async () => {
-    window.print();
-    await handlePrintAndShowQR();
+    const btn = btnPrint;
+    btn.disabled = true;
+    btn.textContent = "กำลังเตรียม...";
+
+    try {
+      await preparePrintReceipt();
+      window.print();
+      await handlePrintAndShowQR();
+    } catch (error) {
+      console.error(error);
+      alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "ปริ้น";
+    }
   });
 }
 
@@ -116,7 +128,7 @@ async function exportReceiptAsBase64() {
   const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
   const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
   if (!frame || !data.photos) return null;
-  return exportCompositeImage(frame, data.photos, qrData.qrCodeUrl || null);
+  return exportCompositeForPrint(frame, data.photos, qrData.qrCodeUrl || null);
 }
 
 async function handlePrintAndShowQR() {

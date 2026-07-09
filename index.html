@@ -112,10 +112,21 @@
         <!-- ==================== PREVIEW PAGE ==================== -->
         <section class="page" id="page-process" data-page="process">
           <div class="preview-page">
-            <div class="frame-composite" id="receipt-composite">
-              <canvas class="frame-composite__canvas" id="receipt-canvas"></canvas>
+            <div class="preview-dispenser">
+              <img
+                src="img/printer.png"
+                alt="Printer"
+                class="preview-dispenser__printer"
+              />
+              <div class="preview-dispenser__output">
+                <div
+                  class="frame-composite preview-dispenser__receipt"
+                  id="receipt-composite"
+                >
+                  <canvas class="frame-composite__canvas" id="receipt-canvas"></canvas>
+                </div>
+              </div>
             </div>
-            <p class="preview-qr-status" id="preview-qr-status">กำลังสร้าง QR Code...</p>
 
             <div class="preview-actions">
               <button class="preview-btn" type="button" id="btn-retake">ถ่ายใหม่</button>
@@ -126,6 +137,10 @@
       </div>
     </div>
 
+    <!-- ใช้เฉพาะตอน print (มี QR 170×170 ต่อท้าย) -->
+    <div class="print-receipt-wrapper" id="print-receipt-wrapper" aria-hidden="true">
+      <canvas id="print-receipt-canvas"></canvas>
+    </div>
 
     <div id="qr-popup" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center;">
       <div class="modal-content" style="background: white; padding: 30px; border-radius: 16px; text-align: center; max-width: 400px; width: 85%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
