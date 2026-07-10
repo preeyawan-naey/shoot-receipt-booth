@@ -2,38 +2,12 @@ const QR_SLOT = { left: 38, top: 72.8, width: 24, height: 10.2 };
 const PRINT_QR_PX = 450;
 const PRINT_QR_STRIP_PADDING = 50;
 
-let cachedApiBase = null;
 let cachedPublicUrl = null;
-
-/**
- * API base สำหรับเรียก backend
- * - Cloud: same origin หรือ meta api-base
- * - Local dev: hostname:3000
- */
-function getApiBase() {
-  if (cachedApiBase) return cachedApiBase;
-
-  const meta = document.querySelector('meta[name="api-base"]');
-  if (meta?.content) {
-    cachedApiBase = meta.content.replace(/\/$/, "");
-    return cachedApiBase;
-  }
-
-  const { protocol, hostname, host, port } = window.location;
-
-  if (port === "3000" || port === "" || port === "443" || port === "80") {
-    cachedApiBase = `${protocol}//${host}`;
-    return cachedApiBase;
-  }
-
-  cachedApiBase = `${protocol}//${hostname}:3000`;
-  return cachedApiBase;
-}
 
 async function getPublicDownloadBase() {
   if (cachedPublicUrl) return cachedPublicUrl;
 
-  const response = await fetch(`${getApiBase()}/api/server-info`);
+  const response = await fetch(`${API_URL}/api/server-info`);
   if (!response.ok) {
     throw new Error("Cannot reach backend server");
   }
@@ -164,7 +138,7 @@ async function exportCompositeForPrint(frameConfig, photos, qrDataUrl) {
 }
 
 async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
-  const response = await fetch(`${getApiBase()}/api/upload`, {
+  const response = await fetch(`${API_URL}/api/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageBase64, replaceId }),
@@ -173,7 +147,7 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
 }
 
 async function createDownloadQR(downloadId) {
-  const response = await fetch(`${getApiBase()}/api/qrcode`, {
+  const response = await fetch(`${API_URL}/api/qrcode`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ downloadId }),
