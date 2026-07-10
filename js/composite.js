@@ -214,3 +214,21 @@ async function preparePrintReceipt() {
 
   return { qrCodeUrl, downloadUrl };
 }
+
+function setupPrintCopies(count) {
+  const source = document.getElementById("print-receipt-canvas");
+  const container = document.getElementById("print-copies-container");
+  if (!source || !container) return;
+
+  const copies = Math.max(1, Math.min(10, Number(count) || 1));
+  container.innerHTML = "";
+
+  for (let i = 0; i < copies; i++) {
+    const copy = document.createElement("canvas");
+    copy.width = source.width;
+    copy.height = source.height;
+    copy.getContext("2d").drawImage(source, 0, 0);
+    copy.className = "print-receipt-copy";
+    container.appendChild(copy);
+  }
+}

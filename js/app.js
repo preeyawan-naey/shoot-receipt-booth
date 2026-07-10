@@ -6,6 +6,29 @@ const appState = {
   selectedFrame: null,
 };
 
+const MIN_PRINT_COPIES = 1;
+const MAX_PRINT_COPIES = 10;
+let printCopies = MIN_PRINT_COPIES;
+
+function getPrintCopies() {
+  return printCopies;
+}
+
+function resetPrintCopiesUI() {
+  printCopies = MIN_PRINT_COPIES;
+  updatePrintCopiesUI();
+}
+
+function updatePrintCopiesUI() {
+  const valueEl = document.getElementById("print-copies-value");
+  const btnMinus = document.getElementById("btn-print-minus");
+  const btnPlus = document.getElementById("btn-print-plus");
+
+  if (valueEl) valueEl.textContent = String(printCopies);
+  if (btnMinus) btnMinus.disabled = printCopies <= MIN_PRINT_COPIES;
+  if (btnPlus) btnPlus.disabled = printCopies >= MAX_PRINT_COPIES;
+}
+
 function initApp() {
   initNavigation();
   initFrameGrid();
@@ -72,6 +95,22 @@ function bindEvents() {
   const btnCameraBack = document.getElementById("btn-camera-back");
   const btnRetake = document.getElementById("btn-retake");
   const btnPrint = document.getElementById("btn-print");
+  const btnPrintMinus = document.getElementById("btn-print-minus");
+  const btnPrintPlus = document.getElementById("btn-print-plus");
+
+  resetPrintCopiesUI();
+
+  btnPrintMinus?.addEventListener("click", () => {
+    if (printCopies <= MIN_PRINT_COPIES) return;
+    printCopies -= 1;
+    updatePrintCopiesUI();
+  });
+
+  btnPrintPlus?.addEventListener("click", () => {
+    if (printCopies >= MAX_PRINT_COPIES) return;
+    printCopies += 1;
+    updatePrintCopiesUI();
+  });
 
   btnStartOverlay?.addEventListener("click", goToFrameSelect);
   btnStart?.addEventListener("click", goToFrameSelect);
@@ -97,16 +136,20 @@ function bindEvents() {
 
     sessionStorage.removeItem("capturedPhotos");
     sessionStorage.removeItem("downloadQR");
+    resetPrintCopiesUI();
     navigateToCamera(frameId);
   });
 
   btnPrint?.addEventListener("click", async () => {
     const btn = btnPrint;
+    const copies = getPrintCopies();
     btn.disabled = true;
-    btn.textContent = "กำลังเตรียม...";
+    btn.textContent = "Preparing...";
 
     try {
       await preparePrintReceipt();
+      setupPrintCopies(copies);
+      sessionStorage.setItem("printCopies", String(copies));
       window.print();
       await handlePrintAndShowQR();
     } catch (error) {
@@ -114,7 +157,7 @@ function bindEvents() {
       alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
     } finally {
       btn.disabled = false;
-      btn.textContent = "ปริ้น";
+      btn.textContent = "Print";
     }
   });
 }
@@ -179,6 +222,8 @@ function closeQRPopup() {
   sessionStorage.removeItem("selectedFrameConfig");
   sessionStorage.removeItem("capturedPhotos");
   sessionStorage.removeItem("downloadQR");
+  sessionStorage.removeItem("printCopies");
+  resetPrintCopiesUI();
 
   goToHome();
 }

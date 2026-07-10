@@ -86,5 +86,6 @@ async function showPreviewPage(capturedPhotosArray, selectedFrameId) {
   if (!frameConfig || !canvas) return;
 
   await drawComposite(canvas, frameConfig, capturedPhotosArray);
+  resetPrintCopiesUI();
   playReceiptPrintAnimation();
 }
