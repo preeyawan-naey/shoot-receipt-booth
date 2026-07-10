@@ -31,13 +31,12 @@ function buildFrameCard(frame) {
       class="frame-card"
       type="button"
       data-frame-id="${frame.id}"
-      aria-label="เฟรม ${frame.label}"
+      aria-label="เลือกเฟรม ${frame.id}"
     >
-      <span class="frame-card__label">${frame.label}</span>
       <img
         class="frame-card__preview"
-        src="${frame.imagePath}"
-        alt="Frame ${frame.label}"
+        src="${frame.selectImagePath || frame.imagePath}"
+        alt="Frame ${frame.id}"
       />
     </button>
   `;

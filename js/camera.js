@@ -14,8 +14,7 @@ const cameraState = {
 };
 
 const COUNTDOWN_START = 5;
-const BETWEEN_SHOTS_MS = 1800;
-const AUTO_START_DELAY_MS = 1200;
+const BETWEEN_SHOTS_MS = 1400;
 
 function initCameraModule() {
   const btnShutter = document.getElementById("btn-shutter");
@@ -50,6 +49,8 @@ async function startCameraSession(frame) {
         facingMode: "user",
         width: { ideal: 1280 },
         height: { ideal: 720 },
+        exposureMode: "continuous",
+        whiteBalanceMode: "continuous",
       },
       audio: false,
     });
@@ -57,6 +58,7 @@ async function startCameraSession(frame) {
     if (video) {
       video.srcObject = cameraState.stream;
       await video.play();
+      applyCameraBrightness(video);
     }
 
     viewport?.classList.remove("camera-viewport--error");
@@ -66,11 +68,22 @@ async function startCameraSession(frame) {
     return;
   }
 
-  setTimeout(() => {
-    if (cameraState.isSessionActive && !cameraState.isCountingDown) {
-      startCountdown();
-    }
-  }, AUTO_START_DELAY_MS);
+  hideCountdown();
+}
+
+function applyCameraBrightness(video) {
+  const track = cameraState.stream?.getVideoTracks?.()?.[0];
+  if (!track) return;
+
+  const caps = track.getCapabilities?.();
+  if (caps?.exposureCompensation) {
+    const mid =
+      (caps.exposureCompensation.min + caps.exposureCompensation.max) / 2;
+    const target = Math.min(caps.exposureCompensation.max, mid + 0.5);
+    track
+      .applyConstraints({ advanced: [{ exposureCompensation: target }] })
+      .catch(() => {});
+  }
 }
 
 function stopCameraSession() {
@@ -99,7 +112,7 @@ function updatePhotoCounter() {
   const counter = document.getElementById("camera-photo-counter");
   if (!counter) return;
 
-  const current = String(cameraState.currentShot + 1).padStart(2, "0");
+  const current = String(cameraState.currentShot).padStart(2, "0");
   const total = String(cameraState.totalShots).padStart(2, "0");
   counter.textContent = `${current}/${total}`;
 }
@@ -205,6 +218,7 @@ function capturePhoto() {
 
   const ctx = canvas.getContext("2d");
   ctx.save();
+  ctx.filter = "brightness(1.12) contrast(1.04)";
   ctx.scale(-scale, scale);
   ctx.drawImage(video, -vw, 0, vw, vh);
   ctx.restore();
@@ -218,7 +232,11 @@ function capturePhoto() {
   } else {
     updatePhotoCounter();
     setTimeout(() => {
-      if (cameraState.isSessionActive) {
+      if (
+        cameraState.isSessionActive &&
+        cameraState.currentShot < cameraState.totalShots &&
+        !cameraState.isCountingDown
+      ) {
         startCountdown();
       }
     }, BETWEEN_SHOTS_MS);
