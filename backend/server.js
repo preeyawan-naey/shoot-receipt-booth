@@ -9,6 +9,35 @@ const storage = require("./storage");
 
 const app = express();
 
+function resolveRequestBaseUrl(req) {
+  const envUrl = process.env.PUBLIC_URL?.replace(/\/$/, "");
+  const isPlaceholder = envUrl?.includes("your-app");
+  if (envUrl && !isPlaceholder) {
+    return envUrl;
+  }
+
+  const forwardedProto = req.get("x-forwarded-proto");
+  const forwardedHost = req.get("x-forwarded-host");
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
+  }
+
+  const host = req.get("host");
+  if (host) {
+    const proto = req.secure || forwardedProto === "https" ? "https" : "http";
+    const hostname = host.split(":")[0];
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      const port = host.split(":")[1] || String(config.port);
+      return `http://${config.lanIp}:${port}`;
+    }
+
+    return `${proto}://${host}`.replace(/\/$/, "");
+  }
+
+  return config.publicUrl;
+}
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -28,7 +57,7 @@ app.post("/api/qrcode", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid downloadId" });
     }
 
-    const downloadUrl = storage.buildDownloadUrl(downloadId);
+    const downloadUrl = storage.buildDownloadUrl(downloadId, resolveRequestBaseUrl(req));
     const qrCodeDataUrl = await QRCode.toDataURL(downloadUrl);
 
     res.json({ success: true, qrCodeUrl: qrCodeDataUrl, downloadUrl });
@@ -69,7 +98,7 @@ app.post("/api/upload", async (req, res) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
 
-    const downloadUrl = await storage.saveImage(id, buffer);
+    const downloadUrl = await storage.saveImage(id, buffer, resolveRequestBaseUrl(req));
     const qrCodeDataUrl = await QRCode.toDataURL(downloadUrl);
 
     console.log(`📸 Saved photo ${id} (${storage.getStorageMode()})`);
@@ -97,7 +126,11 @@ app.get("/api/download/:id", (req, res) => {
   if (!storage.localFileExists(id)) {
     return res.status(404).send("File not found");
   }
-  res.download(filePath, "shoot-receipt.jpg");
+  res.download(filePath, "shoot-receipt.jpg", (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send("Download failed");
+    }
+  });
 });
 
 app.get("/api/health", (_req, res) => {

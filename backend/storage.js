@@ -9,22 +9,23 @@ function getStorageMode() {
   return config.supabase ? "supabase" : "local";
 }
 
-function buildDownloadUrl(id) {
-  if (config.supabase) {
+function buildDownloadUrl(id, baseUrl) {
+  if (config.supabase && !baseUrl) {
     const { url, bucket } = config.supabase;
     return `${url}/storage/v1/object/public/${bucket}/${id}.jpg`;
   }
-  return `${config.publicUrl}/api/download/${id}`;
+  const base = (baseUrl || config.publicUrl).replace(/\/$/, "");
+  return `${base}/api/download/${id}`;
 }
 
-async function saveImage(id, buffer) {
+async function saveImage(id, buffer, baseUrl) {
   if (config.supabase) {
     await uploadToSupabase(id, buffer);
-    return buildDownloadUrl(id);
+    return buildDownloadUrl(id, baseUrl);
   }
 
   fs.writeFileSync(path.join(UPLOAD_DIR, `${id}.jpg`), buffer);
-  return buildDownloadUrl(id);
+  return buildDownloadUrl(id, baseUrl);
 }
 
 async function uploadToSupabase(id, buffer) {
@@ -59,21 +60,9 @@ function localFileExists(id) {
 function isAllowedDownloadUrl(urlString) {
   try {
     const parsed = new URL(urlString);
-    const publicParsed = new URL(config.publicUrl);
 
-    if (parsed.hostname === publicParsed.hostname) {
-      return (
-        /^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname) ||
-        parsed.pathname.startsWith(`/storage/v1/object/public/${config.supabase?.bucket}/`)
-      );
-    }
-
-    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-      return /^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname);
-    }
-
-    if (parsed.hostname === config.lanIp) {
-      return /^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname);
+    if (/^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname)) {
+      return true;
     }
 
     if (config.supabase) {
