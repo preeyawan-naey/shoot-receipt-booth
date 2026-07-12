@@ -39,4 +39,14 @@ function goToFrameSelect() {
 
 function goToHome() {
   navigateTo("home");
+  replayHomeAnimations();
+}
+
+function replayHomeAnimations() {
+  const home = pages.home;
+  if (!home) return;
+
+  home.classList.remove("home--animate");
+  void home.offsetWidth;
+  home.classList.add("home--animate");
 }

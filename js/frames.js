@@ -21,8 +21,8 @@ const FRAMES = [
     imagePath: "img/Frame/frame_2.png",
     selectImagePath: "img/Frame/frame-select-2.png",
     slots: [
-      { left: 9.72, top: 23.14, width: 80.47, height: 26.79 },
-      { left: 9.72, top: 50.76, width: 80.47, height: 26.79 },
+      { left: 9.72, top: 32.53, width: 80.47, height: 26.79 },
+      { left: 9.72, top: 60.15, width: 80.47, height: 26.79 },
     ],
   },
   {
@@ -32,9 +32,9 @@ const FRAMES = [
     imagePath: "img/Frame/frame_3.png",
     selectImagePath: "img/Frame/frame-select-3.png",
     slots: [
-      { left: 9.72, top: 23.14, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 42.08, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 61.02, width: 80.47, height: 18.11 },
+      { left: 9.72, top: 32.53, width: 80.47, height: 18.11 },
+      { left: 9.72, top: 51.47, width: 80.47, height: 18.11 },
+      { left: 9.72, top: 70.41, width: 80.47, height: 18.11 },
     ],
   },
   {
@@ -44,10 +44,10 @@ const FRAMES = [
     selectImagePath: "img/Frame/frame-select-4.png",
     imagePath: "img/Frame/frame_4.png",
     slots: [
-      { left: 9.72, top: 23.14, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 23.14, width: 39.24, height: 22.11 },
-      { left: 9.72, top: 46.07, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 46.07, width: 39.24, height: 22.11 },
+      { left: 9.72, top: 32.53, width: 39.24, height: 22.11 },
+      { left: 51.04, top: 32.53, width: 39.24, height: 22.11 },
+      { left: 9.72, top: 55.47, width: 39.24, height: 22.11 },
+      { left: 51.04, top: 55.47, width: 39.24, height: 22.11 },
     ],
   },
 ];
@@ -68,7 +68,7 @@ function playReceiptPrintAnimation() {
   receiptEl.classList.add("preview-dispenser__receipt--printing");
 
   const onDone = (e) => {
-    if (e.animationName !== "receipt-print-out") return;
+    if (e.animationName !== "home-receipt-out") return;
     receiptEl.classList.remove("preview-dispenser__receipt--printing");
     receiptEl.classList.add("preview-dispenser__receipt--done");
     receiptEl.removeEventListener("animationend", onDone);

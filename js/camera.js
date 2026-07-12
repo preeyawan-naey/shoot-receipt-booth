@@ -15,6 +15,7 @@ const cameraState = {
 
 const COUNTDOWN_START = 5;
 const BETWEEN_SHOTS_MS = 1400;
+const CAMERA_BRIGHTNESS_FILTER = "brightness(1.08) contrast(1.02)";
 
 function initCameraModule() {
   const btnShutter = document.getElementById("btn-shutter");
@@ -43,6 +44,9 @@ async function startCameraSession(frame) {
   const video = document.getElementById("camera-video");
   const viewport = document.getElementById("camera-viewport");
 
+  viewport?.classList.remove("camera-viewport--error", "camera-viewport--ready");
+  viewport?.classList.add("camera-viewport--loading");
+
   try {
     cameraState.stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -58,11 +62,13 @@ async function startCameraSession(frame) {
     if (video) {
       video.srcObject = cameraState.stream;
       await video.play();
-      applyCameraBrightness(video);
+      applyCameraBrightness();
     }
 
-    viewport?.classList.remove("camera-viewport--error");
+    viewport?.classList.remove("camera-viewport--loading", "camera-viewport--error");
+    viewport?.classList.add("camera-viewport--ready");
   } catch (err) {
+    viewport?.classList.remove("camera-viewport--loading", "camera-viewport--ready");
     viewport?.classList.add("camera-viewport--error");
     console.error("Camera access failed:", err);
     return;
@@ -71,7 +77,7 @@ async function startCameraSession(frame) {
   hideCountdown();
 }
 
-function applyCameraBrightness(video) {
+function applyCameraBrightness() {
   const track = cameraState.stream?.getVideoTracks?.()?.[0];
   if (!track) return;
 
@@ -79,7 +85,7 @@ function applyCameraBrightness(video) {
   if (caps?.exposureCompensation) {
     const mid =
       (caps.exposureCompensation.min + caps.exposureCompensation.max) / 2;
-    const target = Math.min(caps.exposureCompensation.max, mid + 0.5);
+    const target = Math.min(caps.exposureCompensation.max, mid + 0.35);
     track
       .applyConstraints({ advanced: [{ exposureCompensation: target }] })
       .catch(() => {});
@@ -104,6 +110,10 @@ function stopCameraSession() {
   if (video) {
     video.srcObject = null;
   }
+
+  const viewport = document.getElementById("camera-viewport");
+  viewport?.classList.remove("camera-viewport--ready", "camera-viewport--error");
+  viewport?.classList.add("camera-viewport--loading");
 
   hideCountdown();
 }
@@ -218,7 +228,7 @@ function capturePhoto() {
 
   const ctx = canvas.getContext("2d");
   ctx.save();
-  ctx.filter = "brightness(1.12) contrast(1.04)";
+  ctx.filter = CAMERA_BRIGHTNESS_FILTER;
   ctx.scale(-scale, scale);
   ctx.drawImage(video, -vw, 0, vw, vh);
   ctx.restore();

@@ -124,7 +124,8 @@ function bindEvents() {
     goToHome();
   });
 
-  btnCameraBack?.addEventListener("click", () => {
+  btnCameraBack?.addEventListener("click", (event) => {
+    event.stopPropagation();
     stopCameraSession();
     navigateTo("frame-select");
   });
@@ -178,18 +179,18 @@ async function handlePrintAndShowQR() {
   const qrImage = document.getElementById("qr-code-display");
   const statusText = document.getElementById("upload-status");
 
-  popup.style.display = "flex";
+  popup.classList.add("qr-popup--open");
 
   const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
 
   if (cached.qrCodeUrl) {
     qrImage.src = cached.qrCodeUrl;
-    qrImage.style.display = "block";
-    statusText.innerText = "สแกนเพื่อดาวน์โหลดรูปภาพ";
+    qrImage.classList.add("qr-modal__image--visible");
+    statusText.innerText = "Scan to download your photo";
     return;
   }
 
-  qrImage.style.display = "none";
+  qrImage.classList.remove("qr-modal__image--visible");
   statusText.innerText = "📸 กำลังอัปโหลดรูปภาพและสร้าง QR Code...";
 
   try {
@@ -202,7 +203,7 @@ async function handlePrintAndShowQR() {
         JSON.stringify({ qrCodeUrl: data.qrCodeUrl, downloadUrl: data.downloadUrl })
       );
       qrImage.src = data.qrCodeUrl;
-      qrImage.style.display = "block";
+      qrImage.classList.add("qr-modal__image--visible");
       statusText.innerText = "✨ สร้าง QR Code สำเร็จ!";
     } else {
       statusText.innerText = "❌ เกิดข้อผิดพลาด: " + data.message;
@@ -215,7 +216,7 @@ async function handlePrintAndShowQR() {
 
 // 2. ฟังก์ชันปิด Popup เมื่อสแกนเสร็จแล้วกดปุ่มปิด
 function closeQRPopup() {
-  document.getElementById("qr-popup").style.display = "none";
+  document.getElementById("qr-popup").classList.remove("qr-popup--open");
 
   appState.selectedFrame = null;
   sessionStorage.removeItem("selectedFrame");
