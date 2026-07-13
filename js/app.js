@@ -149,9 +149,8 @@ function bindEvents() {
 
     try {
       await preparePrintReceipt();
-      setupPrintCopies(copies);
       sessionStorage.setItem("printCopies", String(copies));
-      window.print();
+      await printReceiptDirect(copies);
       await handlePrintAndShowQR();
     } catch (error) {
       console.error(error);

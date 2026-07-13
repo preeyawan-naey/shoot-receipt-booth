@@ -309,3 +309,62 @@ function setupPrintCopies(count) {
     container.appendChild(copy);
   }
 }
+
+function printReceiptDirect(copies = 1) {
+  return new Promise((resolve) => {
+    const source = document.getElementById("print-receipt-canvas");
+    if (!source?.width) {
+      resolve();
+      return;
+    }
+
+    const count = Math.max(1, Math.min(10, Number(copies) || 1));
+    const dataUrl = source.toDataURL("image/jpeg", 0.92);
+    const images = Array(count)
+      .fill(`<img class="receipt-copy" src="${dataUrl}" alt="" />`)
+      .join("");
+
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute(
+      "style",
+      "position:fixed;width:0;height:0;border:0;visibility:hidden"
+    );
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow;
+    const doc = win.document;
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Receipt</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  img.receipt-copy {
+    display: block;
+    width: 80mm;
+    height: auto;
+    page-break-after: always;
+    break-after: page;
+  }
+  img.receipt-copy:last-child { page-break-after: auto; break-after: auto; }
+</style></head>
+<body>${images}</body></html>`);
+    doc.close();
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      setTimeout(() => iframe.remove(), 300);
+      resolve();
+    };
+
+    win.onafterprint = finish;
+    setTimeout(finish, 60000);
+
+    setTimeout(() => {
+      win.focus();
+      win.print();
+    }, 300);
+  });
+}

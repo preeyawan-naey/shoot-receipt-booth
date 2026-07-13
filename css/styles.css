@@ -1,5 +1,5 @@
 /* ============================================================
-   SHOOT Receipt BOOTH — Vertical Photobooth UI (1080 × 1920)
+   SHOOT Receipt BOOTH — Tablet UI (712 × 995)
    ============================================================ */
 
 *,
@@ -11,8 +11,8 @@
 }
 
 :root {
-  --screen-width: 1080;
-  --screen-height: 1920;
+  --design-width: 712;
+  --design-height: 995;
   --color-bg: #ffffff;
   --color-bg-card: #ebe6df;
   --color-text: #1a1a1a;
@@ -22,8 +22,8 @@
   --font-sans: "Roboto Mono", monospace;
   --font-script: "Roboto Mono", monospace;
   --font-serif: "Roboto Mono", monospace;
-  --section-padding-x: 10%;
-  --page-padding-y: clamp(32px, 6vh, 64px);
+  --section-padding-x: 8%;
+  --page-padding-y: clamp(16px, 3.5vh, 40px);
 }
 
 html,
@@ -142,8 +142,8 @@ body {
 
 .booth-screen {
   position: relative;
-  width: min(100vw, calc(100vh * 9 / 16));
-  height: min(100vh, calc(100vw * 16 / 9));
+  width: min(100vw, calc(100vh * var(--design-width) / var(--design-height)));
+  height: min(100vh, calc(100vw * var(--design-height) / var(--design-width)));
   background-color: #ffffff;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   overflow: hidden;
@@ -433,7 +433,7 @@ body {
 }
 
 .frame-title__image {
-  height: clamp(64px, 12vw, 88px);
+  height: clamp(52px, 10vw, 76px);
   width: auto;
   max-width: 88%;
   object-fit: contain;
@@ -458,7 +458,7 @@ body {
   grid-template-columns: 1fr 1fr;
   /*grid-template-rows: 1fr 1fr;
   gap: clamp(8px, 1.8vw, 18px);*/
-  gap: 24px;
+  gap: 16px;
   padding: 0 var(--section-padding-x);
   justify-content: center;
   justify-items: center;
@@ -1041,6 +1041,41 @@ body {
 .preview-btn--print:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+/* Tablet portrait — 712×995 / 11" */
+@media (min-width: 680px) and (max-width: 860px) and (min-height: 900px) and (max-height: 1250px) {
+  :root {
+    --page-padding-y: clamp(14px, 3vh, 32px);
+    --section-padding-x: 7%;
+  }
+
+  .home-header__logo {
+    width: 38%;
+  }
+
+  .dispenser,
+  .preview-dispenser {
+    width: clamp(180px, 48vw, 340px);
+  }
+
+  .home-header_receipt,
+  .preview-dispenser__receipt,
+  .preview-receipt-preview .frame-composite {
+    width: clamp(130px, 34vw, 260px);
+  }
+
+  .frame-grid {
+    gap: 12px;
+  }
+
+  .camera-status {
+    margin-bottom: clamp(8px, 1.5vw, 14px);
+  }
+
+  .preview-controls {
+    gap: clamp(12px, 2vw, 20px);
+  }
 }
 
 @media print {
