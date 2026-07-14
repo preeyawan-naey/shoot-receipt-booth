@@ -6,6 +6,11 @@ const PRINT_DASH_STROKE = 2;
 const PRINT_QR_TEXT_GAP = 24;
 const PRINT_THANK_YOU_TEXT = "* THANK YOU & HAVE A NICE DAY *";
 const PRINT_THANK_YOU_FONT_SIZE = 36;
+const PRINT_PHOTO_RENDER_SCALE = 3;
+const PRINT_PHOTO_GAMMA = 0.72;
+const PRINT_PHOTO_BRIGHTNESS = 1.25;
+const PRINT_PHOTO_CONTRAST = 1;
+const PRINT_PHOTO_SHARPNESS = 0.70;
 
 let cachedPublicUrl = null;
 
@@ -67,6 +72,98 @@ function drawImageCover(ctx, img, dx, dy, dw, dh) {
   }
 
   ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dw, dh);
+}
+
+function boxBlur3x3(source, width, height) {
+  const blurred = new Float32Array(source.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+            sum += source[ny * width + nx];
+            count += 1;
+          }
+        }
+      }
+      blurred[y * width + x] = sum / count;
+    }
+  }
+  return blurred;
+}
+
+function liftThermalTones(value) {
+  if (value < 120) {
+    value += (120 - value) * 0.5;
+  }
+  if (value < 165) {
+    value += (165 - value) * 0.38;
+  }
+  if (value < 215) {
+    value += (215 - value) * 0.08;
+  }
+  return value;
+}
+
+function processThermalGrayscale(imageData) {
+  const { data, width, height } = imageData;
+  const pixelCount = width * height;
+  const gray = new Float32Array(pixelCount);
+
+  for (let i = 0; i < pixelCount; i += 1) {
+    const idx = i * 4;
+    gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+  }
+
+  for (let i = 0; i < pixelCount; i += 1) {
+    gray[i] = Math.pow(gray[i] / 255, PRINT_PHOTO_GAMMA) * 255;
+  }
+
+  const blurred = boxBlur3x3(gray, width, height);
+  for (let i = 0; i < pixelCount; i += 1) {
+    gray[i] += (gray[i] - blurred[i]) * PRINT_PHOTO_SHARPNESS;
+  }
+
+  for (let i = 0; i < pixelCount; i += 1) {
+    let value = liftThermalTones(gray[i] * PRINT_PHOTO_BRIGHTNESS);
+    value = (value - 128) * PRINT_PHOTO_CONTRAST + 128;
+    value = Math.max(0, Math.min(255, value));
+    const v = Math.round(value);
+    const idx = i * 4;
+    data[idx] = v;
+    data[idx + 1] = v;
+    data[idx + 2] = v;
+    data[idx + 3] = 255;
+  }
+}
+
+function drawImageCoverForPrint(ctx, img, dx, dy, dw, dh) {
+  const w = Math.max(1, Math.round(dw * PRINT_PHOTO_RENDER_SCALE));
+  const h = Math.max(1, Math.round(dh * PRINT_PHOTO_RENDER_SCALE));
+  const scratch = document.createElement("canvas");
+  scratch.width = w;
+  scratch.height = h;
+
+  const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
+  drawImageCover(scratchCtx, img, 0, 0, w, h);
+
+  const imageData = scratchCtx.getImageData(0, 0, w, h);
+  processThermalGrayscale(imageData);
+  scratchCtx.putImageData(imageData, 0, 0);
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(scratch, dx, dy, dw, dh);
+}
+
+async function drawFrameOnly(ctx, frameConfig, canvasWidth, canvasHeight) {
+  const frameImg = await loadImage(frameConfig.imagePath);
+  ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+  coverMockQRSlot(ctx, canvasWidth, canvasHeight);
 }
 
 async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight) {
@@ -208,7 +305,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  await drawFrameAndPhotos(ctx, frameConfig, photos, frameW, frameH);
+  await drawFrameOnly(ctx, frameConfig, frameW, frameH);
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, photosBottom, frameW, canvas.height - photosBottom);
@@ -223,7 +320,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
     const y = (slot.top / 100) * frameH;
     const w = (slot.width / 100) * frameW;
     const h = (slot.height / 100) * frameH;
-    drawImageCover(ctx, photo, x, y, w, h);
+    drawImageCoverForPrint(ctx, photo, x, y, w, h);
   }
 
   const qrX = (frameW - PRINT_QR_PX) / 2;
@@ -237,7 +334,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
 async function exportCompositeForPrint(frameConfig, photos, qrDataUrl) {
   const canvas = document.createElement("canvas");
   await drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl);
-  return canvas.toDataURL("image/jpeg", 0.92);
+  return canvas.toDataURL("image/png");
 }
 
 async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
@@ -277,7 +374,7 @@ async function preparePrintReceipt() {
 
   await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl);
 
-  const finalBase64 = printCanvas.toDataURL("image/jpeg", 0.92);
+  const finalBase64 = printCanvas.toDataURL("image/png");
   const uploadResult = await uploadCompositeAndGetQR(finalBase64, downloadId);
 
   if (!uploadResult.success) {
@@ -319,7 +416,7 @@ function printReceiptDirect(copies = 1) {
     }
 
     const count = Math.max(1, Math.min(10, Number(copies) || 1));
-    const dataUrl = source.toDataURL("image/jpeg", 0.92);
+    const dataUrl = source.toDataURL("image/png");
     const images = Array(count)
       .fill(`<img class="receipt-copy" src="${dataUrl}" alt="" />`)
       .join("");

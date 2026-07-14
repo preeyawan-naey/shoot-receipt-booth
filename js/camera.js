@@ -15,7 +15,7 @@ const cameraState = {
 
 const COUNTDOWN_START = 5;
 const BETWEEN_SHOTS_MS = 1400;
-const CAMERA_BRIGHTNESS_FILTER = "brightness(1.08) contrast(1.02)";
+const CAMERA_BRIGHTNESS_FILTER = "Graysclae(100%) brightness(0.8) contrast(1.2)";
 
 function initCameraModule() {
   const btnShutter = document.getElementById("btn-shutter");

@@ -6,7 +6,7 @@ const appState = {
   selectedFrame: null,
 };
 
-alert("Width: " + window.innerWidth + " | Height: " + window.innerHeight);
+/* alert("Width: " + window.innerWidth + " | Height: " + window.innerHeight); */
 
 const MIN_PRINT_COPIES = 1;
 const MAX_PRINT_COPIES = 10;

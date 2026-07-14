@@ -47,14 +47,23 @@ body {
 }
 
 .home-header_printer {
-  width: clamp(180px, 38vw, 300px);
-  height: auto;
+  /*width: clamp(200px, 38vw, 300px)
+  height: 0px;
   display: block;
   margin: 18px auto 0 auto;
   object-fit: contain;
   position: relative;
   z-index: 1;
-  pointer-events: none;
+  pointer-events: none;*/
+    width: 340px;            /* 💡 ปรับเป็น 340px ตรง ๆ ไปเลยครับ ไม่ต้องใช้ clamp จะได้จูนง่ายและเครื่องกว้างพอดีกับกระดาษ */
+    height: auto;            /* 💡 ปล่อยเป็น auto (และแยกบรรทัดให้ชัดเจน) เพื่อให้ความหนาขยายตามสมดุล */
+    display: block;
+    margin: 18px auto 0 auto;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+  
 }
 
 .receipt-preview {
@@ -220,6 +229,7 @@ body {
   align-items: center;
   justify-content: center;
   overflow: visible;
+  margin-top: -100px;                /* 💡 ใส่ค่าติดลบตรงนี้ ยิ่งลบเยอะ กระดาษยิ่งขยับขึ้นไปข้างบน เช่น -15px หรือ -20px */
 }
 
 .dispenser-slot {
@@ -352,7 +362,8 @@ body {
   color: var(--color-text);
   padding: 16px 32px;
   transition: transform 0.15s ease;
-  font-size: clamp(14px, 2.5vw, 22px);
+  /*font-size: clamp(14px, 2.5vw, 22px);*/
+  font-size: 32px;
   font-weight: 600;
 }
 
