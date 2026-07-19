@@ -284,6 +284,82 @@
     }
   }
 
+  function showGenerateModal() {
+    const modal = $("#generate-modal");
+    const input = $("#generate-count-input");
+    const err = $("#generate-modal-error");
+    const result = $("#generate-modal-result");
+    if (!modal) return;
+    if (input) input.value = "10";
+    if (err) err.hidden = true;
+    if (result) {
+      result.hidden = true;
+      result.textContent = "";
+    }
+    modal.hidden = false;
+    input?.focus();
+    input?.select();
+  }
+
+  function hideGenerateModal() {
+    const modal = $("#generate-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  async function confirmGenerateCodes() {
+    const input = $("#generate-count-input");
+    const err = $("#generate-modal-error");
+    const result = $("#generate-modal-result");
+    const btn = $("#btn-generate-confirm");
+    const count = parseInt(input?.value || "0", 10);
+
+    if (err) err.hidden = true;
+    if (result) result.hidden = true;
+
+    if (!Number.isFinite(count) || count < 1 || count > 500) {
+      if (err) {
+        err.textContent = "Enter a number between 1 and 500";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+    }
+
+    try {
+      const data = await apiFetch("/tickets/generate", {
+        method: "POST",
+        body: JSON.stringify({ count }),
+      });
+
+      if (result) {
+        const sample = (data.sample || []).join("\n");
+        result.textContent = `Created ${data.inserted} code(s)\n\nSample:\n${sample}`;
+        result.hidden = false;
+      }
+
+      state.period = "all";
+      state.page = 1;
+      document.querySelectorAll(".admin-tab").forEach((tab) => {
+        tab.classList.toggle("admin-tab--active", tab.dataset.period === "all");
+      });
+      await refresh();
+    } catch (generateErr) {
+      if (err) {
+        err.textContent = generateErr.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Generate";
+      }
+    }
+  }
+
   function bindEvents() {
     $("#admin-key-submit")?.addEventListener("click", handleLogin);
 
@@ -332,24 +408,16 @@
       }, 350);
     });
 
-    $("#btn-generate-codes")?.addEventListener("click", async () => {
-      const countStr = window.prompt("How many codes to generate?", "10");
-      if (!countStr) return;
-      const count = parseInt(countStr, 10);
-      if (!Number.isFinite(count) || count < 1 || count > 500) {
-        window.alert("Enter a number between 1 and 500");
-        return;
-      }
-      try {
-        const data = await apiFetch("/tickets/generate", {
-          method: "POST",
-          body: JSON.stringify({ count }),
-        });
-        window.alert(`Generated ${data.inserted} codes`);
-        await refresh();
-      } catch (err) {
-        window.alert(err.message);
-      }
+    $("#btn-generate-codes")?.addEventListener("click", showGenerateModal);
+    $("#btn-generate-cancel")?.addEventListener("click", hideGenerateModal);
+    $("#btn-generate-confirm")?.addEventListener("click", () => {
+      confirmGenerateCodes().catch(console.error);
+    });
+    $("#generate-count-input")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") confirmGenerateCodes().catch(console.error);
+    });
+    $("#generate-modal")?.addEventListener("click", (e) => {
+      if (e.target.id === "generate-modal") hideGenerateModal();
     });
   }
 
