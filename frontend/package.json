@@ -1,0 +1,9 @@
+{
+  "name": "shoot-receipt-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SHOOT Receipt BOOTH — static booth UI + backoffice",
+  "scripts": {
+    "preview": "npx --yes serve . -p 5173"
+  }
+}

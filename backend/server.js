@@ -3,6 +3,7 @@ const cors = require("cors");
 const QRCode = require("qrcode");
 const { randomUUID } = require("crypto");
 const path = require("path");
+const fs = require("fs");
 
 const config = require("./config");
 const storage = require("./storage");
@@ -171,12 +172,15 @@ adminApp.use("/js", express.static(path.join(adminDir, "js"), { redirect: false,
 
 app.use("/admin", adminApp);
 
-app.use((req, res, next) => {
-  if (req.path.startsWith("/admin")) {
-    return next();
+app.get("/", (_req, res) => {
+  const indexPath = path.join(FRONTEND_DIR, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    return res.status(503).send("Frontend not found — ensure frontend/ is deployed");
   }
-  express.static(FRONTEND_DIR, { index: "index.html", redirect: false })(req, res, next);
+  res.sendFile(indexPath);
 });
+
+app.use(express.static(FRONTEND_DIR, { redirect: false }));
 
 async function startServer() {
   try {
@@ -187,6 +191,12 @@ async function startServer() {
   }
 
   app.listen(config.port, "0.0.0.0", () => {
+    const indexPath = path.join(FRONTEND_DIR, "index.html");
+    if (!fs.existsSync(indexPath)) {
+      console.error(`❌ Missing frontend: ${indexPath}`);
+    } else {
+      console.log(`🖥️  Frontend: ${FRONTEND_DIR}`);
+    }
     console.log(`🚀 Backend running on port ${config.port}`);
     console.log(`🌐 Public URL: ${config.publicUrl}`);
     console.log(`💾 Storage: ${storage.getStorageMode()}`);

@@ -7,12 +7,13 @@ const pages = {};
 
 function initNavigation() {
   pages.home = document.getElementById("page-home");
+  pages["code-entry"] = document.getElementById("page-code-entry");
   pages["frame-select"] = document.getElementById("page-frame-select");
   pages.camera = document.getElementById("page-camera");
   pages.process = document.getElementById("page-process");
   if (pages.home) {
-    pages.home.style.cursor = "pointer"; // เปลี่ยนเมาส์ให้เป็นรูปมือบอกให้รู้ว่ากดได้
-    pages.home.addEventListener("click", goToFrameSelect); // คลิกตรงไหนของหน้า home ก็จะไปหน้าเลือกเฟรมทันที
+    pages.home.style.cursor = "pointer";
+    pages.home.addEventListener("click", goToCodeEntry);
   }
 }
 
@@ -31,6 +32,13 @@ function navigateTo(pageName) {
 
 function getCurrentPage() {
   return currentPage;
+}
+
+function goToCodeEntry() {
+  if (typeof resetCodeEntry === "function") {
+    resetCodeEntry();
+  }
+  navigateTo("code-entry");
 }
 
 function goToFrameSelect() {

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SHOOT Receipt — Backoffice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin/css/admin.css?v=4" />
+  </head>
+  <body>
+    <div class="admin-login" id="admin-login">
+      <div class="admin-login__card">
+        <h1 class="admin-login__title">SHOOT <span>Backoffice</span></h1>
+        <p class="admin-login__desc">Enter admin API key to continue</p>
+        <input
+          class="admin-login__input"
+          id="admin-key-input"
+          type="password"
+          placeholder="ADMIN_API_KEY"
+          autocomplete="off"
+        />
+        <button class="admin-login__btn" id="admin-key-submit" type="button">Sign in</button>
+        <p class="admin-login__error" id="admin-login-error" hidden></p>
+      </div>
+    </div>
+
+    <div class="admin-app" id="admin-app" hidden>
+      <aside class="admin-sidebar">
+        <div class="admin-sidebar__brand">
+          <span class="admin-sidebar__logo">SHOOT</span>
+          <span class="admin-sidebar__subtitle">Receipt Booth</span>
+        </div>
+        <nav class="admin-nav">
+          <a class="admin-nav__item admin-nav__item--active" href="#">
+            <span class="admin-nav__icon">▣</span>
+            Dashboard
+          </a>
+          <a class="admin-nav__item" href="/" target="_blank" rel="noopener">
+            <span class="admin-nav__icon">↗</span>
+            Open Booth
+          </a>
+        </nav>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <div>
+            <p class="admin-topbar__eyebrow">Backoffice / Dashboard</p>
+            <h1 class="admin-topbar__title">Control Tower</h1>
+          </div>
+          <div class="admin-topbar__actions">
+            <button class="admin-btn admin-btn--ghost" id="btn-generate-codes" type="button">
+              + Generate Codes
+            </button>
+            <button class="admin-btn admin-btn--ghost" id="btn-logout" type="button">Logout</button>
+          </div>
+        </header>
+
+        <section class="admin-filters">
+          <div class="admin-filters__tabs" id="period-tabs">
+            <button class="admin-tab admin-tab--active" type="button" data-period="today">Today</button>
+            <button class="admin-tab" type="button" data-period="7days">7 Days</button>
+            <button class="admin-tab" type="button" data-period="month">Monthly</button>
+            <button class="admin-tab" type="button" data-period="custom">Custom</button>
+            <button class="admin-tab" type="button" data-period="all">All time</button>
+          </div>
+          <div class="admin-filters__custom" id="custom-range" hidden>
+            <input type="date" id="filter-from" />
+            <span>to</span>
+            <input type="date" id="filter-to" />
+            <button class="admin-btn admin-btn--primary" id="btn-apply-custom" type="button">Apply</button>
+          </div>
+        </section>
+
+        <section class="admin-kpis" id="kpi-grid">
+          <article class="kpi-card kpi-card--primary">
+            <p class="kpi-card__label">Total Revenue</p>
+            <p class="kpi-card__value" id="kpi-revenue">—</p>
+            <p class="kpi-card__hint" id="kpi-revenue-hint">used codes × ฿59</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-card__label">Cafe Share (30%)</p>
+            <p class="kpi-card__value" id="kpi-cafe">—</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-card__label">Noey Share (70%)</p>
+            <p class="kpi-card__value" id="kpi-noey">—</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-card__label">Total Sessions</p>
+            <p class="kpi-card__value" id="kpi-sessions">—</p>
+            <p class="kpi-card__hint">tickets used</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-card__label">Total Prints</p>
+            <p class="kpi-card__value" id="kpi-prints">—</p>
+            <p class="kpi-card__hint">receipt copies</p>
+          </article>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel__header">
+            <div>
+              <h2 class="admin-panel__title">Code Usage History</h2>
+              <p class="admin-panel__subtitle" id="table-period-label">—</p>
+            </div>
+            <div class="admin-panel__tools">
+              <input
+                class="admin-search"
+                id="ticket-search"
+                type="search"
+                placeholder="Search ticket code..."
+              />
+            </div>
+          </div>
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Ticket Code</th>
+                  <th>Status</th>
+                  <th>Created At</th>
+                  <th>Used At</th>
+                  <th>Print</th>
+                  <th>Chosen Frame</th>
+                </tr>
+              </thead>
+              <tbody id="tickets-tbody">
+                <tr><td colspan="6" class="admin-table__empty">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="admin-pagination">
+            <p class="admin-pagination__info" id="pagination-info">—</p>
+            <div class="admin-pagination__controls" id="pagination-controls"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script src="/admin/js/admin.js?v=4"></script>
+  </body>
+</html>

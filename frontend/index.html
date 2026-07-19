@@ -53,6 +53,30 @@
           
         </section>
 
+        <!-- ==================== CODE ENTRY PAGE ==================== -->
+        <section class="page" id="page-code-entry" data-page="code-entry">
+          <div class="code-entry">
+            <h1 class="code-entry__title">
+              Enter your <span class="code-entry__title-accent">Code</span>
+            </h1>
+
+            <div class="code-entry__digits" id="code-entry-digits" role="group" aria-label="รหัส 6 หลัก">
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" autocomplete="one-time-code" aria-label="Digit 1" data-index="0" />
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Digit 2" data-index="1" />
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Digit 3" data-index="2" />
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Digit 4" data-index="3" />
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Digit 5" data-index="4" />
+              <input class="code-digit" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Digit 6" data-index="5" />
+            </div>
+
+            <p class="code-entry__error" id="code-entry-error" hidden></p>
+
+            <button class="code-entry__submit" id="btn-code-submit" type="button" disabled>
+              Submit
+            </button>
+          </div>
+        </section>
+
         <!-- ==================== FRAME SELECTION PAGE ==================== -->
         <section class="page" id="page-frame-select" data-page="frame-select">
           <header class="frame-header">
@@ -197,9 +221,11 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/tickets.js"></script>
     <script src="js/frames.js"></script>
     <script src="js/navigation.js"></script>
-    <script src="js/composite.js"></script>
+    <script src="js/code-entry.js"></script>
+    <script src="js/composite.js?v=rawbt1"></script>
     <script src="js/camera.js"></script>
     <script src="js/app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>

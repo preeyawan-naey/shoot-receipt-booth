@@ -407,14 +407,77 @@ function setupPrintCopies(count) {
   }
 }
 
-function printReceiptDirect(copies = 1) {
-  return new Promise((resolve) => {
-    const source = document.getElementById("print-receipt-canvas");
-    if (!source?.width) {
-      resolve();
-      return;
-    }
+/** 80mm thermal ~576px — keeps RawBT intent URL within Android limits */
+const RAWBT_MAX_WIDTH_PX = 576;
+const RAWBT_COPY_DELAY_MS = 1600;
+const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
+const RAWBT_INTENT_SUFFIX =
+  `#Intent;component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;package=${RAWBT_PACKAGE};end;`;
 
+function getPrintDriver() {
+  const fromQuery = new URLSearchParams(window.location.search).get("print");
+  if (fromQuery === "rawbt" || fromQuery === "browser") return fromQuery;
+
+  try {
+    const stored = localStorage.getItem("shoot_print_driver");
+    if (stored === "rawbt" || stored === "browser") return stored;
+  } catch {
+    /* private mode */
+  }
+
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isFullyKiosk = typeof fully !== "undefined";
+  if (isAndroid || isFullyKiosk) return "rawbt";
+
+  return "browser";
+}
+
+function scaleCanvasForThermal(source, maxWidth = RAWBT_MAX_WIDTH_PX) {
+  if (source.width <= maxWidth) return source;
+
+  const scaled = document.createElement("canvas");
+  scaled.width = maxWidth;
+  scaled.height = Math.max(1, Math.round(source.height * (maxWidth / source.width)));
+  const ctx = scaled.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, scaled.width, scaled.height);
+  return scaled;
+}
+
+function canvasToRawBtPayload(canvas) {
+  const jpegUrl = canvas.toDataURL("image/jpeg", 0.9);
+  return `rawbt:${jpegUrl}`;
+}
+
+function launchRawBtIntent(rawbtPayload) {
+  return new Promise((resolve) => {
+    const intentUrl = `intent:${encodeURI(rawbtPayload)}${RAWBT_INTENT_SUFFIX}`;
+    const link = document.createElement("a");
+    link.href = intentUrl;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
+  });
+}
+
+async function printViaRawBt(source, copies = 1) {
+  const scaled = scaleCanvasForThermal(source);
+  const payload = canvasToRawBtPayload(scaled);
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+
+  for (let i = 0; i < count; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
+    }
+    await launchRawBtIntent(payload);
+  }
+}
+
+function printViaBrowserIframe(source, copies = 1) {
+  return new Promise((resolve) => {
     const count = Math.max(1, Math.min(10, Number(copies) || 1));
     const dataUrl = source.toDataURL("image/png");
     const images = Array(count)
@@ -452,16 +515,32 @@ function printReceiptDirect(copies = 1) {
     const finish = () => {
       if (finished) return;
       finished = true;
-      setTimeout(() => iframe.remove(), 300);
+      window.setTimeout(() => iframe.remove(), 300);
       resolve();
     };
 
     win.onafterprint = finish;
-    setTimeout(finish, 60000);
+    window.setTimeout(finish, 60000);
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       win.focus();
       win.print();
     }, 300);
   });
+}
+
+function printReceiptDirect(copies = 1) {
+  const source = document.getElementById("print-receipt-canvas");
+  if (!source?.width) {
+    return Promise.resolve();
+  }
+
+  const driver = getPrintDriver();
+  console.info(`[print] driver=${driver} copies=${copies}`);
+
+  if (driver === "rawbt") {
+    return printViaRawBt(source, copies);
+  }
+
+  return printViaBrowserIframe(source, copies);
 }

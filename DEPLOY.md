@@ -2,23 +2,31 @@
 
 ให้ทุกคนสแกน QR ดาวน์โหลดรูปได้ (4G / Wi‑Fi คนละเครือข่าย)
 
+## Project layout
+
+- `frontend/` — booth UI + admin dashboard (static)
+- `backend/` — API server (also serves `frontend/` in production)
+
 ## วิธีที่ 1: Railway (แนะนำ — ง่ายที่สุด)
 
 1. สร้างบัญชี [Railway](https://railway.app)
 2. New Project → Deploy from GitHub repo นี้
-3. ตั้ง **Root Directory** = `backend` (หรือ deploy ทั้ง repo ด้วย Dockerfile)
-4. ตั้ง Environment Variables:
+3. **Root Directory** = repository root (`.`)
+4. Railway จะใช้ `railway.toml` ที่ root → build ด้วย `backend/Dockerfile`
+5. ตั้ง Environment Variables:
    ```
    PUBLIC_URL=https://your-app.up.railway.app
+   ADMIN_API_KEY=your-secret-key
    ```
-5. Deploy แล้ว copy URL จริงจาก Railway → ใส่ใน `PUBLIC_URL` → Redeploy
-6. เปิด `https://your-app.up.railway.app` ใช้งาน booth ได้เลย
+6. Deploy แล้ว copy URL จริงจาก Railway → ใส่ใน `PUBLIC_URL` → Redeploy
+7. เปิด `https://your-app.up.railway.app` ใช้งาน booth ได้เลย  
+   Backoffice: `https://your-app.up.railway.app/admin/`
 
 ## วิธีที่ 2: Render
 
 1. สร้างบัญชี [Render](https://render.com)
-2. New → Blueprint → เลือก repo (ใช้ `render.yaml`)
-3. ตั้ง `PUBLIC_URL` ใน Environment
+2. New → Blueprint → เลือก repo (ใช้ `render.yaml` ที่ root)
+3. ตั้ง `PUBLIC_URL` และ `ADMIN_API_KEY` ใน Environment
 4. Deploy
 
 ## วิธีที่ 3: Supabase Storage (แนะนำสำหรับ production)
@@ -35,6 +43,7 @@
 
 ```
 PUBLIC_URL=https://your-app.up.railway.app
+ADMIN_API_KEY=your-secret-key
 
 SUPABASE_ENABLED=true
 SUPABASE_URL=https://xxxxx.supabase.co
@@ -52,10 +61,13 @@ QR จะชี้ไป URL สาธารณะบน Supabase โดยต�
 cd backend
 cp .env.example .env
 npm install
-node server.js
+npm start
 ```
 
-เปิด `http://localhost:3000`
+เปิด:
+
+- Booth: `http://localhost:3000`
+- Backoffice: `http://localhost:3000/admin/`
 
 ## ตรวจสอบว่า deploy สำเร็จ
 
@@ -64,6 +76,7 @@ curl https://your-app.up.railway.app/api/health
 ```
 
 ควรได้:
+
 ```json
 {"ok":true,"storageMode":"local","publicUrl":"https://your-app.up.railway.app"}
 ```
@@ -81,3 +94,4 @@ curl https://your-app.up.railway.app/api/health
 - **PUBLIC_URL** ต้องเป็น URL สาธารณะที่มือถือเข้าถึงได้ (HTTPS)
 - อย่าใช้ `localhost` หรือ `192.168.x.x` ใน production
 - Booth ตู้ถ่ายรูปเปิดผ่าน URL cloud เดียวกับ backend
+- Docker build ต้องรันจาก **repo root**: `docker build -f backend/Dockerfile .`

@@ -1,4 +1,16 @@
 node_modules/
-backend/uploads/
+backend/node_modules/
+frontend/node_modules/
+
+# Secrets & local data
 .env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Runtime artifacts
+backend/uploads/
+backend/data/
+.DS_Store

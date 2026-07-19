@@ -114,8 +114,8 @@ function bindEvents() {
     updatePrintCopiesUI();
   });
 
-  btnStartOverlay?.addEventListener("click", goToFrameSelect);
-  btnStart?.addEventListener("click", goToFrameSelect);
+  btnStartOverlay?.addEventListener("click", goToCodeEntry);
+  btnStart?.addEventListener("click", goToCodeEntry);
 
   btnBack?.addEventListener("click", () => {
     appState.selectedFrame = null;
@@ -123,7 +123,8 @@ function bindEvents() {
     sessionStorage.removeItem("selectedFrameConfig");
     sessionStorage.removeItem("capturedPhotos");
     sessionStorage.removeItem("downloadQR");
-    goToHome();
+    clearVerifiedTicketCode();
+    goToCodeEntry();
   });
 
   btnCameraBack?.addEventListener("click", (event) => {
@@ -153,6 +154,14 @@ function bindEvents() {
       await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
       await printReceiptDirect(copies);
+      const ticketCode = getVerifiedTicketCode();
+      if (ticketCode) {
+        try {
+          await recordTicketPrintCount(ticketCode, copies);
+        } catch (printErr) {
+          console.warn("[print-count]", printErr);
+        }
+      }
       await handlePrintAndShowQR();
     } catch (error) {
       console.error(error);
@@ -225,6 +234,7 @@ function closeQRPopup() {
   sessionStorage.removeItem("capturedPhotos");
   sessionStorage.removeItem("downloadQR");
   sessionStorage.removeItem("printCopies");
+  clearVerifiedTicketCode();
   resetPrintCopiesUI();
 
   goToHome();
