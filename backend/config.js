@@ -1,6 +1,8 @@
 const os = require("os");
 
-require("dotenv").config();
+const path = require("path");
+
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 function getLocalIP() {
   try {
@@ -41,6 +43,11 @@ const config = {
   port: Number(process.env.PORT) || 3000,
   publicUrl: resolvePublicUrl(),
   lanIp: getLocalIP(),
+  databaseUrl: process.env.DATABASE_URL || "",
+  sqlitePath: path.join(__dirname, "data", "tickets.db"),
+  databaseSsl:
+    process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
+  adminApiKey: process.env.ADMIN_API_KEY || "",
   supabase: supabaseEnabled
     ? {
         url: supabaseUrl,

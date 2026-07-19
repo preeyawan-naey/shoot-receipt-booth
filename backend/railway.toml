@@ -1,0 +1,9 @@
+# Railway: set repository root as project root (not backend/).
+# Dockerfile path is relative to repo root.
+[build]
+builder = "dockerfile"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+restartPolicyType = "on_failure"

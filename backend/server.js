@@ -6,6 +6,11 @@ const path = require("path");
 
 const config = require("./config");
 const storage = require("./storage");
+const db = require("./db");
+const ticketRoutes = require("./routes/tickets");
+const adminRoutes = require("./routes/admin");
+
+const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
 
 const app = express();
 
@@ -133,19 +138,61 @@ app.get("/api/download/:id", (req, res) => {
   });
 });
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    storageMode: storage.getStorageMode(),
-    publicUrl: config.publicUrl,
+app.get("/api/health", async (_req, res) => {
+  try {
+    const stats = await require("./tickets").getTicketStats();
+    res.json({
+      ok: true,
+      storageMode: storage.getStorageMode(),
+      publicUrl: config.publicUrl,
+      database: db.getDbMode(),
+      tickets: stats,
+    });
+  } catch (error) {
+    res.status(503).json({
+      ok: false,
+      message: error.message,
+    });
+  }
+});
+
+app.use("/api/tickets", ticketRoutes);
+app.use("/api/admin", adminRoutes);
+
+const adminDir = path.join(FRONTEND_DIR, "admin");
+const adminApp = express.Router();
+
+adminApp.get("/", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(adminDir, "index.html"));
+});
+adminApp.use("/css", express.static(path.join(adminDir, "css"), { redirect: false, maxAge: 0 }));
+adminApp.use("/js", express.static(path.join(adminDir, "js"), { redirect: false, maxAge: 0 }));
+
+app.use("/admin", adminApp);
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/admin")) {
+    return next();
+  }
+  express.static(FRONTEND_DIR, { index: "index.html", redirect: false })(req, res, next);
+});
+
+async function startServer() {
+  try {
+    await db.initDb();
+  } catch (error) {
+    console.error("❌ Database init failed:", error.message);
+    process.exit(1);
+  }
+
+  app.listen(config.port, "0.0.0.0", () => {
+    console.log(`🚀 Backend running on port ${config.port}`);
+    console.log(`🌐 Public URL: ${config.publicUrl}`);
+    console.log(`💾 Storage: ${storage.getStorageMode()}`);
+    console.log(`🎫 Tickets API: ${config.publicUrl}/api/tickets/verify`);
+    console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
   });
-});
+}
 
-app.use(express.static(path.join(__dirname, "..")));
-
-app.listen(config.port, "0.0.0.0", () => {
-  console.log(`🚀 Backend running on port ${config.port}`);
-  console.log(`🌐 Public URL: ${config.publicUrl}`);
-  console.log(`💾 Storage: ${storage.getStorageMode()}`);
-  console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
-});
+startServer();

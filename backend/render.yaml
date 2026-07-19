@@ -1,0 +1,22 @@
+# Render Blueprint — copy or symlink to repo root as render.yaml when using Blueprint deploy.
+services:
+  - type: web
+    name: shoot-receipt-booth
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PUBLIC_URL
+        sync: false
+      - key: SUPABASE_ENABLED
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: photos
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
