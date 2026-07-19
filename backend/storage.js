@@ -57,11 +57,19 @@ function localFileExists(id) {
   return fs.existsSync(getLocalFilePath(id));
 }
 
+function buildPrintUrl(id, baseUrl) {
+  if (config.supabase && !baseUrl) {
+    return buildDownloadUrl(id, baseUrl);
+  }
+  const base = (baseUrl || config.publicUrl).replace(/\/$/, "");
+  return `${base}/api/print/${id}`;
+}
+
 function isAllowedDownloadUrl(urlString) {
   try {
     const parsed = new URL(urlString);
 
-    if (/^\/api\/download\/[0-9a-f-]{36}$/i.test(parsed.pathname)) {
+    if (/^\/api\/(?:download|print)\/[0-9a-f-]{36}$/i.test(parsed.pathname)) {
       return true;
     }
 
@@ -81,6 +89,7 @@ function isAllowedDownloadUrl(urlString) {
 module.exports = {
   getStorageMode,
   buildDownloadUrl,
+  buildPrintUrl,
   saveImage,
   getLocalFilePath,
   localFileExists,

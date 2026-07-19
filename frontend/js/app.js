@@ -151,9 +151,12 @@ function bindEvents() {
     btn.textContent = "Preparing...";
 
     try {
-      await preparePrintReceipt();
+      const receipt = await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
-      await printReceiptDirect(copies);
+      await printReceiptDirect(copies, {
+        printUrl: receipt.printUrl,
+        downloadUrl: receipt.downloadUrl,
+      });
       const ticketCode = getVerifiedTicketCode();
       if (ticketCode) {
         try {

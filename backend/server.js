@@ -105,15 +105,18 @@ app.post("/api/upload", async (req, res) => {
     const buffer = Buffer.from(base64Data, "base64");
 
     const downloadUrl = await storage.saveImage(id, buffer, resolveRequestBaseUrl(req));
+    const printUrl = storage.buildPrintUrl(id, resolveRequestBaseUrl(req));
     const qrCodeDataUrl = await QRCode.toDataURL(downloadUrl);
 
     console.log(`📸 Saved photo ${id} (${storage.getStorageMode()})`);
     console.log(`🔗 Download URL: ${downloadUrl}`);
+    console.log(`🖨️ Print URL: ${printUrl}`);
 
     res.json({
       success: true,
       qrCodeUrl: qrCodeDataUrl,
       downloadUrl,
+      printUrl,
     });
   } catch (error) {
     console.error(error);
@@ -135,6 +138,32 @@ app.get("/api/download/:id", (req, res) => {
   res.download(filePath, "shoot-receipt.jpg", (err) => {
     if (err && !res.headersSent) {
       res.status(500).send("Download failed");
+    }
+  });
+});
+
+/** Inline JPEG for RawBT PrintDownloadActivity (avoids huge base64 intents) */
+app.get("/api/print/:id", (req, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return res.status(400).send("Invalid id");
+  }
+
+  if (config.supabase) {
+    return res.redirect(storage.buildDownloadUrl(id));
+  }
+
+  const filePath = storage.getLocalFilePath(id);
+  if (!storage.localFileExists(id)) {
+    return res.status(404).send("File not found");
+  }
+
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Content-Disposition", "inline");
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send("Print image unavailable");
     }
   });
 });

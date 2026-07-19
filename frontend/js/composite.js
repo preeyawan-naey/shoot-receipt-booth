@@ -374,19 +374,26 @@ async function preparePrintReceipt() {
 
   await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl);
 
-  const finalBase64 = printCanvas.toDataURL("image/png");
+  const scaledForPrint = scaleCanvasForThermal(printCanvas);
+  const finalBase64 = scaledForPrint.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(finalBase64, downloadId);
 
   if (!uploadResult.success) {
     throw new Error(uploadResult.message || "Upload failed");
   }
 
+  const printUrl = uploadResult.printUrl || uploadResult.downloadUrl;
+
   sessionStorage.setItem(
     "downloadQR",
-    JSON.stringify({ qrCodeUrl, downloadUrl })
+    JSON.stringify({
+      qrCodeUrl,
+      downloadUrl: uploadResult.downloadUrl,
+      printUrl,
+    })
   );
 
-  return { qrCodeUrl, downloadUrl };
+  return { qrCodeUrl, downloadUrl: uploadResult.downloadUrl, printUrl };
 }
 
 function setupPrintCopies(count) {
@@ -407,14 +414,17 @@ function setupPrintCopies(count) {
   }
 }
 
-/** 80mm thermal — keep payload small for RawBT intent limits */
-const RAWBT_MAX_WIDTH_PX = 480;
-const RAWBT_MAX_HEIGHT_PX = 2200;
-const RAWBT_JPEG_QUALITY = 0.82;
-const RAWBT_COPY_DELAY_MS = 2200;
+/** 80mm thermal — keep payload small for RawBT */
+const RAWBT_MAX_WIDTH_PX = 576;
+const RAWBT_MAX_HEIGHT_PX = 2400;
+const RAWBT_JPEG_QUALITY = 0.88;
+const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
-/** Inline image print — NOT PrintDownloadActivity (that one is for URLs only) */
-const RAWBT_INTENT_SUFFIX = `#Intent;scheme=rawbt;package=${RAWBT_PACKAGE};end;`;
+/** URL download print (recommended — avoids Android intent length limits) */
+const RAWBT_URL_INTENT_SUFFIX =
+  `#Intent;component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;package=${RAWBT_PACKAGE};end;`;
+/** Inline image fallback */
+const RAWBT_INLINE_INTENT_SUFFIX = `#Intent;scheme=rawbt;package=${RAWBT_PACKAGE};end;`;
 
 function getPrintDriver() {
   const fromQuery = new URLSearchParams(window.location.search).get("print");
@@ -486,13 +496,25 @@ function canvasToRawBtPayload(canvas) {
   return payload;
 }
 
-function openRawBtPayload(rawbtPayload) {
-  const intentUrl = `intent:${encodeURI(rawbtPayload)}${RAWBT_INTENT_SUFFIX}`;
+function openRawBtIntentUrl(intentUrl) {
+  if (typeof fully !== "undefined") {
+    try {
+      if (typeof fully.startIntentUrl === "function") {
+        fully.startIntentUrl(intentUrl);
+        return "fully-intent";
+      }
+      if (typeof fully.browseUrl === "function") {
+        fully.browseUrl(intentUrl);
+        return "fully-browse";
+      }
+    } catch (err) {
+      console.warn("[print] fully intent failed", err);
+    }
+  }
 
-  // 1) intent: URL — standard RawBT call, keeps kiosk page loaded
   try {
     window.location.href = intentUrl;
-    return "intent";
+    return "location";
   } catch {
     /* fall through */
   }
@@ -506,24 +528,46 @@ function openRawBtPayload(rawbtPayload) {
   return "link";
 }
 
-function launchRawBtIntent(rawbtPayload) {
+function launchRawBtUrlPrint(imageUrl) {
   return new Promise((resolve) => {
-    const method = openRawBtPayload(rawbtPayload);
-    console.info(`[print] rawbt launch=${method}`);
+    const intentUrl = `intent:${encodeURI(imageUrl)}${RAWBT_URL_INTENT_SUFFIX}`;
+    const method = openRawBtIntentUrl(intentUrl);
+    console.info(`[print] rawbt url=${imageUrl} launch=${method}`);
     window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
   });
 }
 
-async function printViaRawBt(source, copies = 1) {
+function launchRawBtInlinePrint(rawbtPayload) {
+  return new Promise((resolve) => {
+    const intentUrl = `intent:${encodeURI(rawbtPayload)}${RAWBT_INLINE_INTENT_SUFFIX}`;
+    const method = openRawBtIntentUrl(intentUrl);
+    console.info(`[print] rawbt inline launch=${method} len=${rawbtPayload.length}`);
+    window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
+  });
+}
+
+async function printViaRawBt(source, copies = 1, printUrl = null) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+
+  if (printUrl) {
+    for (let i = 0; i < count; i += 1) {
+      if (i > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
+      }
+      await launchRawBtUrlPrint(printUrl);
+    }
+    return;
+  }
+
   const scaled = scaleCanvasForThermal(source);
   const payload = canvasToRawBtPayload(scaled);
-  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  console.warn("[print] rawbt fallback inline (no printUrl)");
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
     }
-    await launchRawBtIntent(payload);
+    await launchRawBtInlinePrint(payload);
   }
 }
 
@@ -580,17 +624,27 @@ function printViaBrowserIframe(source, copies = 1) {
   });
 }
 
-function printReceiptDirect(copies = 1) {
+function printReceiptDirect(copies = 1, options = {}) {
   const source = document.getElementById("print-receipt-canvas");
   if (!source?.width) {
     return Promise.resolve();
   }
 
   const driver = getPrintDriver();
-  console.info(`[print] driver=${driver} copies=${copies}`);
+  const cached = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const printUrl =
+    options.printUrl || cached.printUrl || options.downloadUrl || cached.downloadUrl;
+
+  console.info(`[print] driver=${driver} copies=${copies} printUrl=${printUrl || "(inline)"}`);
 
   if (driver === "rawbt") {
-    return printViaRawBt(source, copies);
+    return printViaRawBt(source, copies, printUrl);
   }
 
   return printViaBrowserIframe(source, copies);
