@@ -283,9 +283,16 @@ function finishCaptureSession() {
  * @param {object} payload
  */
 function navigateToProcess(payload) {
-  showPreviewPage(payload.photos, payload.frameId).then(() => {
-    navigateTo("process");
-  });
+  showPreviewPage(payload.photos, payload.frameId)
+    .then(() => {
+      navigateTo("process");
+    })
+    .catch((error) => {
+      console.error("[preview]", error);
+      alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
+      sessionStorage.removeItem("capturedPhotos");
+      navigateTo("frame-select");
+    });
 }
 
 document.addEventListener("DOMContentLoaded", initCameraModule);
