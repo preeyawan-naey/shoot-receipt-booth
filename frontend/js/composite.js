@@ -285,7 +285,9 @@ async function drawComposite(canvas, frameConfig, photos) {
   return canvas;
 }
 
-async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
+async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, options = {}) {
+  const { thermal = true } = options;
+  const drawPhoto = thermal ? drawImageCoverForPrint : drawImageCover;
   const frameImg = await loadImage(frameConfig.imagePath);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
@@ -320,7 +322,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
     const y = (slot.top / 100) * frameH;
     const w = (slot.width / 100) * frameW;
     const h = (slot.height / 100) * frameH;
-    drawImageCoverForPrint(ctx, photo, x, y, w, h);
+    drawPhoto(ctx, photo, x, y, w, h);
   }
 
   const qrX = (frameW - PRINT_QR_PX) / 2;
@@ -331,9 +333,12 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl) {
   return canvas;
 }
 
-async function exportCompositeForPrint(frameConfig, photos, qrDataUrl) {
+async function exportCompositeForPrint(frameConfig, photos, qrDataUrl, options = {}) {
   const canvas = document.createElement("canvas");
-  await drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl);
+  await drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, {
+    thermal: false,
+    ...options,
+  });
   return canvas.toDataURL("image/png");
 }
 
@@ -372,17 +377,27 @@ async function preparePrintReceipt() {
   const downloadId = crypto.randomUUID();
   const { qrCodeUrl, downloadUrl } = await createDownloadQR(downloadId);
 
-  await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl);
+  await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl, { thermal: true });
 
-  const scaledForPrint = scaleCanvasForThermal(printCanvas);
-  const finalBase64 = scaledForPrint.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
-  const uploadResult = await uploadCompositeAndGetQR(finalBase64, downloadId);
+  const downloadCanvas = document.createElement("canvas");
+  await drawCompositeForPrint(downloadCanvas, frame, data.photos, qrCodeUrl, {
+    thermal: false,
+  });
+  const colorBase64 = downloadCanvas.toDataURL("image/png");
+  const uploadResult = await uploadCompositeAndGetQR(colorBase64, downloadId);
 
   if (!uploadResult.success) {
     throw new Error(uploadResult.message || "Upload failed");
   }
 
-  const printUrl = uploadResult.printUrl || uploadResult.downloadUrl;
+  const scaledForPrint = scaleCanvasForThermal(printCanvas);
+  const printId = crypto.randomUUID();
+  const thermalBase64 = scaledForPrint.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const printUpload = await uploadCompositeAndGetQR(thermalBase64, printId);
+  const printUrl =
+    (printUpload.success && (printUpload.printUrl || printUpload.downloadUrl)) ||
+    uploadResult.printUrl ||
+    uploadResult.downloadUrl;
 
   sessionStorage.setItem(
     "downloadQR",
