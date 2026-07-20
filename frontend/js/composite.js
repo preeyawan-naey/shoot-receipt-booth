@@ -414,17 +414,12 @@ function setupPrintCopies(count) {
   }
 }
 
-/** 80mm thermal — keep payload small for RawBT */
-const RAWBT_MAX_WIDTH_PX = 576;
+/** 80mm thermal @ 203dpi — always render at full printable width */
+const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_MAX_HEIGHT_PX = 2400;
 const RAWBT_JPEG_QUALITY = 0.88;
 const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
-/** URL download print (recommended — avoids Android intent length limits) */
-const RAWBT_URL_INTENT_SUFFIX =
-  `#Intent;component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;package=${RAWBT_PACKAGE};end;`;
-/** Inline image fallback */
-const RAWBT_INLINE_INTENT_SUFFIX = `#Intent;scheme=rawbt;package=${RAWBT_PACKAGE};end;`;
 
 function getPrintDriver() {
   const fromQuery = new URLSearchParams(window.location.search).get("print");
@@ -446,19 +441,19 @@ function getPrintDriver() {
 
 function scaleCanvasForThermal(
   source,
-  maxWidth = RAWBT_MAX_WIDTH_PX,
+  targetWidth = RAWBT_TARGET_WIDTH_PX,
   maxHeight = RAWBT_MAX_HEIGHT_PX
 ) {
-  let targetW = source.width;
-  let targetH = source.height;
+  if (!source.width || !source.height) return source;
 
-  if (targetW > maxWidth) {
-    targetH = Math.max(1, Math.round(targetH * (maxWidth / targetW)));
-    targetW = maxWidth;
-  }
+  const scaleW = targetWidth / source.width;
+  let targetW = targetWidth;
+  let targetH = Math.max(1, Math.round(source.height * scaleW));
+
   if (targetH > maxHeight) {
-    targetW = Math.max(1, Math.round(targetW * (maxHeight / targetH)));
-    targetH = maxHeight;
+    const scale = Math.min(scaleW, maxHeight / source.height);
+    targetW = Math.max(1, Math.round(source.width * scale));
+    targetH = Math.max(1, Math.round(source.height * scale));
   }
 
   if (targetW === source.width && targetH === source.height) {
@@ -496,42 +491,145 @@ function canvasToRawBtPayload(canvas) {
   return payload;
 }
 
-function openRawBtIntentUrl(intentUrl) {
-  if (typeof fully !== "undefined") {
+const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
+
+function getFullyBridge() {
+  const api = typeof fully !== "undefined" ? fully : window.fully;
+  if (!api) return null;
+  return typeof api === "object" ? api : null;
+}
+
+function logFullyPrintDiagnostics() {
+  const api = getFullyBridge();
+  if (!api) {
+    console.warn(
+      "[print] fully JS interface not found — enable Advanced Web Settings → Enable JavaScript Interface, then restart Fully Kiosk"
+    );
+    return;
+  }
+
+  const methods = [
+    "startApplication",
+    "startIntent",
+    "broadcastIntent",
+    "getAppVersion",
+  ].filter((name) => typeof api[name] === "function");
+
+  console.info(`[print] fully OK methods=${methods.join(",") || "(none)"}`);
+}
+
+function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
+  if (targetUrl.startsWith("rawbt:")) {
+    return `intent:${encodeURI(targetUrl)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
+  }
+
+  let suffix =
+    `#Intent;action=${RAWBT_ACTION_VIEW};launchFlags=0x10000000;package=${RAWBT_PACKAGE};`;
+  if (withComponent) {
+    suffix += `component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;`;
+  }
+  suffix += "end;";
+  return `intent:${encodeURI(targetUrl)}${suffix}`;
+}
+
+function launchViaFully(api, targetUrl) {
+  const isHttpUrl = /^https?:\/\//i.test(targetUrl);
+  const intentCandidates = isHttpUrl
+    ? [
+        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
+        buildRawBtIntentUrl(targetUrl, { withComponent: false }),
+      ]
+    : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
+
+  // Proven path on Fully Kiosk + RawBT — call before startIntent
+  if (isHttpUrl && typeof api.startApplication === "function") {
     try {
-      if (typeof fully.startIntentUrl === "function") {
-        fully.startIntentUrl(intentUrl);
-        return "fully-intent";
-      }
-      if (typeof fully.browseUrl === "function") {
-        fully.browseUrl(intentUrl);
-        return "fully-browse";
-      }
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
+      return "fully-startApplication";
     } catch (err) {
-      console.warn("[print] fully intent failed", err);
+      console.warn("[print] fully.startApplication failed", err);
     }
   }
 
-  try {
-    window.location.href = intentUrl;
-    return "location";
-  } catch {
-    /* fall through */
+  if (typeof api.startIntent === "function") {
+    for (const intentUrl of intentCandidates) {
+      try {
+        api.startIntent(intentUrl);
+        return "fully-startIntent";
+      } catch (err) {
+        console.warn("[print] fully.startIntent failed", err);
+      }
+    }
+  }
+
+  if (!isHttpUrl && typeof api.startApplication === "function") {
+    try {
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
+      return "fully-startApplication";
+    } catch (err) {
+      console.warn("[print] fully.startApplication failed", err);
+    }
+  }
+
+  if (typeof api.broadcastIntent === "function") {
+    try {
+      api.broadcastIntent(intentCandidates[0]);
+      return "fully-broadcastIntent";
+    } catch (err) {
+      console.warn("[print] fully.broadcastIntent failed", err);
+    }
+  }
+
+  return null;
+}
+
+function launchRawBtView(targetUrl) {
+  logFullyPrintDiagnostics();
+
+  const fullyApi = getFullyBridge();
+  if (fullyApi) {
+    const fullyMethod = launchViaFully(fullyApi, targetUrl);
+    if (fullyMethod) return fullyMethod;
+  }
+
+  const isHttpUrl = /^https?:\/\//i.test(targetUrl);
+  const intentVariants = isHttpUrl
+    ? [
+        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
+        buildRawBtIntentUrl(targetUrl, { withComponent: false }),
+      ]
+    : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
+
+  if (targetUrl.startsWith("rawbt:")) {
+    try {
+      window.location.href = targetUrl;
+      return "rawbt-scheme";
+    } catch {
+      /* fall through */
+    }
+  }
+
+  for (const intentUrl of intentVariants) {
+    try {
+      window.location.href = intentUrl;
+      return "location-intent";
+    } catch {
+      /* try next */
+    }
   }
 
   const link = document.createElement("a");
-  link.href = intentUrl;
+  link.href = intentVariants[0];
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  return "link";
+  return "link-intent";
 }
 
 function launchRawBtUrlPrint(imageUrl) {
   return new Promise((resolve) => {
-    const intentUrl = `intent:${encodeURI(imageUrl)}${RAWBT_URL_INTENT_SUFFIX}`;
-    const method = openRawBtIntentUrl(intentUrl);
+    const method = launchRawBtView(imageUrl);
     console.info(`[print] rawbt url=${imageUrl} launch=${method}`);
     window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
   });
@@ -539,8 +637,7 @@ function launchRawBtUrlPrint(imageUrl) {
 
 function launchRawBtInlinePrint(rawbtPayload) {
   return new Promise((resolve) => {
-    const intentUrl = `intent:${encodeURI(rawbtPayload)}${RAWBT_INLINE_INTENT_SUFFIX}`;
-    const method = openRawBtIntentUrl(intentUrl);
+    const method = launchRawBtView(rawbtPayload);
     console.info(`[print] rawbt inline launch=${method} len=${rawbtPayload.length}`);
     window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
   });

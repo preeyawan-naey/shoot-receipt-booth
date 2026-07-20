@@ -90,7 +90,11 @@ function initCodeEntryModule() {
       goToFrameSelect();
     } catch (error) {
       showError(error.message || "ไม่สามารถตรวจสอบรหัสได้");
-      resetCodeEntry();
+      inputs.forEach((input) => {
+        input.value = "";
+      });
+      updateSubmitState();
+      inputs[0]?.focus();
     } finally {
       submitBtn.textContent = "Submit";
       updateSubmitState();
