@@ -34,6 +34,7 @@ async function verifyTicket(ticketCode) {
     return {
       ok: false,
       status: 404,
+      reason: "not_found",
       message: "รหัสไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง",
     };
   }
@@ -42,6 +43,7 @@ async function verifyTicket(ticketCode) {
     return {
       ok: false,
       status: 409,
+      reason: "already_used",
       message: "รหัสนี้ถูกใช้ไปแล้ว",
     };
   }

@@ -9,9 +9,10 @@ router.post("/verify", async (req, res) => {
     const result = await tickets.verifyTicket(ticketCode);
 
     if (!result.ok) {
-      return res.status(result.status).json({
+      return res.json({
         success: false,
         message: result.message,
+        reason: result.reason,
       });
     }
 

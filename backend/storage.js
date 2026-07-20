@@ -9,11 +9,16 @@ function getStorageMode() {
   return config.supabase ? "supabase" : "local";
 }
 
+function buildSupabasePublicUrl(id) {
+  if (!config.supabase) return null;
+  const { url, bucket } = config.supabase;
+  return `${url}/storage/v1/object/public/${bucket}/${id}.jpg`;
+}
+
 function buildDownloadUrl(id, baseUrl) {
-  if (config.supabase && !baseUrl) {
-    const { url, bucket } = config.supabase;
-    return `${url}/storage/v1/object/public/${bucket}/${id}.jpg`;
-  }
+  const direct = buildSupabasePublicUrl(id);
+  if (direct) return direct;
+
   const base = (baseUrl || config.publicUrl).replace(/\/$/, "");
   return `${base}/api/download/${id}`;
 }
@@ -58,9 +63,9 @@ function localFileExists(id) {
 }
 
 function buildPrintUrl(id, baseUrl) {
-  if (config.supabase && !baseUrl) {
-    return buildDownloadUrl(id, baseUrl);
-  }
+  const direct = buildSupabasePublicUrl(id);
+  if (direct) return direct;
+
   const base = (baseUrl || config.publicUrl).replace(/\/$/, "");
   return `${base}/api/print/${id}`;
 }
