@@ -44,9 +44,12 @@ function coverMockQRSlot(ctx, canvasWidth, canvasHeight) {
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // crossOrigin breaks data:/blob: URLs on Android WebView (Fully Kiosk)
+    if (/^https?:\/\//i.test(src)) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    img.onerror = () => reject(new Error(`Failed to load image: ${src.slice(0, 80)}`));
     img.src = src;
   });
 }
@@ -456,7 +459,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "kiosk4";
+const PRINT_BUILD = "kiosk5";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
