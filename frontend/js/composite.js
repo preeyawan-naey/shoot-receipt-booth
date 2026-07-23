@@ -390,25 +390,26 @@ async function preparePrintReceipt() {
     throw new Error(uploadResult.message || "Upload failed");
   }
 
-  const scaledForPrint = scaleCanvasForThermal(printCanvas);
-  const printId = crypto.randomUUID();
-  const thermalBase64 = scaledForPrint.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
-  const printUpload = await uploadCompositeAndGetQR(thermalBase64, printId);
-  const printUrl =
-    (printUpload.success && (printUpload.printUrl || printUpload.downloadUrl)) ||
-    uploadResult.printUrl ||
-    uploadResult.downloadUrl;
+  const scaledColor = scaleCanvasForThermal(downloadCanvas);
+  const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
+
+  if (!uploadResult.success) {
+    throw new Error(uploadResult.message || "Upload failed");
+  }
+
+  const imageUrl = uploadResult.downloadUrl || uploadResult.printUrl;
 
   sessionStorage.setItem(
     "downloadQR",
     JSON.stringify({
       qrCodeUrl,
-      downloadUrl: uploadResult.downloadUrl,
-      printUrl,
+      downloadUrl: imageUrl,
+      printUrl: imageUrl,
     })
   );
 
-  return { qrCodeUrl, downloadUrl: uploadResult.downloadUrl, printUrl };
+  return { qrCodeUrl, downloadUrl: imageUrl, printUrl: imageUrl };
 }
 
 function clearPrintCopies() {
@@ -449,10 +450,13 @@ async function setupPrintCopies(count) {
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_MAX_HEIGHT_PX = 2400;
-const RAWBT_JPEG_QUALITY = 0.88;
+const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
-const PRINT_BUILD = "kiosk3";
+const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
+const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
+const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
+const PRINT_BUILD = "kiosk4";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -477,11 +481,12 @@ function getPrintDriver() {
   return "browser";
 }
 
-function resolveRawBtHttpUrl(printUrl) {
-  const candidates = [printUrl];
+function resolveRawBtHttpUrl(urls = {}) {
+  const { downloadUrl, printUrl } = urls;
+  const candidates = [downloadUrl, printUrl];
   try {
     const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-    candidates.push(cached.printUrl, cached.downloadUrl);
+    candidates.push(cached.downloadUrl, cached.printUrl);
   } catch {
     /* ignore */
   }
@@ -556,12 +561,39 @@ function canvasToRawBtPayload(canvas) {
   return payload;
 }
 
-const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 
 function getFullyBridge() {
   const api = typeof fully !== "undefined" ? fully : window.fully;
   if (!api) return null;
   return typeof api === "object" ? api : null;
+}
+
+function buildPrintRawBtSilentIntent(data) {
+  const encoded = encodeURIComponent(data);
+  return (
+    `intent:#Intent;action=${RAWBT_PRINT_ACTION};` +
+    `launchFlags=0x10000000;package=${RAWBT_PACKAGE};` +
+    `S.${RAWBT_PRINT_DATA_EXTRA}=${encoded};end;`
+  );
+}
+
+function buildRawBtSchemeIntent(httpUrl) {
+  const payload = `rawbt:${httpUrl}`;
+  return `intent:${encodeURI(payload)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
+}
+
+function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
+  if (targetUrl.startsWith("rawbt:")) {
+    return `intent:${encodeURI(targetUrl)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
+  }
+
+  let suffix =
+    `#Intent;action=${RAWBT_ACTION_VIEW};launchFlags=0x10000000;package=${RAWBT_PACKAGE};`;
+  if (withComponent) {
+    suffix += `component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;`;
+  }
+  suffix += "end;";
+  return `intent:${encodeURI(targetUrl)}${suffix}`;
 }
 
 function logFullyPrintDiagnostics() {
@@ -583,31 +615,14 @@ function logFullyPrintDiagnostics() {
   console.info(`[print] fully OK methods=${methods.join(",") || "(none)"}`);
 }
 
-function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
-  if (targetUrl.startsWith("rawbt:")) {
-    return `intent:${encodeURI(targetUrl)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
-  }
-
-  let suffix =
-    `#Intent;action=${RAWBT_ACTION_VIEW};launchFlags=0x10000000;package=${RAWBT_PACKAGE};`;
-  if (withComponent) {
-    suffix += `component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;`;
-  }
-  suffix += "end;";
-  return `intent:${encodeURI(targetUrl)}${suffix}`;
-}
-
 function launchViaFully(api, targetUrl) {
   const isHttpUrl = /^https?:\/\//i.test(targetUrl);
   const isRawBtScheme = targetUrl.startsWith("rawbt:");
   const intentCandidates = isHttpUrl
-    ? [
-        buildRawBtIntentUrl(targetUrl, { withComponent: false }),
-        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
-      ]
+    ? [buildRawBtIntentUrl(targetUrl, { withComponent: false })]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // HTTP image URL — proven on Fully + RawBT (fully.startApplication)
+  // HTTP color image — same path as manual fully.startApplication(...) in console
   if (isHttpUrl && typeof api.startApplication === "function") {
     try {
       api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
@@ -617,7 +632,22 @@ function launchViaFully(api, targetUrl) {
     }
   }
 
-  // Inline rawbt: — startApplication often ignores this; use intent instead
+  // Silent service fallback (PRINT_RAWBT) if startApplication unavailable
+  if (isHttpUrl && typeof api.startIntent === "function") {
+    const silentIntents = [
+      buildPrintRawBtSilentIntent(targetUrl),
+      buildRawBtSchemeIntent(targetUrl),
+    ];
+    for (const intentUrl of silentIntents) {
+      try {
+        api.startIntent(intentUrl);
+        return "fully-startIntent-silent";
+      } catch (err) {
+        console.warn("[print] fully.startIntent silent failed", err);
+      }
+    }
+  }
+
   if (isRawBtScheme && typeof api.startIntent === "function") {
     try {
       api.startIntent(buildRawBtIntentUrl(targetUrl, { withComponent: false }));
@@ -700,15 +730,14 @@ function launchRawBtPrint(targetUrl) {
   return method;
 }
 
-async function printViaRawBt(source, copies = 1, printUrl = null) {
+async function printViaRawBt(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const scaled = scaleCanvasForThermal(source);
-  const payload = canvasToRawBtPayload(scaled);
-  const httpTarget = resolveRawBtHttpUrl(printUrl);
+  const payload = canvasToRawBtPayload(scaleCanvasForThermal(source));
+  const httpTarget = resolveRawBtHttpUrl(urls);
   const onFully = !!getFullyBridge();
 
   if (onFully && !httpTarget) {
-    console.error("[print] Fully kiosk requires http printUrl — none available");
+    console.error("[print] Fully kiosk requires http image url — none available");
   }
 
   for (let i = 0; i < count; i += 1) {
@@ -718,7 +747,7 @@ async function printViaRawBt(source, copies = 1, printUrl = null) {
 
     if (httpTarget) {
       const method = launchRawBtPrint(httpTarget);
-      console.info(`[print] rawbt http launch=${method} url=${httpTarget}`);
+      console.info(`[print] rawbt color-url launch=${method} url=${httpTarget}`);
       continue;
     }
 
@@ -845,13 +874,15 @@ function printReceiptDirect(copies = 1, options = {}) {
       return {};
     }
   })();
-  const printUrl =
-    options.printUrl || cached.printUrl || options.downloadUrl || cached.downloadUrl;
+  const downloadUrl = options.downloadUrl || cached.downloadUrl;
+  const printUrl = options.printUrl || cached.printUrl;
 
-  console.info(`[print] driver=${driver} copies=${copies} printUrl=${printUrl || "(inline)"}`);
+  console.info(
+    `[print] driver=${driver} copies=${copies} downloadUrl=${downloadUrl || "(none)"}`
+  );
 
   if (driver === "rawbt") {
-    return printViaRawBt(source, copies, printUrl);
+    return printViaRawBt(source, copies, { downloadUrl, printUrl });
   }
 
   return printViaBrowser(source, copies);
