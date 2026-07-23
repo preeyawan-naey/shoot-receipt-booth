@@ -156,19 +156,25 @@ function bindEvents() {
     try {
       const receipt = await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
-      await printReceiptDirect(copies, {
+
+      void handlePrintAndShowQR();
+
+      const ticketCode = getVerifiedTicketCode();
+      void printReceiptDirect(copies, {
         printUrl: receipt.printUrl,
         downloadUrl: receipt.downloadUrl,
-      });
-      const ticketCode = getVerifiedTicketCode();
-      if (ticketCode) {
-        try {
-          await recordTicketPrintCount(ticketCode, copies);
-        } catch (printErr) {
-          console.warn("[print-count]", printErr);
-        }
-      }
-      await handlePrintAndShowQR();
+      })
+        .then(async () => {
+          if (!ticketCode) return;
+          try {
+            await recordTicketPrintCount(ticketCode, copies);
+          } catch (printErr) {
+            console.warn("[print-count]", printErr);
+          }
+        })
+        .catch((printErr) => {
+          console.error("[print]", printErr);
+        });
     } catch (error) {
       console.error(error);
       alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");

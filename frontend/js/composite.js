@@ -454,6 +454,11 @@ const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 
 function getPrintDriver() {
+  // Fully Kiosk: silent RawBT only (fully.print / Android dialog breaks kiosk UX)
+  if (getFullyBridge()) {
+    return "rawbt";
+  }
+
   const fromQuery = new URLSearchParams(window.location.search).get("print");
   if (fromQuery === "rawbt" || fromQuery === "browser") return fromQuery;
 
@@ -464,11 +469,24 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isFullyKiosk = typeof fully !== "undefined";
-  if (isAndroid || isFullyKiosk) return "rawbt";
+  if (/Android/i.test(navigator.userAgent)) return "rawbt";
 
   return "browser";
+}
+
+function refocusBoothAfterPrint() {
+  const api = getFullyBridge();
+  if (!api || typeof api.bringToForeground !== "function") return;
+
+  for (const delayMs of [300, 900, 1800]) {
+    window.setTimeout(() => {
+      try {
+        api.bringToForeground();
+      } catch (err) {
+        console.warn("[print] bringToForeground failed", err);
+      }
+    }, delayMs);
+  }
 }
 
 function scaleCanvasForThermal(
@@ -566,6 +584,7 @@ function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
 
 function launchViaFully(api, targetUrl) {
   const isHttpUrl = /^https?:\/\//i.test(targetUrl);
+  const isRawBtScheme = targetUrl.startsWith("rawbt:");
   const intentCandidates = isHttpUrl
     ? [
         buildRawBtIntentUrl(targetUrl, { withComponent: true }),
@@ -573,8 +592,8 @@ function launchViaFully(api, targetUrl) {
       ]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // Proven path on Fully Kiosk + RawBT — call before startIntent
-  if (isHttpUrl && typeof api.startApplication === "function") {
+  // Proven silent path on Fully Kiosk + RawBT — inline rawbt: or http URL
+  if ((isHttpUrl || isRawBtScheme) && typeof api.startApplication === "function") {
     try {
       api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
       return "fully-startApplication";
@@ -591,15 +610,6 @@ function launchViaFully(api, targetUrl) {
       } catch (err) {
         console.warn("[print] fully.startIntent failed", err);
       }
-    }
-  }
-
-  if (!isHttpUrl && typeof api.startApplication === "function") {
-    try {
-      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
-      return "fully-startApplication";
-    } catch (err) {
-      console.warn("[print] fully.startApplication failed", err);
     }
   }
 
@@ -659,44 +669,38 @@ function launchRawBtView(targetUrl) {
   return "link-intent";
 }
 
-function launchRawBtUrlPrint(imageUrl) {
-  return new Promise((resolve) => {
-    const method = launchRawBtView(imageUrl);
-    console.info(`[print] rawbt url=${imageUrl} launch=${method}`);
-    window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
-  });
-}
-
-function launchRawBtInlinePrint(rawbtPayload) {
-  return new Promise((resolve) => {
-    const method = launchRawBtView(rawbtPayload);
-    console.info(`[print] rawbt inline launch=${method} len=${rawbtPayload.length}`);
-    window.setTimeout(resolve, RAWBT_COPY_DELAY_MS);
-  });
+function launchRawBtPrint(targetUrl) {
+  const method = launchRawBtView(targetUrl);
+  refocusBoothAfterPrint();
+  return method;
 }
 
 async function printViaRawBt(source, copies = 1, printUrl = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-
-  if (printUrl) {
-    for (let i = 0; i < count; i += 1) {
-      if (i > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
-      }
-      await launchRawBtUrlPrint(printUrl);
-    }
-    return;
-  }
-
   const scaled = scaleCanvasForThermal(source);
   const payload = canvasToRawBtPayload(scaled);
-  console.warn("[print] rawbt fallback inline (no printUrl)");
+  const maxInlineLen = 850_000;
+  const useInline = payload.length <= maxInlineLen;
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
     }
-    await launchRawBtInlinePrint(payload);
+
+    if (useInline) {
+      const method = launchRawBtPrint(payload);
+      console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
+      continue;
+    }
+
+    if (printUrl) {
+      const method = launchRawBtPrint(printUrl);
+      console.info(`[print] rawbt url launch=${method} url=${printUrl}`);
+      continue;
+    }
+
+    const method = launchRawBtPrint(payload);
+    console.warn(`[print] rawbt inline oversized (${payload.length}), launch=${method}`);
   }
 }
 
