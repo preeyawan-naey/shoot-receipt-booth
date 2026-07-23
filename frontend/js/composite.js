@@ -411,22 +411,39 @@ async function preparePrintReceipt() {
   return { qrCodeUrl, downloadUrl: uploadResult.downloadUrl, printUrl };
 }
 
-function setupPrintCopies(count) {
+function clearPrintCopies() {
+  const container = document.getElementById("print-copies-container");
+  if (container) container.innerHTML = "";
+  document.body.classList.remove("is-printing");
+}
+
+async function setupPrintCopies(count) {
   const source = document.getElementById("print-receipt-canvas");
   const container = document.getElementById("print-copies-container");
-  if (!source || !container) return;
+  if (!source || !container || !source.width) return;
 
   const copies = Math.max(1, Math.min(10, Number(count) || 1));
   container.innerHTML = "";
+  const dataUrl = source.toDataURL("image/png");
+  const loadPromises = [];
 
   for (let i = 0; i < copies; i++) {
-    const copy = document.createElement("canvas");
-    copy.width = source.width;
-    copy.height = source.height;
-    copy.getContext("2d").drawImage(source, 0, 0);
-    copy.className = "print-receipt-copy";
-    container.appendChild(copy);
+    const img = document.createElement("img");
+    img.className = "print-receipt-copy";
+    img.alt = "";
+    img.src = dataUrl;
+    container.appendChild(img);
+    loadPromises.push(
+      img.complete
+        ? Promise.resolve()
+        : new Promise((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error("print image load failed"));
+          })
+    );
   }
+
+  await Promise.all(loadPromises);
 }
 
 /** 80mm thermal @ 203dpi — always render at full printable width */
@@ -683,6 +700,49 @@ async function printViaRawBt(source, copies = 1, printUrl = null) {
   }
 }
 
+function printViaFully(source, copies = 1) {
+  const api = getFullyBridge();
+  if (!api || typeof api.print !== "function") {
+    return printViaBrowserIframe(source, copies);
+  }
+
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const prevAfterPrint = window.onafterprint;
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.onafterprint = prevAfterPrint;
+      clearPrintCopies();
+      resolve();
+    };
+
+    window.onafterprint = finish;
+    window.setTimeout(finish, 120000);
+
+    setupPrintCopies(copies)
+      .then(() => {
+        document.body.classList.add("is-printing");
+        console.info("[print] fully.print()");
+        window.setTimeout(() => {
+          try {
+            api.print();
+          } catch (err) {
+            console.error("[print] fully.print() failed", err);
+            finish();
+            reject(err);
+          }
+        }, 200);
+      })
+      .catch((err) => {
+        console.error("[print] setupPrintCopies failed", err);
+        finish();
+        reject(err);
+      });
+  });
+}
+
 function printViaBrowserIframe(source, copies = 1) {
   return new Promise((resolve) => {
     const count = Math.max(1, Math.min(10, Number(copies) || 1));
@@ -736,6 +796,14 @@ function printViaBrowserIframe(source, copies = 1) {
   });
 }
 
+function printViaBrowser(source, copies = 1) {
+  const api = getFullyBridge();
+  if (api && typeof api.print === "function") {
+    return printViaFully(source, copies);
+  }
+  return printViaBrowserIframe(source, copies);
+}
+
 function printReceiptDirect(copies = 1, options = {}) {
   const source = document.getElementById("print-receipt-canvas");
   if (!source?.width) {
@@ -759,5 +827,5 @@ function printReceiptDirect(copies = 1, options = {}) {
     return printViaRawBt(source, copies, printUrl);
   }
 
-  return printViaBrowserIframe(source, copies);
+  return printViaBrowser(source, copies);
 }
