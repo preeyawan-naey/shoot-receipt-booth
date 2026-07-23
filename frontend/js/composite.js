@@ -452,6 +452,9 @@ const RAWBT_MAX_HEIGHT_PX = 2400;
 const RAWBT_JPEG_QUALITY = 0.88;
 const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
+const PRINT_BUILD = "kiosk3";
+
+console.info(`[print] composite ${PRINT_BUILD}`);
 
 function getPrintDriver() {
   // Fully Kiosk: silent RawBT only (fully.print / Android dialog breaks kiosk UX)
@@ -474,11 +477,23 @@ function getPrintDriver() {
   return "browser";
 }
 
+function resolveRawBtHttpUrl(printUrl) {
+  const candidates = [printUrl];
+  try {
+    const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    candidates.push(cached.printUrl, cached.downloadUrl);
+  } catch {
+    /* ignore */
+  }
+  return candidates.find((url) => url && /^https?:\/\//i.test(url)) || null;
+}
+
 function refocusBoothAfterPrint() {
   const api = getFullyBridge();
   if (!api || typeof api.bringToForeground !== "function") return;
 
-  for (const delayMs of [300, 900, 1800]) {
+  // Wait for RawBT to fetch + print before pulling Fully back to QR modal
+  for (const delayMs of [2500, 4500, 6500]) {
     window.setTimeout(() => {
       try {
         api.bringToForeground();
@@ -689,8 +704,12 @@ async function printViaRawBt(source, copies = 1, printUrl = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const scaled = scaleCanvasForThermal(source);
   const payload = canvasToRawBtPayload(scaled);
-  const httpTarget =
-    printUrl && /^https?:\/\//i.test(printUrl) ? printUrl : null;
+  const httpTarget = resolveRawBtHttpUrl(printUrl);
+  const onFully = !!getFullyBridge();
+
+  if (onFully && !httpTarget) {
+    console.error("[print] Fully kiosk requires http printUrl — none available");
+  }
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
