@@ -587,18 +587,28 @@ function launchViaFully(api, targetUrl) {
   const isRawBtScheme = targetUrl.startsWith("rawbt:");
   const intentCandidates = isHttpUrl
     ? [
-        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
         buildRawBtIntentUrl(targetUrl, { withComponent: false }),
+        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
       ]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // Proven silent path on Fully Kiosk + RawBT — inline rawbt: or http URL
-  if ((isHttpUrl || isRawBtScheme) && typeof api.startApplication === "function") {
+  // HTTP image URL — proven on Fully + RawBT (fully.startApplication)
+  if (isHttpUrl && typeof api.startApplication === "function") {
     try {
       api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
       return "fully-startApplication";
     } catch (err) {
       console.warn("[print] fully.startApplication failed", err);
+    }
+  }
+
+  // Inline rawbt: — startApplication often ignores this; use intent instead
+  if (isRawBtScheme && typeof api.startIntent === "function") {
+    try {
+      api.startIntent(buildRawBtIntentUrl(targetUrl, { withComponent: false }));
+      return "fully-startIntent-inline";
+    } catch (err) {
+      console.warn("[print] fully.startIntent inline failed", err);
     }
   }
 
@@ -637,8 +647,8 @@ function launchRawBtView(targetUrl) {
   const isHttpUrl = /^https?:\/\//i.test(targetUrl);
   const intentVariants = isHttpUrl
     ? [
-        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
         buildRawBtIntentUrl(targetUrl, { withComponent: false }),
+        buildRawBtIntentUrl(targetUrl, { withComponent: true }),
       ]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
@@ -679,28 +689,22 @@ async function printViaRawBt(source, copies = 1, printUrl = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const scaled = scaleCanvasForThermal(source);
   const payload = canvasToRawBtPayload(scaled);
-  const maxInlineLen = 850_000;
-  const useInline = payload.length <= maxInlineLen;
+  const httpTarget =
+    printUrl && /^https?:\/\//i.test(printUrl) ? printUrl : null;
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
     }
 
-    if (useInline) {
-      const method = launchRawBtPrint(payload);
-      console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
-      continue;
-    }
-
-    if (printUrl) {
-      const method = launchRawBtPrint(printUrl);
-      console.info(`[print] rawbt url launch=${method} url=${printUrl}`);
+    if (httpTarget) {
+      const method = launchRawBtPrint(httpTarget);
+      console.info(`[print] rawbt http launch=${method} url=${httpTarget}`);
       continue;
     }
 
     const method = launchRawBtPrint(payload);
-    console.warn(`[print] rawbt inline oversized (${payload.length}), launch=${method}`);
+    console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
   }
 }
 
