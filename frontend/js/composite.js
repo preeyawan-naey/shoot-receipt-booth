@@ -389,11 +389,9 @@ async function preparePrintReceipt() {
   const scaledColor = scaleCanvasForThermal(
     downloadCanvas,
     RAWBT_TARGET_WIDTH_PX,
-    RAWBT_SINGLE_BAND_MAX_HEIGHT_PX
+    RAWBT_MAX_HEIGHT_PX
   );
-  console.info(
-    `[print] upload size ${scaledColor.width}x${scaledColor.height} (band-safe max ${RAWBT_SINGLE_BAND_MAX_HEIGHT_PX}px)`
-  );
+  console.info(`[print] upload size ${scaledColor.width}x${scaledColor.height}`);
   const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
 
@@ -453,35 +451,41 @@ async function setupPrintCopies(count) {
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_MAX_HEIGHT_PX = 2400;
-/** RawBT splits tall images into bands (~1024px) — cap print upload to avoid white gaps */
-const RAWBT_SINGLE_BAND_MAX_HEIGHT_PX = 1020;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
+const ESCPOS_COPY_DELAY_MS = 1200;
+const ESCPOS_MAX_BASE64_LEN = 900_000;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "kiosk8";
+const PRINT_BUILD = "escpos1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
 function getPrintDriver() {
-  // Fully Kiosk: silent RawBT only (fully.print / Android dialog breaks kiosk UX)
-  if (getFullyBridge()) {
-    return "rawbt";
-  }
-
   const fromQuery = new URLSearchParams(window.location.search).get("print");
-  if (fromQuery === "rawbt" || fromQuery === "browser") return fromQuery;
+  if (fromQuery === "escpos" || fromQuery === "rawbt" || fromQuery === "browser") {
+    return fromQuery;
+  }
 
   try {
     const stored = localStorage.getItem("shoot_print_driver");
-    if (stored === "rawbt" || stored === "browser") return stored;
+    if (stored === "escpos" || stored === "rawbt" || stored === "browser") {
+      return stored;
+    }
   } catch {
     /* private mode */
   }
 
-  if (/Android/i.test(navigator.userAgent)) return "rawbt";
+  // Fully Kiosk + USB ESC/POS via RawBT base64 (no image URL / no modal)
+  if (getFullyBridge()) {
+    return "escpos";
+  }
+
+  if (/Android/i.test(navigator.userAgent)) {
+    return "escpos";
+  }
 
   return "browser";
 }
@@ -502,8 +506,8 @@ function refocusBoothAfterPrint() {
   const api = getFullyBridge();
   if (!api || typeof api.bringToForeground !== "function") return;
 
-  // Wait for RawBT to start fetch, then pull Fully back over RawBT dialog
-  for (const delayMs of [600, 1200, 2200, 4000]) {
+  // RawBT needs foreground ~3–5s to fetch URL and print — refocus too early cancels the job
+  for (const delayMs of [5000, 7000, 9000]) {
     window.setTimeout(() => {
       try {
         api.bringToForeground();
@@ -521,29 +525,31 @@ function scaleCanvasForThermal(
 ) {
   if (!source.width || !source.height) return source;
 
-  const scaleW = targetWidth / source.width;
-  let targetW = targetWidth;
-  let targetH = Math.max(1, Math.round(source.height * scaleW));
+  const scale = Math.min(
+    targetWidth / source.width,
+    maxHeight / source.height
+  );
+  const contentW = Math.max(1, Math.round(source.width * scale));
+  const contentH = Math.max(1, Math.round(source.height * scale));
 
-  if (targetH > maxHeight) {
-    const scale = Math.min(scaleW, maxHeight / source.height);
-    targetW = Math.max(1, Math.round(source.width * scale));
-    targetH = Math.max(1, Math.round(source.height * scale));
-  }
-
-  if (targetW === source.width && targetH === source.height) {
+  if (
+    contentW === source.width &&
+    contentH === source.height &&
+    contentW === targetWidth
+  ) {
     return source;
   }
 
   const scaled = document.createElement("canvas");
-  scaled.width = targetW;
-  scaled.height = targetH;
+  scaled.width = targetWidth;
+  scaled.height = contentH;
   const ctx = scaled.getContext("2d");
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, targetW, targetH);
+  ctx.fillRect(0, 0, scaled.width, scaled.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, 0, 0, targetW, targetH);
+  const x = Math.round((targetWidth - contentW) / 2);
+  ctx.drawImage(source, x, 0, contentW, contentH);
   return scaled;
 }
 
@@ -745,6 +751,71 @@ function launchRawBtView(targetUrl) {
   return "link-intent";
 }
 
+function launchEscPosViaFully(base64Payload) {
+  logFullyPrintDiagnostics();
+  const intentUrl = buildRawBtEscPosIntent(base64Payload);
+  const api = getFullyBridge();
+
+  if (api) {
+    if (typeof api.startIntent === "function") {
+      try {
+        api.startIntent(intentUrl);
+        return "fully-startIntent-escpos";
+      } catch (err) {
+        console.warn("[print] fully.startIntent escpos failed", err);
+      }
+    }
+
+    if (typeof api.broadcastIntent === "function") {
+      try {
+        api.broadcastIntent(intentUrl);
+        return "fully-broadcastIntent-escpos";
+      } catch (err) {
+        console.warn("[print] fully.broadcastIntent escpos failed", err);
+      }
+    }
+  }
+
+  try {
+    window.location.href = intentUrl;
+    return "location-intent-escpos";
+  } catch (err) {
+    console.warn("[print] location escpos intent failed", err);
+  }
+
+  return null;
+}
+
+async function printViaEscPos(source, copies = 1) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const scaled = scaleCanvasForThermal(
+    source,
+    ESCPOS_PRINT_WIDTH_PX,
+    RAWBT_MAX_HEIGHT_PX
+  );
+  const escposBytes = buildEscPosReceiptFromCanvas(scaled);
+  const base64 = escPosBytesToBase64(escposBytes);
+
+  console.info(
+    `[print] escpos ${scaled.width}x${scaled.height} bytes=${escposBytes.length} b64=${base64.length}`
+  );
+
+  if (base64.length > ESCPOS_MAX_BASE64_LEN) {
+    console.error(
+      `[print] escpos payload too large (${base64.length} chars) — reduce receipt height`
+    );
+    return;
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, ESCPOS_COPY_DELAY_MS));
+    }
+    const method = launchEscPosViaFully(base64);
+    console.info(`[print] escpos launch=${method || "failed"}`);
+  }
+}
+
 function launchRawBtPrint(targetUrl) {
   const method = launchRawBtView(targetUrl);
   refocusBoothAfterPrint();
@@ -901,6 +972,10 @@ function printReceiptDirect(copies = 1, options = {}) {
   console.info(
     `[print] driver=${driver} copies=${copies} downloadUrl=${downloadUrl || "(none)"}`
   );
+
+  if (driver === "escpos") {
+    return printViaEscPos(source, copies);
+  }
 
   if (driver === "rawbt") {
     return printViaRawBt(source, copies, { downloadUrl, printUrl });
