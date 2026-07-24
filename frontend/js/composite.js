@@ -378,7 +378,8 @@ async function preparePrintReceipt() {
   }
 
   const downloadId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl } = await createDownloadQR(downloadId);
+  const printId = crypto.randomUUID();
+  const { qrCodeUrl } = await createDownloadQR(downloadId);
 
   await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl, { thermal: true });
 
@@ -386,31 +387,38 @@ async function preparePrintReceipt() {
   await drawCompositeForPrint(downloadCanvas, frame, data.photos, qrCodeUrl, {
     thermal: false,
   });
-  const scaledColor = scaleCanvasForThermal(
-    downloadCanvas,
-    RAWBT_TARGET_WIDTH_PX,
-    RAWBT_MAX_HEIGHT_PX
-  );
-  console.info(`[print] upload size ${scaledColor.width}x${scaledColor.height}`);
-  const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
-  const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
 
-  if (!uploadResult.success) {
-    throw new Error(uploadResult.message || "Upload failed");
+  const scaledColor = scaleCanvasForThermal(downloadCanvas, RAWBT_TARGET_WIDTH_PX);
+  console.info(`[print] download upload ${scaledColor.width}x${scaledColor.height} color`);
+  const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const colorUpload = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
+
+  if (!colorUpload.success) {
+    throw new Error(colorUpload.message || "Upload failed");
   }
 
-  const imageUrl = uploadResult.downloadUrl || uploadResult.printUrl;
+  const scaledThermal = scaleCanvasForThermal(printCanvas, RAWBT_TARGET_WIDTH_PX);
+  console.info(`[print] rawbt upload ${scaledThermal.width}x${scaledThermal.height} thermal`);
+  const thermalJpegBase64 = scaledThermal.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const printUpload = await uploadCompositeAndGetQR(thermalJpegBase64, printId);
+
+  if (!printUpload.success) {
+    throw new Error(printUpload.message || "Thermal upload failed");
+  }
+
+  const downloadUrl = colorUpload.downloadUrl || colorUpload.printUrl;
+  const printUrl = printUpload.downloadUrl || printUpload.printUrl;
 
   sessionStorage.setItem(
     "downloadQR",
     JSON.stringify({
       qrCodeUrl,
-      downloadUrl: imageUrl,
-      printUrl: imageUrl,
+      downloadUrl,
+      printUrl,
     })
   );
 
-  return { qrCodeUrl, downloadUrl: imageUrl, printUrl: imageUrl };
+  return { qrCodeUrl, downloadUrl, printUrl };
 }
 
 function clearPrintCopies() {
@@ -450,8 +458,6 @@ async function setupPrintCopies(count) {
 
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
-/** RawBT splits images taller than ~1024px into bands — keep one band to avoid white gaps */
-const RAWBT_MAX_HEIGHT_PX = 960;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_CUT_DELAY_MS = 4500;
@@ -461,7 +467,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "rawbt8";
+const PRINT_BUILD = "rawbt10";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -495,10 +501,10 @@ function getPrintDriver() {
 
 function resolveRawBtHttpUrl(urls = {}) {
   const { downloadUrl, printUrl } = urls;
-  const candidates = [downloadUrl, printUrl];
+  const candidates = [printUrl, downloadUrl];
   try {
     const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-    candidates.push(cached.downloadUrl, cached.printUrl);
+    candidates.push(cached.printUrl, cached.downloadUrl);
   } catch {
     /* ignore */
   }
@@ -521,17 +527,10 @@ function refocusBoothAfterPrint() {
   }
 }
 
-function scaleCanvasForThermal(
-  source,
-  targetWidth = RAWBT_TARGET_WIDTH_PX,
-  maxHeight = RAWBT_MAX_HEIGHT_PX
-) {
+function scaleCanvasForThermal(source, targetWidth = RAWBT_TARGET_WIDTH_PX) {
   if (!source.width || !source.height) return source;
 
-  const scale = Math.min(
-    targetWidth / source.width,
-    maxHeight / source.height
-  );
+  const scale = targetWidth / source.width;
   const contentW = Math.max(1, Math.round(source.width * scale));
   const contentH = Math.max(1, Math.round(source.height * scale));
 
@@ -863,7 +862,7 @@ async function printViaRawBt(source, copies = 1, urls = {}) {
     let method = null;
     if (httpTarget) {
       method = launchRawBtPrint(httpTarget);
-      console.info(`[print] rawbt color-url launch=${method} url=${httpTarget}`);
+      console.info(`[print] rawbt thermal-url launch=${method} url=${httpTarget}`);
     } else {
       method = launchRawBtPrint(payload);
       console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
