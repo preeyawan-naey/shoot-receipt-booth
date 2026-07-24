@@ -461,7 +461,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "kiosk7";
+const PRINT_BUILD = "kiosk8";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -502,8 +502,8 @@ function refocusBoothAfterPrint() {
   const api = getFullyBridge();
   if (!api || typeof api.bringToForeground !== "function") return;
 
-  // Wait for RawBT to fetch + print before pulling Fully back to QR modal
-  for (const delayMs of [2500, 4500, 6500]) {
+  // Wait for RawBT to start fetch, then pull Fully back over RawBT dialog
+  for (const delayMs of [600, 1200, 2200, 4000]) {
     window.setTimeout(() => {
       try {
         api.bringToForeground();
@@ -627,14 +627,30 @@ function launchViaFully(api, targetUrl) {
     ? [buildRawBtIntentUrl(targetUrl, { withComponent: false })]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  const forceView =
+  // HTTP color URL — VIEW via startApplication is the only reliable print path on this kiosk
+  if (isHttpUrl && typeof api.startApplication === "function") {
+    try {
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
+      return "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication view failed", err);
+    }
+  }
+
+  if (isHttpUrl && typeof api.startIntent === "function") {
+    try {
+      api.startIntent(buildRawBtIntentUrl(targetUrl, { withComponent: false }));
+      return "fully-startIntent-view";
+    } catch (err) {
+      console.warn("[print] fully.startIntent view failed", err);
+    }
+  }
+
+  const trySilent =
     typeof localStorage !== "undefined" &&
-    localStorage.getItem("shoot_rawbt_use_view") === "1";
-
-  // Silent print — try before VIEW (which opens RawBT dialog on free tier)
-  if (isHttpUrl && !forceView) {
+    localStorage.getItem("shoot_rawbt_try_silent") === "1";
+  if (isHttpUrl && trySilent) {
     const silentIntent = buildPrintRawBtSilentIntent(targetUrl);
-
     if (typeof api.startApplication === "function") {
       try {
         api.startApplication(RAWBT_PACKAGE, RAWBT_PRINT_ACTION, targetUrl);
@@ -643,7 +659,6 @@ function launchViaFully(api, targetUrl) {
         console.warn("[print] fully.startApplication print-rawbt failed", err);
       }
     }
-
     if (typeof api.startIntent === "function") {
       try {
         api.startIntent(silentIntent);
@@ -651,32 +666,6 @@ function launchViaFully(api, targetUrl) {
       } catch (err) {
         console.warn("[print] fully.startIntent print-rawbt failed", err);
       }
-
-      try {
-        api.startIntent(buildRawBtSchemeIntent(targetUrl));
-        return "fully-startIntent-rawbt-scheme";
-      } catch (err) {
-        console.warn("[print] fully.startIntent rawbt-scheme failed", err);
-      }
-    }
-
-    if (typeof api.broadcastIntent === "function") {
-      try {
-        api.broadcastIntent(silentIntent);
-        return "fully-broadcastIntent-print-rawbt";
-      } catch (err) {
-        console.warn("[print] fully.broadcastIntent silent failed", err);
-      }
-    }
-  }
-
-  // Fallback — reliable but may show RawBT dialog (free license)
-  if (isHttpUrl && typeof api.startApplication === "function") {
-    try {
-      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
-      return "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication view failed", err);
     }
   }
 
