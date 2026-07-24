@@ -1,14 +1,14 @@
 /**
  * ESC POS USB Print service (com.loopedlabs.usbprintservice)
- * Sends raw image base64 via Android Intent — no data: URL header
+ * Primary: org.escpos.intent.action.PRINT + IMAGE_URL via fully.startIntent
+ * (print:// blocked by Fully URL whitelist — do not use as primary)
  */
 
 const ESCPOS_USB_PACKAGE = "com.loopedlabs.usbprintservice";
-const ESCPOS_USB_SEND_ACTION = "android.intent.action.SEND";
 const ESCPOS_USB_PRINT_ACTION = "org.escpos.intent.action.PRINT";
 const ESCPOS_PRINT_WIDTH_PX = 576;
-const ESCPOS_JPEG_QUALITY = 0.88;
-const ESCPOS_MAX_BASE64_LEN = 380_000;
+const ESCPOS_JPEG_QUALITY = 0.82;
+const ESCPOS_MAX_BASE64_LEN = 95_000;
 
 function stripDataUrlHeader(dataUrl) {
   const comma = dataUrl.indexOf(",");
@@ -23,54 +23,93 @@ function compressCanvasToRawBase64(canvas) {
   let quality = ESCPOS_JPEG_QUALITY;
   let rawBase64 = canvasToRawJpegBase64(canvas, quality);
 
-  while (rawBase64.length > ESCPOS_MAX_BASE64_LEN && quality > 0.45) {
-    quality -= 0.07;
+  while (rawBase64.length > ESCPOS_MAX_BASE64_LEN && quality > 0.4) {
+    quality -= 0.08;
     rawBase64 = canvasToRawJpegBase64(canvas, quality);
   }
 
   return { rawBase64, quality };
 }
 
-async function fetchUrlToRawBase64(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`fetch image failed: ${response.status}`);
-  }
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(stripDataUrlHeader(String(reader.result)));
-    reader.onerror = () => reject(new Error("read image blob failed"));
-    reader.readAsDataURL(blob);
-  });
-}
-
-/** org.escpos.intent.action.PRINT + DATA_TYPE + PRINT_DATA (Looped Labs official API) */
-function buildEscPosUsbPrintIntent(rawBase64, dataType) {
+/** org.escpos.intent.action.PRINT — image from public HTTPS URL */
+function buildEscPosImageUrlIntent(imageUrl, dataType) {
+  const encoded = encodeURIComponent(imageUrl);
   return (
     `intent:#Intent;action=${ESCPOS_USB_PRINT_ACTION};` +
     `package=${ESCPOS_USB_PACKAGE};` +
     `S.DATA_TYPE=${dataType};` +
-    `S.PRINT_DATA=${rawBase64};` +
+    `S.android.intent.extra.TEXT=${encoded};` +
     `launchFlags=0x10000000;end;`
   );
 }
 
-/** android.intent.action.SEND + EXTRA_TEXT fallback */
-function buildEscPosUsbSendIntent(rawBase64) {
-  return (
-    `intent:#Intent;action=${ESCPOS_USB_SEND_ACTION};` +
-    `type=text/plain;` +
-    `package=${ESCPOS_USB_PACKAGE};` +
-    `S.android.intent.extra.TEXT=${rawBase64};` +
-    `launchFlags=0x10000000;end;`
-  );
-}
-
-function buildEscPosUsbIntentVariants(rawBase64) {
+function buildEscPosImageUrlIntentVariants(imageUrl) {
   return [
-    { id: "print-jpg", url: buildEscPosUsbPrintIntent(rawBase64, "JPG") },
-    { id: "print-image", url: buildEscPosUsbPrintIntent(rawBase64, "IMAGE") },
-    { id: "send-text", url: buildEscPosUsbSendIntent(rawBase64) },
+    { id: "image-url", url: buildEscPosImageUrlIntent(imageUrl, "IMAGE_URL") },
+    { id: "jpg-url", url: buildEscPosImageUrlIntent(imageUrl, "JPG_URL") },
+    { id: "jpeg-url", url: buildEscPosImageUrlIntent(imageUrl, "JPEG_URL") },
+    { id: "image", url: buildEscPosImageUrlIntent(imageUrl, "IMAGE") },
   ];
+}
+
+/** Base64 fallback when no upload URL */
+function buildEscPosBase64Intent(rawBase64, dataType) {
+  const encoded = encodeURIComponent(rawBase64);
+  return (
+    `intent:#Intent;action=${ESCPOS_USB_PRINT_ACTION};` +
+    `package=${ESCPOS_USB_PACKAGE};` +
+    `S.DATA_TYPE=${dataType};` +
+    `S.PRINT_DATA=${encoded};` +
+    `launchFlags=0x10000000;end;`
+  );
+}
+
+function buildEscPosBase64IntentVariants(rawBase64) {
+  return [
+    { id: "jpg-b64", url: buildEscPosBase64Intent(rawBase64, "JPG") },
+    { id: "image-b64", url: buildEscPosBase64Intent(rawBase64, "IMAGE") },
+  ];
+}
+
+function fireFullyIntentVariants(api, variants, methodName) {
+  const fn = api?.[methodName];
+  if (typeof fn !== "function") return null;
+
+  for (const { id, url } of variants) {
+    try {
+      fn.call(api, url);
+      return `fully-${methodName}-${id}`;
+    } catch (err) {
+      console.warn(`[print] fully.${methodName} ${id} failed`, err);
+    }
+  }
+  return null;
+}
+
+function launchEscPosIntents(variants) {
+  logFullyPrintDiagnostics();
+  const api = getFullyBridge();
+
+  const fromStart = fireFullyIntentVariants(api, variants, "startIntent");
+  if (fromStart) return fromStart;
+
+  const fromBroadcast = fireFullyIntentVariants(api, variants, "broadcastIntent");
+  if (fromBroadcast) return fromBroadcast;
+
+  return null;
+}
+
+function launchUsbPrintImageUrl(imageUrl, copies = 1) {
+  console.info(`[print] escpos image-url copies=${copies} url=${imageUrl}`);
+  return launchEscPosIntents(buildEscPosImageUrlIntentVariants(imageUrl));
+}
+
+function launchUsbPrintServiceBase64(rawBase64) {
+  if (rawBase64.length > ESCPOS_MAX_BASE64_LEN) {
+    console.error(
+      `[print] escpos base64 too large (${rawBase64.length}) max=${ESCPOS_MAX_BASE64_LEN}`
+    );
+    return null;
+  }
+  return launchEscPosIntents(buildEscPosBase64IntentVariants(rawBase64));
 }
