@@ -1,11 +1,11 @@
 /**
- * ESC POS USB Printer (com.loopedlabs.escposusbprinter)
+ * ESC POS USB Print service (com.loopedlabs.usbprintservice)
  * Sends raw image base64 via Android Intent — no data: URL header
  */
 
-const ESCPOS_USB_PACKAGE = "com.loopedlabs.escposusbprinter";
+const ESCPOS_USB_PACKAGE = "com.loopedlabs.usbprintservice";
 const ESCPOS_USB_SEND_ACTION = "android.intent.action.SEND";
-const ESCPOS_USB_PRINT_ACTION = "com.loopedlabs.escposusbprinter.PRINT";
+const ESCPOS_USB_PRINT_ACTION = "org.escpos.intent.action.PRINT";
 const ESCPOS_PRINT_WIDTH_PX = 576;
 const ESCPOS_JPEG_QUALITY = 0.88;
 const ESCPOS_MAX_BASE64_LEN = 380_000;
@@ -45,7 +45,18 @@ async function fetchUrlToRawBase64(url) {
   });
 }
 
-/** android.intent.action.SEND + EXTRA_TEXT (Fully Kiosk primary path) */
+/** org.escpos.intent.action.PRINT + DATA_TYPE + PRINT_DATA (Looped Labs official API) */
+function buildEscPosUsbPrintIntent(rawBase64, dataType) {
+  return (
+    `intent:#Intent;action=${ESCPOS_USB_PRINT_ACTION};` +
+    `package=${ESCPOS_USB_PACKAGE};` +
+    `S.DATA_TYPE=${dataType};` +
+    `S.PRINT_DATA=${rawBase64};` +
+    `launchFlags=0x10000000;end;`
+  );
+}
+
+/** android.intent.action.SEND + EXTRA_TEXT fallback */
 function buildEscPosUsbSendIntent(rawBase64) {
   return (
     `intent:#Intent;action=${ESCPOS_USB_SEND_ACTION};` +
@@ -56,20 +67,10 @@ function buildEscPosUsbSendIntent(rawBase64) {
   );
 }
 
-/** com.loopedlabs.escposusbprinter.PRINT + base64|bytes extra */
-function buildEscPosUsbPrintIntent(rawBase64, extraKey) {
-  return (
-    `intent:#Intent;action=${ESCPOS_USB_PRINT_ACTION};` +
-    `package=${ESCPOS_USB_PACKAGE};` +
-    `S.${extraKey}=${rawBase64};` +
-    `launchFlags=0x10000000;end;`
-  );
-}
-
 function buildEscPosUsbIntentVariants(rawBase64) {
   return [
+    { id: "print-jpg", url: buildEscPosUsbPrintIntent(rawBase64, "JPG") },
+    { id: "print-image", url: buildEscPosUsbPrintIntent(rawBase64, "IMAGE") },
     { id: "send-text", url: buildEscPosUsbSendIntent(rawBase64) },
-    { id: "print-base64", url: buildEscPosUsbPrintIntent(rawBase64, "base64") },
-    { id: "print-bytes", url: buildEscPosUsbPrintIntent(rawBase64, "bytes") },
   ];
 }
