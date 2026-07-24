@@ -454,12 +454,11 @@ const RAWBT_MAX_HEIGHT_PX = 2400;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
 const ESCPOS_COPY_DELAY_MS = 1200;
-const ESCPOS_MAX_BASE64_LEN = 900_000;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "escpos1";
+const PRINT_BUILD = "usbps1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -751,69 +750,61 @@ function launchRawBtView(targetUrl) {
   return "link-intent";
 }
 
-function launchEscPosViaFully(base64Payload) {
+function launchUsbPrintService(imageUrl, copies = 1) {
   logFullyPrintDiagnostics();
-  const intentUrl = buildRawBtEscPosIntent(base64Payload);
+  const printLink = buildUsbPrintAppLink(imageUrl, copies);
+  const intentUrl = buildUsbPrintIntentUrl(imageUrl);
   const api = getFullyBridge();
 
   if (api) {
     if (typeof api.startIntent === "function") {
       try {
-        api.startIntent(intentUrl);
-        return "fully-startIntent-escpos";
+        api.startIntent(printLink);
+        return "fully-startIntent-usbps-applink";
       } catch (err) {
-        console.warn("[print] fully.startIntent escpos failed", err);
+        console.warn("[print] fully.startIntent print:// failed", err);
+      }
+
+      try {
+        api.startIntent(intentUrl);
+        return "fully-startIntent-usbps-intent";
+      } catch (err) {
+        console.warn("[print] fully.startIntent org.escpos failed", err);
       }
     }
 
-    if (typeof api.broadcastIntent === "function") {
+    if (typeof api.startApplication === "function") {
       try {
-        api.broadcastIntent(intentUrl);
-        return "fully-broadcastIntent-escpos";
+        api.startApplication(USBPS_PACKAGE, "android.intent.action.VIEW", printLink);
+        return "fully-startApplication-usbps";
       } catch (err) {
-        console.warn("[print] fully.broadcastIntent escpos failed", err);
+        console.warn("[print] fully.startApplication usbps failed", err);
       }
     }
   }
 
   try {
-    window.location.href = intentUrl;
-    return "location-intent-escpos";
+    window.location.href = printLink;
+    return "location-usbps-applink";
   } catch (err) {
-    console.warn("[print] location escpos intent failed", err);
+    console.warn("[print] location usbps failed", err);
   }
 
   return null;
 }
 
-async function printViaEscPos(source, copies = 1) {
+async function printViaEscPos(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const scaled = scaleCanvasForThermal(
-    source,
-    ESCPOS_PRINT_WIDTH_PX,
-    RAWBT_MAX_HEIGHT_PX
-  );
-  const escposBytes = buildEscPosReceiptFromCanvas(scaled);
-  const base64 = escPosBytesToBase64(escposBytes);
+  const imageUrl = resolveRawBtHttpUrl(urls);
 
-  console.info(
-    `[print] escpos ${scaled.width}x${scaled.height} bytes=${escposBytes.length} b64=${base64.length}`
-  );
-
-  if (base64.length > ESCPOS_MAX_BASE64_LEN) {
-    console.error(
-      `[print] escpos payload too large (${base64.length} chars) — reduce receipt height`
-    );
+  if (!imageUrl) {
+    console.error("[print] usbps requires uploaded image URL — none available");
     return;
   }
 
-  for (let i = 0; i < count; i += 1) {
-    if (i > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, ESCPOS_COPY_DELAY_MS));
-    }
-    const method = launchEscPosViaFully(base64);
-    console.info(`[print] escpos launch=${method || "failed"}`);
-  }
+  console.info(`[print] usbps image copies=${count} url=${imageUrl}`);
+  const method = launchUsbPrintService(imageUrl, count);
+  console.info(`[print] usbps launch=${method || "failed"}`);
 }
 
 function launchRawBtPrint(targetUrl) {
@@ -974,7 +965,7 @@ function printReceiptDirect(copies = 1, options = {}) {
   );
 
   if (driver === "escpos") {
-    return printViaEscPos(source, copies);
+    return printViaEscPos(source, copies, { downloadUrl, printUrl });
   }
 
   if (driver === "rawbt") {
