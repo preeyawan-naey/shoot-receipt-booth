@@ -450,16 +450,18 @@ async function setupPrintCopies(count) {
 
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
-const RAWBT_MAX_HEIGHT_PX = 2400;
+/** RawBT splits images taller than ~1024px into bands — keep one band to avoid white gaps */
+const RAWBT_MAX_HEIGHT_PX = 960;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
+const RAWBT_CUT_DELAY_MS = 4500;
 const ESCPOS_COPY_DELAY_MS = 1200;
 const THERMER_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "thermer1";
+const PRINT_BUILD = "rawbt8";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -479,13 +481,13 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // Thermer USB bridge (browser print breaks on this kiosk)
+  // RawBT via Supabase URL (proven on this kiosk)
   if (getFullyBridge()) {
-    return "thermer";
+    return "rawbt";
   }
 
   if (/Android/i.test(navigator.userAgent)) {
-    return "thermer";
+    return "rawbt";
   }
 
   return "browser";
@@ -587,6 +589,48 @@ function buildPrintRawBtSilentIntent(data) {
     `launchFlags=0x10000000;package=${RAWBT_PACKAGE};` +
     `S.${RAWBT_PRINT_DATA_EXTRA}=${encoded};end;`
   );
+}
+
+/** ESC/POS GS V 66 0 — feed + full cut (XPrinter / most 80mm) */
+function buildRawBtCutSchemeUrl() {
+  const bytes = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x42, 0x00]);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `rawbt:data:text/plain;base64,${btoa(binary)}`;
+}
+
+function launchRawBtCut() {
+  const cutUrl = buildRawBtCutSchemeUrl();
+  const api = getFullyBridge();
+
+  if (api?.startApplication) {
+    try {
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, cutUrl);
+      return "fully-startApplication-cut";
+    } catch (err) {
+      console.warn("[print] fully.startApplication cut failed", err);
+    }
+  }
+
+  if (api?.startIntent) {
+    try {
+      api.startIntent(buildRawBtIntentUrl(cutUrl, { withComponent: false }));
+      return "fully-startIntent-cut";
+    } catch (err) {
+      console.warn("[print] fully.startIntent cut failed", err);
+    }
+  }
+
+  try {
+    window.location.href = buildRawBtIntentUrl(cutUrl, { withComponent: false });
+    return "location-intent-cut";
+  } catch {
+    /* fall through */
+  }
+
+  return null;
 }
 
 function buildRawBtSchemeIntent(httpUrl) {
@@ -816,14 +860,20 @@ async function printViaRawBt(source, copies = 1, urls = {}) {
       await new Promise((resolve) => window.setTimeout(resolve, RAWBT_COPY_DELAY_MS));
     }
 
+    let method = null;
     if (httpTarget) {
-      const method = launchRawBtPrint(httpTarget);
+      method = launchRawBtPrint(httpTarget);
       console.info(`[print] rawbt color-url launch=${method} url=${httpTarget}`);
-      continue;
+    } else {
+      method = launchRawBtPrint(payload);
+      console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
     }
 
-    const method = launchRawBtPrint(payload);
-    console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
+    if (!method) continue;
+
+    await new Promise((resolve) => window.setTimeout(resolve, RAWBT_CUT_DELAY_MS));
+    const cutMethod = launchRawBtCut();
+    console.info(`[print] rawbt cut launch=${cutMethod || "failed"}`);
   }
 }
 
