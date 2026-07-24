@@ -36,7 +36,9 @@ function initApp() {
   initFrameGrid();
   bindEvents();
   if (/Android/i.test(navigator.userAgent) || typeof fully !== "undefined") {
-    logFullyPrintDiagnostics();
+    if (typeof logFullyPrintDiagnostics === "function") {
+      logFullyPrintDiagnostics();
+    }
   }
 }
 

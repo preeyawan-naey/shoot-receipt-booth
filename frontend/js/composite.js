@@ -386,13 +386,6 @@ async function preparePrintReceipt() {
   await drawCompositeForPrint(downloadCanvas, frame, data.photos, qrCodeUrl, {
     thermal: false,
   });
-  const colorBase64 = downloadCanvas.toDataURL("image/png");
-  const uploadResult = await uploadCompositeAndGetQR(colorBase64, downloadId);
-
-  if (!uploadResult.success) {
-    throw new Error(uploadResult.message || "Upload failed");
-  }
-
   const scaledColor = scaleCanvasForThermal(downloadCanvas);
   const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
@@ -459,7 +452,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "kiosk5";
+const PRINT_BUILD = "kiosk6";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
