@@ -458,7 +458,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "browser2";
+const PRINT_BUILD = "escpos2";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -477,13 +477,13 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // Default: browser print → Android routes to ESC POS USB Print Service
+  // ESC/POS USB Print Service via base64 intent (browser print breaks on this kiosk)
   if (getFullyBridge()) {
-    return "browser";
+    return "escpos";
   }
 
   if (/Android/i.test(navigator.userAgent)) {
-    return "browser";
+    return "escpos";
   }
 
   return "browser";
@@ -752,29 +752,33 @@ function launchRawBtView(targetUrl) {
 
 function launchUsbPrintServiceBase64(rawBase64) {
   logFullyPrintDiagnostics();
-  const intentUrl = buildUsbPrintImageBase64Intent(rawBase64);
+  const intents = buildUsbPrintBase64IntentVariants(rawBase64);
   const api = getFullyBridge();
 
-  if (api?.startIntent) {
-    try {
-      api.startIntent(intentUrl);
-      return "fully-startIntent-usbps-base64";
-    } catch (err) {
-      console.warn("[print] fully.startIntent usbps base64 failed", err);
+  if (api?.broadcastIntent) {
+    for (const intentUrl of intents) {
+      try {
+        api.broadcastIntent(intentUrl);
+        return "fully-broadcastIntent-usbps-base64";
+      } catch (err) {
+        console.warn("[print] fully.broadcastIntent usbps failed", err);
+      }
     }
   }
 
-  if (api?.broadcastIntent) {
-    try {
-      api.broadcastIntent(intentUrl);
-      return "fully-broadcastIntent-usbps-base64";
-    } catch (err) {
-      console.warn("[print] fully.broadcastIntent usbps base64 failed", err);
+  if (api?.startIntent) {
+    for (const intentUrl of intents) {
+      try {
+        api.startIntent(intentUrl);
+        return "fully-startIntent-usbps-base64";
+      } catch (err) {
+        console.warn("[print] fully.startIntent usbps failed", err);
+      }
     }
   }
 
   try {
-    window.location.href = intentUrl;
+    window.location.href = intents[0];
     return "location-usbps-base64";
   } catch (err) {
     console.warn("[print] location usbps base64 failed", err);
@@ -785,20 +789,28 @@ function launchUsbPrintServiceBase64(rawBase64) {
 
 async function printViaEscPos(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const scaled = scaleCanvasForThermal(
-    source,
-    ESCPOS_PRINT_WIDTH_PX,
-    RAWBT_MAX_HEIGHT_PX
-  );
+  const imageUrl = resolveRawBtHttpUrl(urls);
+  let rawBase64 = null;
+  let meta = "";
 
-  let rawBase64 = canvasToRawJpegBase64(scaled);
-  if (!rawBase64 && resolveRawBtHttpUrl(urls)) {
+  if (imageUrl) {
     try {
-      rawBase64 = await fetchUrlToRawBase64(resolveRawBtHttpUrl(urls));
+      rawBase64 = await fetchUrlToRawBase64(imageUrl);
+      meta = `url-b64len=${rawBase64.length}`;
     } catch (err) {
-      console.error("[print] usbps fetch base64 failed", err);
-      return;
+      console.warn("[print] usbps url→base64 failed, using canvas", err);
     }
+  }
+
+  if (!rawBase64) {
+    const scaled = scaleCanvasForThermal(
+      source,
+      ESCPOS_PRINT_WIDTH_PX,
+      RAWBT_MAX_HEIGHT_PX
+    );
+    const compressed = compressCanvasToRawBase64(scaled);
+    rawBase64 = compressed.rawBase64;
+    meta = `${scaled.width}x${scaled.height} q=${compressed.quality.toFixed(2)} b64len=${rawBase64.length}`;
   }
 
   if (!rawBase64) {
@@ -806,9 +818,14 @@ async function printViaEscPos(source, copies = 1, urls = {}) {
     return;
   }
 
-  console.info(
-    `[print] usbps base64 ${scaled.width}x${scaled.height} b64len=${rawBase64.length} copies=${count}`
-  );
+  if (rawBase64.length > ESCPOS_MAX_BASE64_LEN) {
+    console.error(
+      `[print] usbps base64 too large (${rawBase64.length}) — max ${ESCPOS_MAX_BASE64_LEN}`
+    );
+    return;
+  }
+
+  console.info(`[print] usbps base64 ${meta} copies=${count}`);
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
