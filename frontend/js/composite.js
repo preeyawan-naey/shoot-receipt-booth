@@ -386,7 +386,14 @@ async function preparePrintReceipt() {
   await drawCompositeForPrint(downloadCanvas, frame, data.photos, qrCodeUrl, {
     thermal: false,
   });
-  const scaledColor = scaleCanvasForThermal(downloadCanvas);
+  const scaledColor = scaleCanvasForThermal(
+    downloadCanvas,
+    RAWBT_TARGET_WIDTH_PX,
+    RAWBT_SINGLE_BAND_MAX_HEIGHT_PX
+  );
+  console.info(
+    `[print] upload size ${scaledColor.width}x${scaledColor.height} (band-safe max ${RAWBT_SINGLE_BAND_MAX_HEIGHT_PX}px)`
+  );
   const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
 
@@ -446,13 +453,15 @@ async function setupPrintCopies(count) {
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_MAX_HEIGHT_PX = 2400;
+/** RawBT splits tall images into bands (~1024px) — cap print upload to avoid white gaps */
+const RAWBT_SINGLE_BAND_MAX_HEIGHT_PX = 1020;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "kiosk6";
+const PRINT_BUILD = "kiosk7";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -618,29 +627,56 @@ function launchViaFully(api, targetUrl) {
     ? [buildRawBtIntentUrl(targetUrl, { withComponent: false })]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // HTTP color image — same path as manual fully.startApplication(...) in console
-  if (isHttpUrl && typeof api.startApplication === "function") {
-    try {
-      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
-      return "fully-startApplication";
-    } catch (err) {
-      console.warn("[print] fully.startApplication failed", err);
+  const forceView =
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("shoot_rawbt_use_view") === "1";
+
+  // Silent print — try before VIEW (which opens RawBT dialog on free tier)
+  if (isHttpUrl && !forceView) {
+    const silentIntent = buildPrintRawBtSilentIntent(targetUrl);
+
+    if (typeof api.startApplication === "function") {
+      try {
+        api.startApplication(RAWBT_PACKAGE, RAWBT_PRINT_ACTION, targetUrl);
+        return "fully-startApplication-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startApplication print-rawbt failed", err);
+      }
+    }
+
+    if (typeof api.startIntent === "function") {
+      try {
+        api.startIntent(silentIntent);
+        return "fully-startIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startIntent print-rawbt failed", err);
+      }
+
+      try {
+        api.startIntent(buildRawBtSchemeIntent(targetUrl));
+        return "fully-startIntent-rawbt-scheme";
+      } catch (err) {
+        console.warn("[print] fully.startIntent rawbt-scheme failed", err);
+      }
+    }
+
+    if (typeof api.broadcastIntent === "function") {
+      try {
+        api.broadcastIntent(silentIntent);
+        return "fully-broadcastIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.broadcastIntent silent failed", err);
+      }
     }
   }
 
-  // Silent service fallback (PRINT_RAWBT) if startApplication unavailable
-  if (isHttpUrl && typeof api.startIntent === "function") {
-    const silentIntents = [
-      buildPrintRawBtSilentIntent(targetUrl),
-      buildRawBtSchemeIntent(targetUrl),
-    ];
-    for (const intentUrl of silentIntents) {
-      try {
-        api.startIntent(intentUrl);
-        return "fully-startIntent-silent";
-      } catch (err) {
-        console.warn("[print] fully.startIntent silent failed", err);
-      }
+  // Fallback — reliable but may show RawBT dialog (free license)
+  if (isHttpUrl && typeof api.startApplication === "function") {
+    try {
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
+      return "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication view failed", err);
     }
   }
 
