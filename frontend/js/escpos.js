@@ -1,31 +1,43 @@
 /**
  * Looped Labs ESC POS USB Print service (com.loopedlabs.usbprintservice)
- * Docs: https://loopedlabs.com/esc-pos-usb-print-service/app-links
+ * Intent: DATA_TYPE=IMAGE + PRINT_DATA=raw base64 (no data: header)
  */
 
 const USBPS_PACKAGE = "com.loopedlabs.usbprintservice";
 const USBPS_PRINT_ACTION = "org.escpos.intent.action.PRINT";
 const ESCPOS_PRINT_WIDTH_PX = 576;
+const ESCPOS_JPEG_QUALITY = 0.92;
 
-/** print:// app link — direct print, no preview (app v2.1.0+) */
-function buildUsbPrintAppLink(imageUrl, copies = 1) {
-  const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  return (
-    `print://escpos.org/escpos/usb/print?srcTp=uri` +
-    `&srcObj=imagejpg` +
-    `&numCopies=${count}` +
-    `&src='${imageUrl}'`
-  );
+function stripDataUrlHeader(dataUrl) {
+  const comma = dataUrl.indexOf(",");
+  return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 }
 
-/** org.escpos.intent.action.PRINT fallback */
-function buildUsbPrintIntentUrl(imageUrl) {
-  const encoded = encodeURIComponent(imageUrl);
+function canvasToRawJpegBase64(canvas, quality = ESCPOS_JPEG_QUALITY) {
+  return stripDataUrlHeader(canvas.toDataURL("image/jpeg", quality));
+}
+
+async function fetchUrlToRawBase64(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`fetch image failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(stripDataUrlHeader(String(reader.result)));
+    reader.onerror = () => reject(new Error("read image blob failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function buildUsbPrintImageBase64Intent(rawBase64) {
+  const encoded = encodeURIComponent(rawBase64);
   return (
     `intent:#Intent;action=${USBPS_PRINT_ACTION};` +
     `package=${USBPS_PACKAGE};` +
-    `S.DATA_TYPE=IMAGE_URL;` +
-    `S.android.intent.extra.TEXT=${encoded};` +
+    `S.DATA_TYPE=IMAGE;` +
+    `S.PRINT_DATA=${encoded};` +
     `launchFlags=0x10000000;end;`
   );
 }

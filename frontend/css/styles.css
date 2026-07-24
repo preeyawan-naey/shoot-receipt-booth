@@ -1089,23 +1089,45 @@ body {
   }
 }
 
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
 @media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm;
+    background: #fff;
+  }
+
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
 
   .print-receipt-wrapper,
   .print-receipt-wrapper * {
-    visibility: visible;
+    visibility: visible !important;
+  }
+
+  .qr-popup,
+  #qr-popup,
+  .qr-popup * {
+    display: none !important;
+    visibility: hidden !important;
   }
 
   .print-receipt-wrapper {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 80mm;
     height: auto;
     overflow: visible;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   #print-receipt-canvas {
@@ -1113,9 +1135,19 @@ body {
   }
 
   .print-receipt-copy {
-    display: block;
-    width: 100%;
+    display: block !important;
+    width: 80mm;
+    max-width: 80mm;
     height: auto;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-receipt-copy:last-child {
+    page-break-after: auto;
+    break-after: auto;
   }
 }
 
@@ -1280,41 +1312,4 @@ body {
 
 .code-entry__submit--ready:active {
   transform: scale(0.98);
-}
-
-
-@page {
-  size: 80mm 240mm;  /* กว้าง x สูง — คำนวณจาก canvas จริง */
-  margin: 0;
-}
-
-@media print {
-  html, body {
-    margin: 0;
-    padding: 0;
-  }
-
-  .print-receipt-wrapper {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
-  #print-receipt-canvas {
-    display: none !important;
-  }
-
-  .print-receipt-copy {
-    width: 80mm;
-    height: auto;
-    display: block;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    page-break-after: always;
-    break-after: page;
-  }
-
-  .print-receipt-copy:last-child {
-    page-break-after: auto;
-    break-after: auto;
-  }
 }

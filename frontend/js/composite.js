@@ -458,7 +458,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "usbps1";
+const PRINT_BUILD = "browser2";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -477,13 +477,13 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // Fully Kiosk + USB ESC/POS via RawBT base64 (no image URL / no modal)
+  // Default: browser print → Android routes to ESC POS USB Print Service
   if (getFullyBridge()) {
-    return "escpos";
+    return "browser";
   }
 
   if (/Android/i.test(navigator.userAgent)) {
-    return "escpos";
+    return "browser";
   }
 
   return "browser";
@@ -750,44 +750,34 @@ function launchRawBtView(targetUrl) {
   return "link-intent";
 }
 
-function launchUsbPrintService(imageUrl, copies = 1) {
+function launchUsbPrintServiceBase64(rawBase64) {
   logFullyPrintDiagnostics();
-  const printLink = buildUsbPrintAppLink(imageUrl, copies);
-  const intentUrl = buildUsbPrintIntentUrl(imageUrl);
+  const intentUrl = buildUsbPrintImageBase64Intent(rawBase64);
   const api = getFullyBridge();
 
-  if (api) {
-    if (typeof api.startIntent === "function") {
-      try {
-        api.startIntent(printLink);
-        return "fully-startIntent-usbps-applink";
-      } catch (err) {
-        console.warn("[print] fully.startIntent print:// failed", err);
-      }
-
-      try {
-        api.startIntent(intentUrl);
-        return "fully-startIntent-usbps-intent";
-      } catch (err) {
-        console.warn("[print] fully.startIntent org.escpos failed", err);
-      }
+  if (api?.startIntent) {
+    try {
+      api.startIntent(intentUrl);
+      return "fully-startIntent-usbps-base64";
+    } catch (err) {
+      console.warn("[print] fully.startIntent usbps base64 failed", err);
     }
+  }
 
-    if (typeof api.startApplication === "function") {
-      try {
-        api.startApplication(USBPS_PACKAGE, "android.intent.action.VIEW", printLink);
-        return "fully-startApplication-usbps";
-      } catch (err) {
-        console.warn("[print] fully.startApplication usbps failed", err);
-      }
+  if (api?.broadcastIntent) {
+    try {
+      api.broadcastIntent(intentUrl);
+      return "fully-broadcastIntent-usbps-base64";
+    } catch (err) {
+      console.warn("[print] fully.broadcastIntent usbps base64 failed", err);
     }
   }
 
   try {
-    window.location.href = printLink;
-    return "location-usbps-applink";
+    window.location.href = intentUrl;
+    return "location-usbps-base64";
   } catch (err) {
-    console.warn("[print] location usbps failed", err);
+    console.warn("[print] location usbps base64 failed", err);
   }
 
   return null;
@@ -795,16 +785,38 @@ function launchUsbPrintService(imageUrl, copies = 1) {
 
 async function printViaEscPos(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const imageUrl = resolveRawBtHttpUrl(urls);
+  const scaled = scaleCanvasForThermal(
+    source,
+    ESCPOS_PRINT_WIDTH_PX,
+    RAWBT_MAX_HEIGHT_PX
+  );
 
-  if (!imageUrl) {
-    console.error("[print] usbps requires uploaded image URL — none available");
+  let rawBase64 = canvasToRawJpegBase64(scaled);
+  if (!rawBase64 && resolveRawBtHttpUrl(urls)) {
+    try {
+      rawBase64 = await fetchUrlToRawBase64(resolveRawBtHttpUrl(urls));
+    } catch (err) {
+      console.error("[print] usbps fetch base64 failed", err);
+      return;
+    }
+  }
+
+  if (!rawBase64) {
+    console.error("[print] usbps no image data");
     return;
   }
 
-  console.info(`[print] usbps image copies=${count} url=${imageUrl}`);
-  const method = launchUsbPrintService(imageUrl, count);
-  console.info(`[print] usbps launch=${method || "failed"}`);
+  console.info(
+    `[print] usbps base64 ${scaled.width}x${scaled.height} b64len=${rawBase64.length} copies=${count}`
+  );
+
+  for (let i = 0; i < count; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, ESCPOS_COPY_DELAY_MS));
+    }
+    const method = launchUsbPrintServiceBase64(rawBase64);
+    console.info(`[print] usbps launch=${method || "failed"}`);
+  }
 }
 
 function launchRawBtPrint(targetUrl) {
@@ -935,10 +947,51 @@ function printViaBrowserIframe(source, copies = 1) {
   });
 }
 
+function printViaBrowserOnPage(source, copies = 1) {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const prevAfterPrint = window.onafterprint;
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.onafterprint = prevAfterPrint;
+      clearPrintCopies();
+      resolve();
+    };
+
+    window.onafterprint = finish;
+    window.setTimeout(finish, 120000);
+
+    setupPrintCopies(copies)
+      .then(() => {
+        document.body.classList.add("is-printing");
+        console.info("[print] window.print()");
+        window.setTimeout(() => {
+          try {
+            window.print();
+          } catch (err) {
+            console.error("[print] window.print() failed", err);
+            finish();
+            reject(err);
+          }
+        }, 200);
+      })
+      .catch((err) => {
+        console.error("[print] setupPrintCopies failed", err);
+        finish();
+        reject(err);
+      });
+  });
+}
+
 function printViaBrowser(source, copies = 1) {
   const api = getFullyBridge();
   if (api && typeof api.print === "function") {
     return printViaFully(source, copies);
+  }
+  if (/Android/i.test(navigator.userAgent)) {
+    return printViaBrowserOnPage(source, copies);
   }
   return printViaBrowserIframe(source, copies);
 }
