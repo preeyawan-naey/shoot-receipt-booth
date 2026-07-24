@@ -458,7 +458,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "escpos2";
+const PRINT_BUILD = "escpos3";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -752,36 +752,36 @@ function launchRawBtView(targetUrl) {
 
 function launchUsbPrintServiceBase64(rawBase64) {
   logFullyPrintDiagnostics();
-  const intents = buildUsbPrintBase64IntentVariants(rawBase64);
+  const variants = buildEscPosUsbIntentVariants(rawBase64);
   const api = getFullyBridge();
 
-  if (api?.broadcastIntent) {
-    for (const intentUrl of intents) {
+  if (api?.startIntent) {
+    for (const { id, url } of variants) {
       try {
-        api.broadcastIntent(intentUrl);
-        return "fully-broadcastIntent-usbps-base64";
+        api.startIntent(url);
+        return `fully-startIntent-${id}`;
       } catch (err) {
-        console.warn("[print] fully.broadcastIntent usbps failed", err);
+        console.warn(`[print] fully.startIntent ${id} failed`, err);
       }
     }
   }
 
-  if (api?.startIntent) {
-    for (const intentUrl of intents) {
+  if (api?.broadcastIntent) {
+    for (const { id, url } of variants) {
       try {
-        api.startIntent(intentUrl);
-        return "fully-startIntent-usbps-base64";
+        api.broadcastIntent(url);
+        return `fully-broadcastIntent-${id}`;
       } catch (err) {
-        console.warn("[print] fully.startIntent usbps failed", err);
+        console.warn(`[print] fully.broadcastIntent ${id} failed`, err);
       }
     }
   }
 
   try {
-    window.location.href = intents[0];
-    return "location-usbps-base64";
+    window.location.href = variants[0].url;
+    return `location-${variants[0].id}`;
   } catch (err) {
-    console.warn("[print] location usbps base64 failed", err);
+    console.warn("[print] location escpos usb failed", err);
   }
 
   return null;
