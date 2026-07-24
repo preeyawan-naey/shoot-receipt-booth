@@ -458,7 +458,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "escpos6";
+const PRINT_BUILD = "escpos7";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -753,36 +753,20 @@ function launchRawBtView(targetUrl) {
 async function printViaEscPos(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const imageUrl = resolveRawBtHttpUrl(urls);
-
-  if (imageUrl) {
-    for (let i = 0; i < count; i += 1) {
-      if (i > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, ESCPOS_COPY_DELAY_MS));
-      }
-      const method = launchUsbPrintImageUrl(imageUrl, 1);
-      console.info(`[print] usbps launch=${method || "failed"}`);
-    }
-    return;
-  }
-
-  const scaled = scaleCanvasForThermal(
-    source,
-    ESCPOS_PRINT_WIDTH_PX,
-    RAWBT_MAX_HEIGHT_PX
-  );
-  const compressed = compressCanvasToRawBase64(scaled);
-  const rawBase64 = compressed.rawBase64;
-
-  console.info(
-    `[print] usbps base64 ${scaled.width}x${scaled.height} q=${compressed.quality.toFixed(2)} b64len=${rawBase64.length} copies=${count}`
-  );
+  const { scaled, rawBase64, quality } = prepareEscPosPrintCanvas(source);
+  const meta = `${scaled.width}x${scaled.height} q=${quality.toFixed(2)}`;
 
   for (let i = 0; i < count; i += 1) {
     if (i > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, ESCPOS_COPY_DELAY_MS));
     }
-    const method = launchUsbPrintServiceBase64(rawBase64);
-    console.info(`[print] usbps launch=${method || "failed"}`);
+
+    let method = launchUsbPrintBase64(rawBase64, meta);
+    if (!method && imageUrl) {
+      console.warn("[print] escpos base64 failed — trying image-url fallback");
+      method = launchUsbPrintImageUrl(imageUrl);
+    }
+    console.info(`[print] escpos launch=${method || "failed"}`);
   }
 }
 
