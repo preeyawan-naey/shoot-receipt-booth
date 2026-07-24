@@ -454,36 +454,38 @@ const RAWBT_MAX_HEIGHT_PX = 2400;
 const RAWBT_JPEG_QUALITY = 0.92;
 const RAWBT_COPY_DELAY_MS = 3500;
 const ESCPOS_COPY_DELAY_MS = 1200;
+const THERMER_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "escpos7";
+const PRINT_BUILD = "thermer1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
 function getPrintDriver() {
+  const valid = new Set(["thermer", "escpos", "rawbt", "browser"]);
   const fromQuery = new URLSearchParams(window.location.search).get("print");
-  if (fromQuery === "escpos" || fromQuery === "rawbt" || fromQuery === "browser") {
+  if (valid.has(fromQuery)) {
     return fromQuery;
   }
 
   try {
     const stored = localStorage.getItem("shoot_print_driver");
-    if (stored === "escpos" || stored === "rawbt" || stored === "browser") {
+    if (valid.has(stored)) {
       return stored;
     }
   } catch {
     /* private mode */
   }
 
-  // ESC/POS USB Print Service via base64 intent (browser print breaks on this kiosk)
+  // Thermer USB bridge (browser print breaks on this kiosk)
   if (getFullyBridge()) {
-    return "escpos";
+    return "thermer";
   }
 
   if (/Android/i.test(navigator.userAgent)) {
-    return "escpos";
+    return "thermer";
   }
 
   return "browser";
@@ -776,6 +778,29 @@ function launchRawBtPrint(targetUrl) {
   return method;
 }
 
+async function printViaThermer(source, copies = 1, urls = {}) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const imageUrl = resolveRawBtHttpUrl(urls);
+  const onFully = !!getFullyBridge();
+
+  if (!imageUrl) {
+    console.error("[print] thermer requires http image url — none available");
+    if (onFully) return;
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, THERMER_COPY_DELAY_MS));
+    }
+
+    if (!imageUrl) continue;
+
+    const method = launchThermerPrint(imageUrl);
+    refocusBoothAfterPrint();
+    console.info(`[print] thermer launch=${method || "failed"} url=${imageUrl}`);
+  }
+}
+
 async function printViaRawBt(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const payload = canvasToRawBtPayload(scaleCanvasForThermal(source));
@@ -967,6 +992,10 @@ function printReceiptDirect(copies = 1, options = {}) {
   console.info(
     `[print] driver=${driver} copies=${copies} downloadUrl=${downloadUrl || "(none)"}`
   );
+
+  if (driver === "thermer") {
+    return printViaThermer(source, copies, { downloadUrl, printUrl });
+  }
 
   if (driver === "escpos") {
     return printViaEscPos(source, copies, { downloadUrl, printUrl });
