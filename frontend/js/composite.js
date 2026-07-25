@@ -455,7 +455,12 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "rawbt11";
+/** RawBT silent print — appended to every intent URI */
+const RAWBT_SILENT_OPTIONS =
+  "S.ru.a4105.rawbt.option.silent=true;" +
+  "S.ru.a4105.rawbt.option.show_dialog=false;" +
+  "S.ru.a4105.rawbt.option.show_preview=false;";
+const PRINT_BUILD = "rawbt12";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -574,7 +579,9 @@ function buildPrintRawBtSilentIntent(data) {
   return (
     `intent:#Intent;action=${RAWBT_PRINT_ACTION};` +
     `launchFlags=0x10000000;package=${RAWBT_PACKAGE};` +
-    `S.${RAWBT_PRINT_DATA_EXTRA}=${encoded};end;`
+    `S.${RAWBT_PRINT_DATA_EXTRA}=${encoded};` +
+    RAWBT_SILENT_OPTIONS +
+    "end;"
   );
 }
 
@@ -622,12 +629,18 @@ function launchRawBtCut() {
 
 function buildRawBtSchemeIntent(httpUrl) {
   const payload = `rawbt:${httpUrl}`;
-  return `intent:${encodeURI(payload)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
+  return (
+    `intent:${encodeURI(payload)}#Intent;scheme=rawbt;launchFlags=0x10000000;` +
+    `package=${RAWBT_PACKAGE};${RAWBT_SILENT_OPTIONS}end;`
+  );
 }
 
 function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
   if (targetUrl.startsWith("rawbt:")) {
-    return `intent:${encodeURI(targetUrl)}#Intent;scheme=rawbt;launchFlags=0x10000000;package=${RAWBT_PACKAGE};end;`;
+    return (
+      `intent:${encodeURI(targetUrl)}#Intent;scheme=rawbt;launchFlags=0x10000000;` +
+      `package=${RAWBT_PACKAGE};${RAWBT_SILENT_OPTIONS}end;`
+    );
   }
 
   let suffix =
@@ -635,6 +648,7 @@ function buildRawBtIntentUrl(targetUrl, { withComponent = false } = {}) {
   if (withComponent) {
     suffix += `component=${RAWBT_PACKAGE}.activity.PrintDownloadActivity;`;
   }
+  suffix += RAWBT_SILENT_OPTIONS;
   suffix += "end;";
   return `intent:${encodeURI(targetUrl)}${suffix}`;
 }
@@ -665,22 +679,22 @@ function launchViaFully(api, targetUrl) {
     ? [buildRawBtIntentUrl(targetUrl, { withComponent: false })]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // HTTP color URL — VIEW via startApplication is the only reliable print path on this kiosk
-  if (isHttpUrl && typeof api.startApplication === "function") {
-    try {
-      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
-      return "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication view failed", err);
-    }
-  }
-
+  // Prefer startIntent so RAWBT_SILENT_OPTIONS extras reach RawBT
   if (isHttpUrl && typeof api.startIntent === "function") {
     try {
       api.startIntent(buildRawBtIntentUrl(targetUrl, { withComponent: false }));
       return "fully-startIntent-view";
     } catch (err) {
       console.warn("[print] fully.startIntent view failed", err);
+    }
+  }
+
+  if (isHttpUrl && typeof api.startApplication === "function") {
+    try {
+      api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
+      return "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication view failed", err);
     }
   }
 
