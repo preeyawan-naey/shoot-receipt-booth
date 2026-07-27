@@ -455,7 +455,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "rawbt11";
+const PRINT_BUILD = "browser1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -475,7 +475,16 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // RawBT via Supabase URL (proven on this kiosk)
+  // Android Print Service — RawBT as print driver, fully.print() / window.print() (Mac-like, no RawBT URL modal)
+  // Requires: RawBT → "ทำงานเป็นบริการพิมพ์" ON, XPrinter USB selected in RawBT
+  // Fallback to legacy URL intent: ?print=rawbt or localStorage shoot_print_driver=rawbt
+  if (getFullyBridge() || /Android/i.test(navigator.userAgent)) {
+    return "browser";
+  }
+
+  return "browser";
+
+  /* --- previous default: RawBT URL intent (restore if browser print unstable) ---
   if (getFullyBridge()) {
     return "rawbt";
   }
@@ -485,6 +494,7 @@ function getPrintDriver() {
   }
 
   return "browser";
+  --- */
 }
 
 function resolveRawBtHttpUrl(urls = {}) {
@@ -1038,6 +1048,7 @@ function printReceiptDirect(copies = 1, options = {}) {
     return printViaEscPos(source, copies, { downloadUrl, printUrl });
   }
 
+  // Legacy RawBT URL path — override with ?print=rawbt or localStorage shoot_print_driver=rawbt
   if (driver === "rawbt") {
     return printViaRawBt(source, copies, { downloadUrl, printUrl });
   }
