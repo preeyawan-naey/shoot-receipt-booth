@@ -612,7 +612,7 @@ function buildPrintRawBtSilentIntent(data) {
  * RawBT PRINT_RAWBT — background/service path, no VIEW URL activity.
  * Tries https URL then rawbt:https URL as DATA extra.
  */
-function launchRawBtSilentData(data) {
+/*function launchRawBtSilentData(data) {
   const api = getFullyBridge();
   const payloadCandidates = /^https?:\/\//i.test(data)
     ? [data, `rawbt:${data}`]
@@ -650,7 +650,48 @@ function launchRawBtSilentData(data) {
   }
 
   return null;
+}*/
+
+function launchRawBtSilentData(data) {
+  const api = getFullyBridge();
+  const payloadCandidates = /^https?:\/\//i.test(data)
+    ? [data, `rawbt:${data}`]
+    : [data];
+
+  for (const payload of payloadCandidates) {
+    const intent = buildPrintRawBtSilentIntent(payload);
+
+    if (api?.broadcastIntent) {
+      try {
+        api.broadcastIntent(intent);
+        return "fully-broadcastIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.broadcastIntent print-rawbt failed", err);
+      }
+    }
+
+    if (api?.startApplication) {
+      try {
+        api.startApplication(RAWBT_PACKAGE, RAWBT_PRINT_ACTION, payload);
+        return "fully-startApplication-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startApplication print-rawbt failed", err);
+      }
+    }
+
+    if (api?.startIntent) {
+      try {
+        api.startIntent(intent);
+        return "fully-startIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startIntent print-rawbt failed", err);
+      }
+    }
+  }
+
+  return null;
 }
+
 
 /** ESC/POS GS V 66 0 — feed + full cut (XPrinter / most 80mm) */
 function buildRawBtCutSchemeUrl() {
