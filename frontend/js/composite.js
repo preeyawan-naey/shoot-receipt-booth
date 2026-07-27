@@ -455,7 +455,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "browser1";
+const PRINT_BUILD = "silent1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -475,24 +475,28 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // Android Print Service — RawBT as print driver, fully.print() / window.print() (Mac-like, no RawBT URL modal)
-  // Requires: RawBT → "ทำงานเป็นบริการพิมพ์" ON, XPrinter USB selected in RawBT
-  // Fallback to legacy URL intent: ?print=rawbt or localStorage shoot_print_driver=rawbt
+  // PRINT_RAWBT silent — no Android preview, no RawBT URL activity (see launchRawBtSilentData)
+  // Fallbacks: ?print=browser (Android preview) | legacy VIEW via silent failure
   if (getFullyBridge() || /Android/i.test(navigator.userAgent)) {
-    return "browser";
+    return "rawbt";
   }
 
   return "browser";
 
-  /* --- previous default: RawBT URL intent (restore if browser print unstable) ---
+  /* --- browser print service (shows Android preview — not silent) ---
+  if (getFullyBridge() || /Android/i.test(navigator.userAgent)) {
+    return "browser";
+  }
+  return "browser";
+  --- */
+
+  /* --- legacy RawBT VIEW URL (shows RawBT "Printing…" modal) ---
   if (getFullyBridge()) {
     return "rawbt";
   }
-
   if (/Android/i.test(navigator.userAgent)) {
     return "rawbt";
   }
-
   return "browser";
   --- */
 }
@@ -515,6 +519,22 @@ function refocusBoothAfterPrint() {
 
   // RawBT needs foreground ~3–5s to fetch URL and print — refocus too early cancels the job
   for (const delayMs of [5000, 7000, 9000]) {
+    window.setTimeout(() => {
+      try {
+        api.bringToForeground();
+      } catch (err) {
+        console.warn("[print] bringToForeground failed", err);
+      }
+    }, delayMs);
+  }
+}
+
+/** After PRINT_RAWBT silent — lighter refocus in case RawBT briefly took focus */
+function scheduleBoothRefocusAfterSilentPrint() {
+  const api = getFullyBridge();
+  if (!api || typeof api.bringToForeground !== "function") return;
+
+  for (const delayMs of [2500, 4500, 6500]) {
     window.setTimeout(() => {
       try {
         api.bringToForeground();
@@ -588,6 +608,50 @@ function buildPrintRawBtSilentIntent(data) {
   );
 }
 
+/**
+ * RawBT PRINT_RAWBT — background/service path, no VIEW URL activity.
+ * Tries https URL then rawbt:https URL as DATA extra.
+ */
+function launchRawBtSilentData(data) {
+  const api = getFullyBridge();
+  const payloadCandidates = /^https?:\/\//i.test(data)
+    ? [data, `rawbt:${data}`]
+    : [data];
+
+  for (const payload of payloadCandidates) {
+    const intent = buildPrintRawBtSilentIntent(payload);
+
+    if (api?.startIntent) {
+      try {
+        api.startIntent(intent);
+        return "fully-startIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startIntent print-rawbt failed", err);
+      }
+    }
+
+    if (api?.broadcastIntent) {
+      try {
+        api.broadcastIntent(intent);
+        return "fully-broadcastIntent-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.broadcastIntent print-rawbt failed", err);
+      }
+    }
+
+    if (api?.startApplication) {
+      try {
+        api.startApplication(RAWBT_PACKAGE, RAWBT_PRINT_ACTION, payload);
+        return "fully-startApplication-print-rawbt";
+      } catch (err) {
+        console.warn("[print] fully.startApplication print-rawbt failed", err);
+      }
+    }
+  }
+
+  return null;
+}
+
 /** ESC/POS GS V 66 0 — feed + full cut (XPrinter / most 80mm) */
 function buildRawBtCutSchemeUrl() {
   const bytes = new Uint8Array([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x42, 0x00]);
@@ -600,6 +664,13 @@ function buildRawBtCutSchemeUrl() {
 
 function launchRawBtCut() {
   const cutUrl = buildRawBtCutSchemeUrl();
+
+  const silentMethod = launchRawBtSilentData(cutUrl);
+  if (silentMethod) {
+    return `${silentMethod}-cut`;
+  }
+
+  /* --- legacy VIEW cut (may flash RawBT UI) --- */
   const api = getFullyBridge();
 
   if (api?.startApplication) {
@@ -675,7 +746,7 @@ function launchViaFully(api, targetUrl) {
     ? [buildRawBtIntentUrl(targetUrl, { withComponent: false })]
     : [buildRawBtIntentUrl(targetUrl, { withComponent: false })];
 
-  // HTTP color URL — VIEW via startApplication is the only reliable print path on this kiosk
+  /* --- legacy VIEW intent — opens RawBT download/print UI (used only as fallback) --- */
   if (isHttpUrl && typeof api.startApplication === "function") {
     try {
       api.startApplication(RAWBT_PACKAGE, RAWBT_ACTION_VIEW, targetUrl);
@@ -691,29 +762,6 @@ function launchViaFully(api, targetUrl) {
       return "fully-startIntent-view";
     } catch (err) {
       console.warn("[print] fully.startIntent view failed", err);
-    }
-  }
-
-  const trySilent =
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem("shoot_rawbt_try_silent") === "1";
-  if (isHttpUrl && trySilent) {
-    const silentIntent = buildPrintRawBtSilentIntent(targetUrl);
-    if (typeof api.startApplication === "function") {
-      try {
-        api.startApplication(RAWBT_PACKAGE, RAWBT_PRINT_ACTION, targetUrl);
-        return "fully-startApplication-print-rawbt";
-      } catch (err) {
-        console.warn("[print] fully.startApplication print-rawbt failed", err);
-      }
-    }
-    if (typeof api.startIntent === "function") {
-      try {
-        api.startIntent(silentIntent);
-        return "fully-startIntent-print-rawbt";
-      } catch (err) {
-        console.warn("[print] fully.startIntent print-rawbt failed", err);
-      }
     }
   }
 
@@ -814,9 +862,20 @@ async function printViaEscPos(source, copies = 1, urls = {}) {
 }
 
 function launchRawBtPrint(targetUrl) {
-  const method = launchRawBtView(targetUrl);
+  logFullyPrintDiagnostics();
+
+  const silentMethod = launchRawBtSilentData(targetUrl);
+  if (silentMethod) {
+    scheduleBoothRefocusAfterSilentPrint();
+    return silentMethod;
+  }
+
+  console.warn(
+    "[print] PRINT_RAWBT silent unavailable — falling back to legacy VIEW (shows RawBT UI)"
+  );
+  const legacyMethod = launchRawBtView(targetUrl);
   refocusBoothAfterPrint();
-  return method;
+  return legacyMethod;
 }
 
 async function printViaThermer(source, copies = 1, urls = {}) {
@@ -860,10 +919,10 @@ async function printViaRawBt(source, copies = 1, urls = {}) {
     let method = null;
     if (httpTarget) {
       method = launchRawBtPrint(httpTarget);
-      console.info(`[print] rawbt color-url launch=${method} url=${httpTarget}`);
+      console.info(`[print] rawbt silent-url launch=${method} url=${httpTarget}`);
     } else {
       method = launchRawBtPrint(payload);
-      console.info(`[print] rawbt inline launch=${method} len=${payload.length}`);
+      console.info(`[print] rawbt silent-inline launch=${method} len=${payload.length}`);
     }
 
     if (!method) continue;
