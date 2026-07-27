@@ -454,7 +454,7 @@ const THERMER_COPY_DELAY_MS = 3500;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
-const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
+const RAWBT_PRINT_DATA_EXTRA = "DATA";
 const PRINT_BUILD = "silent1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
