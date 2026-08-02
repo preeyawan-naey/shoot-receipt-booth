@@ -455,12 +455,12 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "rawbt11";
+const PRINT_BUILD = "native1";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
 function getPrintDriver() {
-  const valid = new Set(["thermer", "escpos", "rawbt", "browser"]);
+  const valid = new Set(["thermer", "escpos", "rawbt", "native", "browser"]);
   const fromQuery = new URLSearchParams(window.location.search).get("print");
   if (valid.has(fromQuery)) {
     return fromQuery;
@@ -1040,6 +1040,10 @@ function printReceiptDirect(copies = 1, options = {}) {
 
   if (driver === "rawbt") {
     return printViaRawBt(source, copies, { downloadUrl, printUrl });
+  }
+
+  if (driver === "native") {
+    return printViaNative(source, copies, { downloadUrl, printUrl });
   }
 
   return printViaBrowser(source, copies);

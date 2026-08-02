@@ -10,9 +10,13 @@ Shoot Receipt/
 │   ├── index.html            # Main booth app
 │   ├── css/
 │   ├── js/
+│   │   └── native-print.js   # Native APK print driver (Intent)
 │   ├── img/
 │   ├── admin/                # Backoffice dashboard
 │   └── package.json
+│
+├── android/                  # Shoot Print Bridge APK (USB silent print)
+│   └── README.md             # Build & install instructions
 │
 ├── backend/                  # Node.js API + serves frontend
 │   ├── server.js
@@ -98,3 +102,15 @@ docker run -p 3000:3000 --env-file backend/.env shoot-receipt
 ## Deploy
 
 See [DEPLOY.md](./DEPLOY.md).
+
+## Native Android print (optional)
+
+For silent USB printing without RawBT modal, build and install **Shoot Print Bridge**:
+
+```bash
+# See android/README.md
+open android/   # in Android Studio → Build APK
+```
+
+Enable on tablet: `?print=native` or `localStorage.shoot_print_driver = 'native'`.
+Default driver remains **rawbt** until you switch.

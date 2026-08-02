@@ -14,3 +14,14 @@ backend/.env.*
 backend/uploads/
 backend/data/
 .DS_Store
+
+# Android build
+android/.gradle/
+android/.idea/
+android/local.properties
+android/**/build/
+android/**/*.iml
+android/.kotlin/
+android/captures/
+*.keystore
+!android/debug.keystore.example
