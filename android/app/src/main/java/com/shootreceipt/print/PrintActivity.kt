@@ -8,31 +8,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Headless print handler — launched by Fully Kiosk via:
- *   fully.startApplication("com.shootreceipt.print", "android.intent.action.VIEW", imageUrl)
+ * Instant trampoline — starts PrintJobService and finishes (Fully stays fullscreen).
  */
 class PrintActivity : android.app.Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        overridePendingTransition(0, 0)
         super.onCreate(savedInstanceState)
-
-        val action = intent?.action
-        Thread {
-            try {
-                when (action) {
-                    ACTION_CUT -> PrintEngine.cutPaper(this)
-                    else -> {
-                        val url = PrintEngine.resolvePrintUrl(intent)
-                            ?: throw IllegalArgumentException("No http(s) print URL in intent")
-                        PrintEngine.printImageUrl(this, url)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Print job failed", e)
-            } finally {
-                runOnUiThread { finish() }
-            }
-        }.start()
+        Log.i(TAG, "intent action=${intent?.action} data=${intent?.dataString} extras=${intent?.extras?.summary()}")
+        PrintJobService.start(this, intent)
+        finish()
+        overridePendingTransition(0, 0)
     }
 
     companion object {
@@ -43,6 +29,11 @@ class PrintActivity : android.app.Activity() {
     }
 }
 
+private fun Bundle.summary(): String {
+    val parts = keySet().map { key -> "$key=${get(key)}" }
+    return parts.joinToString(", ")
+}
+
 object PrintEngine {
     private const val TAG = "ShootPrint"
     /** Match booth upload width (80mm @ ~203dpi) */
@@ -50,9 +41,28 @@ object PrintEngine {
 
     fun resolvePrintUrl(intent: android.content.Intent?): String? {
         intent?.dataString?.takeIf { it.startsWith("http") }?.let { return it }
-        intent?.getStringExtra(PrintActivity.EXTRA_PRINT_URL)?.let { return it }
-        intent?.getStringExtra(android.content.Intent.EXTRA_TEXT)?.takeIf { it.startsWith("http") }
-            ?.let { return it }
+
+        val directKeys = listOf(
+            PrintActivity.EXTRA_PRINT_URL,
+            android.content.Intent.EXTRA_TEXT,
+            "url",
+            "URL",
+            "printUrl",
+            "imageUrl",
+        )
+        for (key in directKeys) {
+            intent?.getStringExtra(key)?.takeIf { it.startsWith("http") }?.let { return it }
+        }
+
+        intent?.extras?.let { bundle ->
+            for (key in bundle.keySet()) {
+                val value = bundle.get(key)?.toString()
+                if (value?.startsWith("http") == true) {
+                    return value
+                }
+            }
+        }
+
         return null
     }
 

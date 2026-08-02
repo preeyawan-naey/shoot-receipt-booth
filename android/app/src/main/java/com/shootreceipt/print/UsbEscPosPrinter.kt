@@ -20,19 +20,24 @@ class UsbEscPosPrinter(private val context: Context) {
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
     fun printBitmap(source: Bitmap, bandHeight: Int = BAND_HEIGHT_PX) {
+        val dithered = AtkinsonDither.toBlackWhiteBitmap(source)
+        val recycleDithered = dithered !== source
         val connection = openConnection()
         try {
             connection.write(INIT)
-            val bands = splitIntoBands(source, bandHeight)
+            val bands = splitIntoBands(dithered, bandHeight)
             for (band in bands) {
                 connection.write(bitmapToRaster(band))
-                if (band !== source) {
+                if (band !== dithered) {
                     band.recycle()
                 }
             }
             connection.write(FEED_AND_CUT)
         } finally {
             connection.close()
+            if (recycleDithered) {
+                dithered.recycle()
+            }
         }
     }
 
@@ -116,11 +121,8 @@ class UsbEscPosPrinter(private val context: Context) {
                     val x = byteIndex * 8 + bit
                     if (x >= width) continue
                     val pixel = bitmap.getPixel(x, y)
-                    val luminance =
-                        (Color.red(pixel) * 0.299f +
-                            Color.green(pixel) * 0.587f +
-                            Color.blue(pixel) * 0.114f)
-                    if (luminance < 160f) {
+                    // Already Atkinson dithered to pure black/white
+                    if (Color.red(pixel) < 128) {
                         value = value or (0x80 shr bit)
                     }
                 }

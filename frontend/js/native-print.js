@@ -1,84 +1,92 @@
 /**
  * Shoot Print Bridge — native Android APK (com.shootreceipt.print)
- * Fully: fully.startApplication(package, VIEW, supabaseUrl) → APK → USB ESC/POS
+ * Headless PrintJobService — Fully stays fullscreen
  */
 
 const NATIVE_PRINT_PACKAGE = "com.shootreceipt.print";
+const NATIVE_PRINT_COMPONENT = "com.shootreceipt.print/.PrintActivity";
 const NATIVE_PRINT_ACTION_VIEW = "android.intent.action.VIEW";
-const NATIVE_PRINT_ACTION = "com.shootreceipt.print.action.PRINT";
-const NATIVE_PRINT_ACTION_CUT = "com.shootreceipt.print.action.CUT";
 const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
 const NATIVE_COPY_DELAY_MS = 3500;
-const NATIVE_CUT_DELAY_MS = 4500;
+/** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
+const NATIVE_LAUNCH_FLAGS = "0x10010000";
+/** Print ~576x1375 + Atkinson dither + USB */
+const NATIVE_REFOCUS_DELAY_MS = 14000;
 
-function buildNativePrintIntentUrl(httpUrl) {
+function buildNativeViewIntentUrl(httpUrl) {
   return (
     `intent:${encodeURI(httpUrl)}#Intent;` +
     `action=${NATIVE_PRINT_ACTION_VIEW};` +
-    `launchFlags=0x10000000;` +
+    `component=${NATIVE_PRINT_COMPONENT};` +
+    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
     `package=${NATIVE_PRINT_PACKAGE};end;`
   );
 }
 
-function buildNativeCutIntentUrl() {
+function buildNativeExtraIntentUrl(httpUrl) {
+  const encoded = encodeURIComponent(httpUrl);
   return (
-    `intent:#Intent;action=${NATIVE_PRINT_ACTION_CUT};` +
-    `launchFlags=0x10000000;` +
+    `intent:#Intent;` +
+    `action=${NATIVE_PRINT_ACTION_VIEW};` +
+    `component=${NATIVE_PRINT_COMPONENT};` +
+    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
+    `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};` +
+    `package=${NATIVE_PRINT_PACKAGE};end;`
+  );
+}
+
+function buildNativePackageViewIntentUrl(httpUrl) {
+  return (
+    `intent:${encodeURI(httpUrl)}#Intent;` +
+    `action=${NATIVE_PRINT_ACTION_VIEW};` +
+    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
     `package=${NATIVE_PRINT_PACKAGE};end;`
   );
 }
 
 function launchNativeViaFully(api, httpUrl) {
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, httpUrl);
-      return "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native view failed", err);
+  const variants = [
+    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl) },
+    { id: "extra-url", url: buildNativeExtraIntentUrl(httpUrl) },
+    { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl) },
+  ];
+
+  if (typeof api.startIntent === "function") {
+    for (const { id, url } of variants) {
+      try {
+        api.startIntent(url);
+        return `fully-startIntent-${id}`;
+      } catch (err) {
+        console.warn(`[print] fully.startIntent native ${id} failed`, err);
+      }
     }
   }
 
-  if (typeof api.startIntent === "function") {
+  if (typeof api.startApplication === "function") {
     try {
-      api.startIntent(buildNativePrintIntentUrl(httpUrl));
-      return "fully-startIntent-view";
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, httpUrl);
+      return "fully-startApplication-view-fallback";
     } catch (err) {
-      console.warn("[print] fully.startIntent native failed", err);
+      console.warn("[print] fully.startApplication native fallback failed", err);
     }
   }
 
   return null;
 }
 
-function launchNativeCut() {
+function refocusBoothAfterNativePrint() {
   const api = getFullyBridge();
+  if (!api || typeof api.bringToForeground !== "function") return;
 
-  if (api?.startApplication) {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_CUT, "");
-      return "fully-startApplication-cut";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native cut failed", err);
-    }
+  for (const delayMs of [NATIVE_REFOCUS_DELAY_MS, NATIVE_REFOCUS_DELAY_MS + 3000]) {
+    window.setTimeout(() => {
+      try {
+        api.bringToForeground();
+      } catch (err) {
+        console.warn("[print] bringToForeground native failed", err);
+      }
+    }, delayMs);
   }
-
-  if (api?.startIntent) {
-    try {
-      api.startIntent(buildNativeCutIntentUrl());
-      return "fully-startIntent-cut";
-    } catch (err) {
-      console.warn("[print] fully.startIntent native cut failed", err);
-    }
-  }
-
-  try {
-    window.location.href = buildNativeCutIntentUrl();
-    return "location-intent-cut";
-  } catch {
-    /* fall through */
-  }
-
-  return null;
 }
 
 function launchNativePrint(httpUrl) {
@@ -93,30 +101,23 @@ function launchNativePrint(httpUrl) {
   const api = getFullyBridge();
   if (api) {
     const method = launchNativeViaFully(api, httpUrl);
-    if (method) {
-      refocusBoothAfterPrint();
-      return method;
+    if (method) return method;
+  }
+
+  for (const url of [
+    buildNativeViewIntentUrl(httpUrl),
+    buildNativeExtraIntentUrl(httpUrl),
+    buildNativePackageViewIntentUrl(httpUrl),
+  ]) {
+    try {
+      window.location.href = url;
+      return "location-intent-native";
+    } catch {
+      /* try next */
     }
   }
 
-  const intentUrl = buildNativePrintIntentUrl(httpUrl);
-
-  try {
-    window.location.href = intentUrl;
-    refocusBoothAfterPrint();
-    return "location-intent-native";
-  } catch {
-    /* fall through */
-  }
-
-  const link = document.createElement("a");
-  link.href = intentUrl;
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  refocusBoothAfterPrint();
-  return "link-intent-native";
+  return null;
 }
 
 async function printViaNative(source, copies = 1, urls = {}) {
@@ -141,8 +142,6 @@ async function printViaNative(source, copies = 1, urls = {}) {
 
     if (!method) continue;
 
-    await new Promise((resolve) => window.setTimeout(resolve, NATIVE_CUT_DELAY_MS));
-    const cutMethod = launchNativeCut();
-    console.info(`[print] native cut launch=${cutMethod || "failed"}`);
+    refocusBoothAfterNativePrint();
   }
 }

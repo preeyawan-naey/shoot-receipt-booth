@@ -51,13 +51,11 @@ Release build (signing required):
 ## Install on tablet
 
 1. Enable **Developer options** + **USB debugging**
-2. Connect Pad to Mac → Android Studio **Run ▶**
-   Or:
-   ```bash
-   adb install app/build/outputs/apk/debug/app-debug.apk
-   ```
-3. Open **Shoot Print** app once — confirm “USB printer connected”
-4. Grant **USB permission** when prompted (first time)
+2. Install APK (adb or copy file). **No launcher icon** — app runs headless from booth only.
+3. First print may show **system USB permission** dialog → Allow + Always
+4. USB permission persists after first grant (already done if you tested before)
+
+**Re-install:** uninstall old APK first (removes old launcher icon), then install new build.
 
 ## Fully Kiosk setup
 

@@ -14,12 +14,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ShootPrint">
 
-        <!-- Transparent handler — no UI; Fully Kiosk launches via VIEW + URL -->
+        <!-- Headless — no launcher icon; booth opens this via intent only -->
         <activity
             android:name=".PrintActivity"
             android:exported="true"
+            android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:noHistory="true"
+            android:taskAffinity="com.shootreceipt.print.job"
             android:theme="@style/Theme.ShootPrint.Transparent">
 
             <intent-filter>
@@ -47,15 +49,8 @@
             </intent-filter>
         </activity>
 
-        <!-- Optional launcher for manual USB permission / smoke test -->
-        <activity
-            android:name=".LauncherActivity"
-            android:exported="true"
-            android:theme="@style/Theme.ShootPrint">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <service
+            android:name=".PrintJobService"
+            android:exported="false" />
     </application>
 </manifest>
