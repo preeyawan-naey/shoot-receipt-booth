@@ -11,6 +11,7 @@ function initNavigation() {
   pages["frame-select"] = document.getElementById("page-frame-select");
   pages.camera = document.getElementById("page-camera");
   pages.process = document.getElementById("page-process");
+  pages["qr-download"] = document.getElementById("page-qr-download");
   if (pages.home) {
     pages.home.style.cursor = "pointer";
     pages.home.addEventListener("click", goToCodeEntry);
@@ -46,8 +47,15 @@ function goToFrameSelect() {
 }
 
 function goToHome() {
+  if (typeof clearQrCountdown === "function") {
+    clearQrCountdown();
+  }
   navigateTo("home");
   replayHomeAnimations();
+}
+
+function goToQrDownload() {
+  navigateTo("qr-download");
 }
 
 function replayHomeAnimations() {

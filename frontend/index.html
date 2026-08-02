@@ -191,6 +191,43 @@
             </div>
           </div>
         </section>
+
+        <!-- ==================== QR DOWNLOAD PAGE ==================== -->
+        <section class="page" id="page-qr-download" data-page="qr-download">
+          <div class="qr-download">
+            <h1 class="qr-download__title">
+              Scan to <span class="qr-download__title-accent">Download</span>
+            </h1>
+            <p class="qr-download__subtitle" id="qr-download-status">
+              Scan to download your photo
+            </p>
+
+            <div class="qr-download__image-wrap">
+              <img
+                id="qr-download-image"
+                class="qr-download__image"
+                src=""
+                alt="QR Code"
+                hidden
+              />
+            </div>
+
+            <p class="qr-download__countdown">
+              กลับหน้าหลักใน <span id="qr-countdown">40</span> วินาที
+            </p>
+
+            <button type="button" class="qr-download__btn" id="btn-qr-home">
+              Back to Home
+            </button>
+          </div>
+        </section>
+
+        <div class="print-overlay" id="print-overlay" hidden aria-hidden="true">
+          <div class="print-overlay__content">
+            <div class="print-overlay__spinner" aria-hidden="true"></div>
+            <p class="print-overlay__text" id="print-overlay-text">กำลังพิมพ์...</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -199,21 +236,6 @@
       <div id="print-copies-container"></div>
       <canvas id="print-receipt-canvas" hidden></canvas>
     </div>
-
-    <div id="qr-popup" class="qr-popup">
-      <div class="qr-modal">
-        <h3 id="upload-status" class="qr-modal__title">Scan to download your photo</h3>
-
-        <div class="qr-modal__image-wrap">
-          <img id="qr-code-display" class="qr-modal__image" src="" alt="QR Code" />
-        </div>
-
-        <button type="button" class="qr-modal__btn" onclick="closeQRPopup()">
-          Back to Home
-        </button>
-      </div>
-    </div>
-    
 
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -227,8 +249,8 @@
     <script src="js/code-entry.js"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
-    <script src="js/native-print.js?v=native3"></script>
-    <script src="js/composite.js?v=native3"></script>
+    <script src="js/native-print.js?v=native4"></script>
+    <script src="js/composite.js?v=native4"></script>
     <script src="js/camera.js"></script>
     <script src="js/app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>

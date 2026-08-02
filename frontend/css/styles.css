@@ -1112,9 +1112,10 @@ body {
     visibility: visible !important;
   }
 
-  .qr-popup,
-  #qr-popup,
-  .qr-popup * {
+  .print-overlay,
+  .print-overlay *,
+  #page-qr-download,
+  #page-qr-download * {
     display: none !important;
     visibility: hidden !important;
   }
@@ -1153,76 +1154,139 @@ body {
 
 
 /* ============================================================
-   QR DOWNLOAD MODAL
+   PRINT OVERLAY (during booth print)
    ============================================================ */
 
-.qr-popup {
-  display: none;
-  position: fixed;
+.print-overlay {
+  position: absolute;
   inset: 0;
-  z-index: 999;
+  z-index: 500;
+  display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(26, 26, 26, 0.88);
 }
 
-.qr-popup--open {
+.print-overlay[hidden] {
+  display: none !important;
+}
+
+.print-overlay__content {
   display: flex;
-}
-
-.qr-modal {
-  width: 85%;
-  max-width: 400px;
-  padding: 30px;
-  border-radius: 16px;
-  background: #fff;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(20px, 4vh, 32px);
+  padding: var(--section-padding-x);
   text-align: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-.qr-modal__title {
-  margin-bottom: 12px;
-  color: #333;
+.print-overlay__spinner {
+  width: clamp(48px, 10vw, 64px);
+  height: clamp(48px, 10vw, 64px);
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--color-red);
+  border-radius: 50%;
+  animation: print-overlay-spin 0.9s linear infinite;
+}
+
+@keyframes print-overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.print-overlay__text {
+  color: #fff;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: clamp(18px, 3.5vw, 26px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   QR DOWNLOAD PAGE
+   ============================================================ */
+
+.qr-download {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--page-padding-y) var(--section-padding-x);
+  gap: clamp(20px, 4vh, 36px);
+}
+
+.qr-download__title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 5.5vw, 44px);
+  font-weight: 400;
+  color: var(--color-text);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.qr-download__title-accent {
+  color: var(--color-red);
+}
+
+.qr-download__subtitle {
+  font-family: var(--font-sans);
+  font-size: clamp(13px, 2.4vw, 16px);
   font-weight: 500;
+  color: var(--color-brown);
+  text-align: center;
   line-height: 1.4;
 }
 
-.qr-modal__image-wrap {
+.qr-download__image-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
-  margin: 16px auto;
+  min-height: clamp(180px, 32vw, 240px);
+  padding: clamp(12px, 2vw, 20px);
+  border-radius: 16px;
+  background: var(--color-bg-card);
 }
 
-.qr-modal__image {
+.qr-download__image {
+  width: clamp(180px, 32vw, 220px);
+  height: clamp(180px, 32vw, 220px);
+  object-fit: contain;
+}
+
+.qr-download__image[hidden] {
   display: none;
-  width: 200px;
-  height: 200px;
 }
 
-.qr-modal__image--visible {
-  display: block;
+.qr-download__countdown {
+  font-family: var(--font-sans);
+  font-size: clamp(12px, 2.2vw, 15px);
+  color: #666;
+  text-align: center;
 }
 
-.qr-modal__btn {
+.qr-download__countdown span {
+  color: var(--color-red);
+  font-weight: 700;
+}
+
+.qr-download__btn {
   box-sizing: border-box;
-  width: 100%;
-  padding: 12px 25px;
+  width: min(100%, 320px);
+  padding: 14px 28px;
   border: none;
   border-radius: 999px;
   background: var(--color-red);
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 11pt;
+  font-size: clamp(12px, 2.2vw, 14px);
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.15s ease;
 }
 
-.qr-modal__btn:active {
+.qr-download__btn:active {
   transform: scale(0.97);
 }
 

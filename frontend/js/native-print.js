@@ -46,8 +46,8 @@ function buildNativePackageViewIntentUrl(httpUrl) {
 
 function launchNativeViaFully(api, httpUrl) {
   const variants = [
-    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl) },
     { id: "extra-url", url: buildNativeExtraIntentUrl(httpUrl) },
+    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl) },
     { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl) },
   ];
 

@@ -2,23 +2,34 @@ package com.shootreceipt.print
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Instant trampoline — starts PrintJobService and finishes (Fully stays fullscreen).
+ * Transparent print handler — stay alive until USB job finishes (MIUI kills background services).
  */
 class PrintActivity : android.app.Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         overridePendingTransition(0, 0)
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "intent action=${intent?.action} data=${intent?.dataString} extras=${intent?.extras?.summary()}")
-        PrintJobService.start(this, intent)
-        finish()
-        overridePendingTransition(0, 0)
+
+        Log.i(
+            TAG,
+            "intent action=${intent?.action} data=${intent?.dataString} " +
+                "resolved=${PrintEngine.resolvePrintUrl(intent)} extras=${intent?.extras?.summary()}",
+        )
+
+        Thread {
+            PrintJobRunner.run(this, intent)
+            runOnUiThread {
+                finish()
+                overridePendingTransition(0, 0)
+            }
+        }.start()
     }
 
     companion object {
@@ -30,8 +41,7 @@ class PrintActivity : android.app.Activity() {
 }
 
 private fun Bundle.summary(): String {
-    val parts = keySet().map { key -> "$key=${get(key)}" }
-    return parts.joinToString(", ")
+    return keySet().joinToString(", ") { key -> "$key=${get(key)}" }
 }
 
 object PrintEngine {
@@ -40,6 +50,7 @@ object PrintEngine {
     private const val TARGET_WIDTH_PX = 576
 
     fun resolvePrintUrl(intent: android.content.Intent?): String? {
+        intent?.data?.let { uri -> uriToHttp(uri)?.let { return it } }
         intent?.dataString?.takeIf { it.startsWith("http") }?.let { return it }
 
         val directKeys = listOf(
@@ -64,6 +75,12 @@ object PrintEngine {
         }
 
         return null
+    }
+
+    private fun uriToHttp(uri: Uri): String? {
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return null
+        return uri.toString()
     }
 
     fun printImageUrl(context: android.content.Context, url: String) {

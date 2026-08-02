@@ -10,7 +10,9 @@ const appState = {
 
 const MIN_PRINT_COPIES = 1;
 const MAX_PRINT_COPIES = 10;
+const QR_HOME_COUNTDOWN_SEC = 40;
 let printCopies = MIN_PRINT_COPIES;
+let qrCountdownTimer = null;
 
 function getPrintCopies() {
   return printCopies;
@@ -104,8 +106,11 @@ function bindEvents() {
   const btnPrint = document.getElementById("btn-print");
   const btnPrintMinus = document.getElementById("btn-print-minus");
   const btnPrintPlus = document.getElementById("btn-print-plus");
+  const btnQrHome = document.getElementById("btn-qr-home");
 
   resetPrintCopiesUI();
+
+  btnQrHome?.addEventListener("click", finishQrDownloadSession);
 
   btnPrintMinus?.addEventListener("click", () => {
     if (printCopies <= MIN_PRINT_COPIES) return;
@@ -156,28 +161,31 @@ function bindEvents() {
     btn.textContent = "Preparing...";
 
     try {
+      showPrintOverlay("กำลังเตรียมใบเสร็จ...");
       const receipt = await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
 
-      void handlePrintAndShowQR();
+      showPrintOverlay("กำลังพิมพ์...");
+      playReceiptPrintAnimation();
 
       const ticketCode = getVerifiedTicketCode();
-      void printReceiptDirect(copies, {
+      await printReceiptDirect(copies, {
         printUrl: receipt.printUrl,
         downloadUrl: receipt.downloadUrl,
-      })
-        .then(async () => {
-          if (!ticketCode) return;
-          try {
-            await recordTicketPrintCount(ticketCode, copies);
-          } catch (printErr) {
-            console.warn("[print-count]", printErr);
-          }
-        })
-        .catch((printErr) => {
-          console.error("[print]", printErr);
-        });
+      });
+
+      if (ticketCode) {
+        try {
+          await recordTicketPrintCount(ticketCode, copies);
+        } catch (printErr) {
+          console.warn("[print-count]", printErr);
+        }
+      }
+
+      hidePrintOverlay();
+      showQrDownloadPage();
     } catch (error) {
+      hidePrintOverlay();
       console.error(error);
       alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
     } finally {
@@ -189,58 +197,72 @@ function bindEvents() {
 
 document.addEventListener("DOMContentLoaded", initApp);
 
-async function exportReceiptAsBase64() {
-  const frameId = sessionStorage.getItem("selectedFrame");
-  const frame = getFrameById(frameId);
-  const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
-  const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-  if (!frame || !data.photos) return null;
-  return exportCompositeForPrint(frame, data.photos, qrData.qrCodeUrl || null);
+function showPrintOverlay(message) {
+  const overlay = document.getElementById("print-overlay");
+  const textEl = document.getElementById("print-overlay-text");
+  if (textEl && message) textEl.textContent = message;
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+  }
 }
 
-async function handlePrintAndShowQR() {
-  const popup = document.getElementById("qr-popup");
-  const qrImage = document.getElementById("qr-code-display");
-  const statusText = document.getElementById("upload-status");
-
-  popup.classList.add("qr-popup--open");
-
-  const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-
-  if (cached.qrCodeUrl) {
-    qrImage.src = cached.qrCodeUrl;
-    qrImage.classList.add("qr-modal__image--visible");
-    statusText.innerText = "Scan to download your photo";
-    return;
+function hidePrintOverlay() {
+  const overlay = document.getElementById("print-overlay");
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
   }
+}
 
-  qrImage.classList.remove("qr-modal__image--visible");
-  statusText.innerText = "📸 กำลังอัปโหลดรูปภาพและสร้าง QR Code...";
+function clearQrCountdown() {
+  if (qrCountdownTimer) {
+    clearInterval(qrCountdownTimer);
+    qrCountdownTimer = null;
+  }
+}
 
-  try {
-    const finalImageBase64 = await exportReceiptAsBase64();
-    const data = await uploadCompositeAndGetQR(finalImageBase64);
+function startQrCountdown(seconds = QR_HOME_COUNTDOWN_SEC) {
+  clearQrCountdown();
+  let remaining = seconds;
+  const countdownEl = document.getElementById("qr-countdown");
+  if (countdownEl) countdownEl.textContent = String(remaining);
 
-    if (data.success) {
-      sessionStorage.setItem(
-        "downloadQR",
-        JSON.stringify({ qrCodeUrl: data.qrCodeUrl, downloadUrl: data.downloadUrl })
-      );
-      qrImage.src = data.qrCodeUrl;
-      qrImage.classList.add("qr-modal__image--visible");
-      statusText.innerText = "✨ สร้าง QR Code สำเร็จ!";
-    } else {
-      statusText.innerText = "❌ เกิดข้อผิดพลาด: " + data.message;
+  qrCountdownTimer = setInterval(() => {
+    remaining -= 1;
+    if (countdownEl) countdownEl.textContent = String(Math.max(0, remaining));
+    if (remaining <= 0) {
+      clearQrCountdown();
+      finishQrDownloadSession();
     }
-  } catch (error) {
-    console.error(error);
-    statusText.innerText = "❌ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้";
-  }
+  }, 1000);
 }
 
-// 2. ฟังก์ชันปิด Popup เมื่อสแกนเสร็จแล้วกดปุ่มปิด
-function closeQRPopup() {
-  document.getElementById("qr-popup").classList.remove("qr-popup--open");
+function showQrDownloadPage() {
+  const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  const qrImage = document.getElementById("qr-download-image");
+  const statusEl = document.getElementById("qr-download-status");
+
+  if (cached.qrCodeUrl && qrImage) {
+    qrImage.src = cached.qrCodeUrl;
+    qrImage.hidden = false;
+  } else if (qrImage) {
+    qrImage.hidden = true;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = cached.qrCodeUrl
+      ? "Scan to download your photo"
+      : "❌ ไม่พบ QR Code";
+  }
+
+  goToQrDownload();
+  startQrCountdown(QR_HOME_COUNTDOWN_SEC);
+}
+
+function finishQrDownloadSession() {
+  clearQrCountdown();
+  hidePrintOverlay();
 
   appState.selectedFrame = null;
   sessionStorage.removeItem("selectedFrame");
@@ -252,4 +274,13 @@ function closeQRPopup() {
   resetPrintCopiesUI();
 
   goToHome();
+}
+
+async function exportReceiptAsBase64() {
+  const frameId = sessionStorage.getItem("selectedFrame");
+  const frame = getFrameById(frameId);
+  const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
+  const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  if (!frame || !data.photos) return null;
+  return exportCompositeForPrint(frame, data.photos, qrData.qrCodeUrl || null);
 }
