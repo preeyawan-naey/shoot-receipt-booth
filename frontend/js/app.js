@@ -2,6 +2,9 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
+const BOOTH_BUILD = "booth5";
+console.info(`[booth] build=${BOOTH_BUILD}`);
+
 const appState = {
   selectedFrame: null,
 };

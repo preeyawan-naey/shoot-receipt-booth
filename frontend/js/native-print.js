@@ -143,5 +143,6 @@ async function printViaNative(source, copies = 1, urls = {}) {
     if (!method) continue;
 
     refocusBoothAfterNativePrint();
+    await new Promise((resolve) => window.setTimeout(resolve, NATIVE_REFOCUS_DELAY_MS));
   }
 }

@@ -52,24 +52,80 @@ class UsbEscPosPrinter(private val context: Context) {
 
     fun hasUsbPrinter(): Boolean = findPrinterDevice() != null
 
+    fun findPrinterDevice(): UsbDevice? {
+        findStrictPrinterDevice()?.let { return it }
+
+        for (device in usbManager.deviceList.values) {
+            if (hasBulkOutEndpoint(device)) {
+                Log.i(
+                    TAG,
+                    "USB fallback printer vid=0x${device.vendorId.toString(16)} " +
+                        "pid=0x${device.productId.toString(16)} name=${device.deviceName}",
+                )
+                return device
+            }
+        }
+
+        logAttachedUsbDevices()
+        return null
+    }
+
     private fun openConnection(): UsbConnection {
         val device = findPrinterDevice()
             ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
         if (!usbManager.hasPermission(device)) {
-            throw IllegalStateException(
-                "USB permission not granted. Open Shoot Print app once and accept USB access."
-            )
+            if (!UsbPermissionHelper.waitForPermission(context, device)) {
+                throw IllegalStateException(
+                    "USB permission not granted. Accept USB access on tablet.",
+                )
+            }
         }
         return UsbConnection(usbManager, device)
     }
 
-    private fun findPrinterDevice(): UsbDevice? {
+    private fun findStrictPrinterDevice(): UsbDevice? {
         for (device in usbManager.deviceList.values) {
             if (isLikelyPrinter(device)) {
                 return device
             }
         }
         return null
+    }
+
+    private fun hasBulkOutEndpoint(device: UsbDevice): Boolean {
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            for (e in 0 until iface.endpointCount) {
+                val endpoint = iface.getEndpoint(e)
+                if (endpoint.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                    endpoint.direction == UsbConstants.USB_DIR_OUT
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun logAttachedUsbDevices() {
+        if (usbManager.deviceList.isEmpty()) {
+            Log.w(TAG, "No USB devices attached")
+            return
+        }
+        for (device in usbManager.deviceList.values) {
+            Log.w(
+                TAG,
+                "USB attached vid=0x${device.vendorId.toString(16)} " +
+                    "pid=0x${device.productId.toString(16)} name=${device.deviceName}",
+            )
+            for (i in 0 until device.interfaceCount) {
+                val iface = device.getInterface(i)
+                Log.w(
+                    TAG,
+                    "  iface $i class=${iface.interfaceClass} subclass=${iface.interfaceSubclass}",
+                )
+            }
+        }
     }
 
     private fun isLikelyPrinter(device: UsbDevice): Boolean {
@@ -81,7 +137,8 @@ class UsbEscPosPrinter(private val context: Context) {
         }
         // XPrinter / common thermal vendor IDs
         val vendor = device.vendorId
-        return vendor == 0x0483 || vendor == 0x1FC9 || vendor == 0x0416 || vendor == 0x154F
+        return vendor == 0x0483 || vendor == 0x1FC9 || vendor == 0x0416 || vendor == 0x154F ||
+            vendor == 0x0471 || vendor == 0x1659 || vendor == 0x6868 || vendor == 0x4B43
     }
 
     private fun splitIntoBands(bitmap: Bitmap, bandHeight: Int): List<Bitmap> {

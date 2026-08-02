@@ -206,10 +206,20 @@ app.get("/", (_req, res) => {
   if (!fs.existsSync(indexPath)) {
     return res.status(503).send("Frontend not found — ensure frontend/ is deployed");
   }
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   res.sendFile(indexPath);
 });
 
-app.use(express.static(FRONTEND_DIR, { redirect: false }));
+app.use(express.static(FRONTEND_DIR, {
+  redirect: false,
+  setHeaders(res, filePath) {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+    }
+  },
+}));
 
 async function startServer() {
   try {

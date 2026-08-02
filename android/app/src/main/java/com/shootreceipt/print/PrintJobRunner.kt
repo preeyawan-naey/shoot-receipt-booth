@@ -18,9 +18,17 @@ object PrintJobRunner {
 
         wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
         try {
-            UsbPermissionHelper.requestIfNeeded(appContext)
             when (intent?.action) {
-                PrintActivity.ACTION_CUT -> PrintEngine.cutPaper(appContext)
+                PrintActivity.ACTION_CUT -> {
+                    val device = UsbEscPosPrinter(appContext).findPrinterDevice()
+                        ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
+                    if (!UsbPermissionHelper.waitForPermission(appContext, device)) {
+                        throw IllegalStateException(
+                            "USB permission not granted. Accept USB access on tablet.",
+                        )
+                    }
+                    PrintEngine.cutPaper(appContext)
+                }
                 else -> {
                     val url = PrintEngine.resolvePrintUrl(intent)
                         ?: throw IllegalArgumentException("No http(s) print URL in intent")
