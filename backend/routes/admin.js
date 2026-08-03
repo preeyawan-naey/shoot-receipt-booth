@@ -5,7 +5,6 @@ const tickets = require("../tickets");
 const boothSettings = require("../boothSettings");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
-const config = require("../config");
 
 const router = express.Router();
 
