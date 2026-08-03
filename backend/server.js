@@ -10,6 +10,8 @@ const storage = require("./storage");
 const db = require("./db");
 const ticketRoutes = require("./routes/tickets");
 const adminRoutes = require("./routes/admin");
+const boothRoutes = require("./routes/booth");
+const webhookRoutes = require("./routes/webhook");
 
 const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
 
@@ -187,6 +189,8 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/booth", boothRoutes);
+app.use("/api/webhook", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 
 const adminDir = path.join(FRONTEND_DIR, "admin");

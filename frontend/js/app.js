@@ -2,14 +2,13 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth5";
+const BOOTH_BUILD = "booth23";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
-  selectedFrame: null,
+  selectedLayout: null,
+  selectedFrame: "none",
 };
-
-/* alert("Width: " + window.innerWidth + " | Height: " + window.innerHeight); */
 
 const MIN_PRINT_COPIES = 1;
 const MAX_PRINT_COPIES = 10;
@@ -38,8 +37,9 @@ function updatePrintCopiesUI() {
 
 function initApp() {
   initNavigation();
-  initFrameGrid();
+  initLayoutGrid();
   bindEvents();
+  void initBoothSettings();
   if (/Android/i.test(navigator.userAgent) || typeof fully !== "undefined") {
     if (typeof logFullyPrintDiagnostics === "function") {
       logFullyPrintDiagnostics();
@@ -47,63 +47,139 @@ function initApp() {
   }
 }
 
-function initFrameGrid() {
-  const frameGrid = document.getElementById("frame-grid");
-  if (!frameGrid) return;
+function initLayoutGrid() {
+  const layoutGrid = document.getElementById("layout-grid");
+  if (!layoutGrid) return;
 
-  frameGrid.innerHTML = FRAMES.map((frame) => buildFrameCard(frame)).join("");
+  layoutGrid.innerHTML = LAYOUTS.map((layout) => buildLayoutCard(layout)).join("");
 
-  frameGrid.querySelectorAll(".frame-card").forEach((card) => {
+  layoutGrid.querySelectorAll(".layout-card").forEach((card) => {
     card.addEventListener("click", () => {
-      selectFrame(card.dataset.frameId);
+      selectLayout(card.dataset.layoutId);
     });
   });
 }
 
-function buildFrameCard(frame) {
+function buildLayoutCard(layout) {
   return `
     <button
-      class="frame-card"
+      class="layout-card"
       type="button"
-      data-frame-id="${frame.id}"
-      aria-label="เลือกเฟรม ${frame.id}"
+      data-layout-id="${layout.id}"
+      aria-label="เลือก layout ${layout.id}"
     >
       <img
-        class="frame-card__preview"
-        src="${frame.selectImagePath || frame.imagePath}"
-        alt="Frame ${frame.id}"
+        class="layout-card__preview"
+        src="${layout.selectImagePath || layout.imagePath}"
+        alt="Layout ${layout.id}"
       />
     </button>
   `;
 }
 
+function selectLayout(layoutId) {
+  const layoutGrid = document.getElementById("layout-grid");
+  const layout = getLayoutById(layoutId);
+  if (!layout) return;
 
-function selectFrame(frameId) {
-  const frameGrid = document.getElementById("frame-grid");
-  appState.selectedFrame = frameId;
+  appState.selectedLayout = layoutId;
+  appState.selectedFrame = "none";
 
-  frameGrid?.querySelectorAll(".frame-card").forEach((card) => {
-    card.classList.toggle("frame-card--selected", card.dataset.frameId === frameId);
+  layoutGrid?.querySelectorAll(".layout-card").forEach((card) => {
+    card.classList.toggle("layout-card--selected", card.dataset.layoutId === layoutId);
   });
 
-  navigateToCamera(frameId);
+  setSelectedLayoutId(layoutId);
+  setSelectedLayoutConfig(layout);
+  clearSelectedFrame();
+  sessionStorage.removeItem("capturedPhotos");
+
+  if (layoutHasFrames(layoutId)) {
+    initFrameGrid(layoutId);
+    goToFrameSelect();
+    return;
+  }
+
+  setSelectedFrameId("none");
+  navigateToCamera(layoutId);
 }
 
-function navigateToCamera(frameId) {
-  const frame = getFrameById(frameId);
-  if (!frame) return;
+function initFrameGrid(layoutId) {
+  const row = document.getElementById("frame-grid");
+  if (!row) return;
 
-  sessionStorage.setItem("selectedFrame", frameId);
-  sessionStorage.setItem("selectedFrameConfig", JSON.stringify(frame));
+  const options = getFramesForLayout(layoutId);
+  row.innerHTML = options.map((option) => buildFrameCard(option)).join("");
+
+  row.querySelectorAll(".frame-picker-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      selectFrame(layoutId, card.dataset.frameId);
+    });
+  });
+}
+
+function buildFrameCard(option) {
+  if (option.id === "none") {
+    return `
+      <button
+        class="frame-picker-card frame-picker-card--none"
+        type="button"
+        data-frame-id="none"
+        aria-label="ไม่เลือก frame"
+      >
+        <span class="frame-picker-card__none-label">ไม่เลือก</span>
+      </button>
+    `;
+  }
+
+  return `
+    <button
+      class="frame-picker-card"
+      type="button"
+      data-frame-id="${option.id}"
+      aria-label="${option.label}"
+    >
+      <img
+        class="frame-picker-card__preview"
+        src="${option.selectImagePath}"
+        alt="${option.label}"
+      />
+    </button>
+  `;
+}
+
+function selectFrame(layoutId, frameId) {
+  const row = document.getElementById("frame-grid");
+  appState.selectedFrame = frameId;
+
+  row?.querySelectorAll(".frame-picker-card").forEach((card) => {
+    card.classList.toggle("frame-picker-card--selected", card.dataset.frameId === frameId);
+  });
+
+  setSelectedFrameId(frameId);
+  if (typeof persistFrameSelection === "function") {
+    persistFrameSelection(layoutId, frameId);
+  }
+
+  const frame = getFrameById(layoutId, frameId);
+  console.info(`[booth] frame=${frameId}`, frame?.slots?.[0] || "layout default slots");
+
+  navigateToCamera(layoutId);
+}
+
+function navigateToCamera(layoutId) {
+  const layout = getLayoutById(layoutId);
+  if (!layout) return;
 
   navigateTo("camera");
-  startCameraSession(frame);
+  startCameraSession(layout);
 }
 
 function bindEvents() {
   const btnStartOverlay = document.getElementById("btn-start-overlay");
   const btnStart = document.getElementById("btn-start");
-  const btnBack = document.getElementById("btn-back");
+  const btnLayoutBack = document.getElementById("btn-layout-back");
+  const btnFrameBack = document.getElementById("btn-frame-back");
   const btnCameraBack = document.getElementById("btn-camera-back");
   const btnRetake = document.getElementById("btn-retake");
   const btnPrint = document.getElementById("btn-print");
@@ -127,34 +203,46 @@ function bindEvents() {
     updatePrintCopiesUI();
   });
 
-  btnStartOverlay?.addEventListener("click", goToCodeEntry);
-  btnStart?.addEventListener("click", goToCodeEntry);
+  btnStartOverlay?.addEventListener("click", goToBoothStart);
+  btnStart?.addEventListener("click", goToBoothStart);
 
-  btnBack?.addEventListener("click", () => {
-    appState.selectedFrame = null;
-    sessionStorage.removeItem("selectedFrame");
-    sessionStorage.removeItem("selectedFrameConfig");
-    sessionStorage.removeItem("capturedPhotos");
-    sessionStorage.removeItem("downloadQR");
+  btnLayoutBack?.addEventListener("click", () => {
+    appState.selectedLayout = null;
+    clearBoothSelection();
     clearVerifiedTicketCode();
-    goToCodeEntry();
+    goToPayment();
+  });
+
+  btnFrameBack?.addEventListener("click", () => {
+    appState.selectedFrame = "none";
+    clearSelectedFrame();
+    sessionStorage.removeItem("capturedPhotos");
+    goToLayoutSelect();
   });
 
   btnCameraBack?.addEventListener("click", (event) => {
     event.stopPropagation();
     stopCameraSession();
-    navigateTo("frame-select");
+
+    const layoutId = getSelectedLayoutId();
+    if (layoutId && layoutHasFrames(layoutId)) {
+      initFrameGrid(layoutId);
+      goToFrameSelect();
+      return;
+    }
+
+    goToLayoutSelect();
   });
 
   btnRetake?.addEventListener("click", () => {
-    const frameId = sessionStorage.getItem("selectedFrame");
-    const frame = getFrameById(frameId);
-    if (!frame) return;
+    const layoutId = getSelectedLayoutId();
+    const layout = getLayoutById(layoutId);
+    if (!layout) return;
 
     sessionStorage.removeItem("capturedPhotos");
     sessionStorage.removeItem("downloadQR");
     resetPrintCopiesUI();
-    navigateToCamera(frameId);
+    navigateToCamera(layoutId);
   });
 
   btnPrint?.addEventListener("click", async () => {
@@ -267,12 +355,9 @@ function finishQrDownloadSession() {
   clearQrCountdown();
   hidePrintOverlay();
 
-  appState.selectedFrame = null;
-  sessionStorage.removeItem("selectedFrame");
-  sessionStorage.removeItem("selectedFrameConfig");
-  sessionStorage.removeItem("capturedPhotos");
-  sessionStorage.removeItem("downloadQR");
-  sessionStorage.removeItem("printCopies");
+  appState.selectedLayout = null;
+  appState.selectedFrame = "none";
+  clearBoothSelection();
   clearVerifiedTicketCode();
   resetPrintCopiesUI();
 
@@ -280,10 +365,10 @@ function finishQrDownloadSession() {
 }
 
 async function exportReceiptAsBase64() {
-  const frameId = sessionStorage.getItem("selectedFrame");
-  const frame = getFrameById(frameId);
+  const layoutId = getSelectedLayoutId();
+  const layout = getLayoutById(layoutId);
   const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
   const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-  if (!frame || !data.photos) return null;
-  return exportCompositeForPrint(frame, data.photos, qrData.qrCodeUrl || null);
+  if (!layout || !data.photos) return null;
+  return exportCompositeForPrint(layout, data.photos, qrData.qrCodeUrl || null);
 }

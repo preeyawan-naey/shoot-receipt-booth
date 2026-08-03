@@ -48,6 +48,7 @@ const config = {
   databaseSsl:
     process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
   adminApiKey: process.env.ADMIN_API_KEY || "",
+  bankWebhookSecret: process.env.BANK_WEBHOOK_SECRET || "",
   supabase: supabaseEnabled
     ? {
         url: supabaseUrl,

@@ -28,7 +28,7 @@ function initCameraModule() {
 
 /**
  * เริ่ม session ถ่ายรูปเมื่อเข้าหน้ากล้อง
- * @param {object} frame - config จาก frames.js
+ * @param {object} layout - config จาก layouts.js
  */
 async function startCameraSession(frame) {
   stopCameraSession();
@@ -291,7 +291,15 @@ function navigateToProcess(payload) {
       console.error("[preview]", error);
       alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
       sessionStorage.removeItem("capturedPhotos");
-      navigateTo("frame-select");
+      const layoutId = getSelectedLayoutId();
+      if (layoutId && layoutHasFrames(layoutId)) {
+        if (typeof initFrameGrid === "function") {
+          initFrameGrid(layoutId);
+        }
+        navigateTo("frame-select");
+      } else {
+        navigateTo("layout-select");
+      }
     });
 }
 

@@ -2,6 +2,10 @@ const express = require("express");
 const config = require("../config");
 const admin = require("../admin");
 const tickets = require("../tickets");
+const boothSettings = require("../boothSettings");
+const paymentSettings = require("../paymentSettings");
+const paymentSessions = require("../paymentSessions");
+const config = require("../config");
 
 const router = express.Router();
 
@@ -112,6 +116,120 @@ router.post("/tickets/generate", async (req, res) => {
     });
   } catch (error) {
     console.error("[admin/tickets/generate]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/settings", async (_req, res) => {
+  try {
+    const settings = await boothSettings.getSettings();
+    return res.json({ success: true, settings });
+  } catch (error) {
+    console.error("[admin/settings]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.patch("/settings", async (req, res) => {
+  try {
+    if (typeof req.body?.code_entry_enabled !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "code_entry_enabled must be a boolean",
+      });
+    }
+
+    await boothSettings.setCodeEntryEnabled(req.body.code_entry_enabled);
+    const settings = await boothSettings.getSettings();
+
+    return res.json({ success: true, settings });
+  } catch (error) {
+    console.error("[admin/settings]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/payment", async (_req, res) => {
+  try {
+    const payment = await paymentSettings.getPaymentSettings();
+    return res.json({
+      success: true,
+      payment: {
+        ...payment,
+        webhook_url: `${config.publicUrl}/api/webhook/bank-notify`,
+        webhook_secret_configured: Boolean(config.bankWebhookSecret),
+        payment_session_ttl_sec: Math.round(paymentSessions.SESSION_TTL_MS / 1000),
+      },
+    });
+  } catch (error) {
+    console.error("[admin/payment]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.patch("/payment", async (req, res) => {
+  try {
+    const amount = req.body?.payment_amount;
+    if (amount === undefined || amount === null) {
+      return res.status(400).json({
+        success: false,
+        message: "payment_amount is required",
+      });
+    }
+
+    await paymentSettings.setPaymentAmount(amount);
+    const payment = await paymentSettings.getPaymentSettings();
+    return res.json({ success: true, payment });
+  } catch (error) {
+    console.error("[admin/payment]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.post("/payment/qr", async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "imageBase64 is required",
+      });
+    }
+
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+    if (buffer.length < 64) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid image data",
+      });
+    }
+
+    const updatedAt = await paymentSettings.savePaymentQr(buffer);
+    const payment = await paymentSettings.getPaymentSettings();
+
+    return res.json({
+      success: true,
+      payment,
+      updated_at: updatedAt,
+    });
+  } catch (error) {
+    console.error("[admin/payment/qr]", error);
     return res.status(500).json({
       success: false,
       message: error.message,

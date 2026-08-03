@@ -3,7 +3,7 @@
   --red-dark: #b91c1c;
   --red-light: #fef2f2;
   --red-muted: rgba(214, 40, 40, 0.12);
-  --bg: #f4f6f9;
+  --bg: #F9F6F2;
   --surface: #ffffff;
   --border: #e5e7eb;
   --text: #111827;
@@ -138,12 +138,21 @@ body {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
   padding: 0.75rem 1.25rem;
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
   border-left: 3px solid transparent;
+}
+
+.admin-nav__item--link {
+  cursor: pointer;
 }
 
 .admin-nav__item:hover {
@@ -276,6 +285,99 @@ body {
   font-family: inherit;
 }
 
+/* Booth settings */
+.admin-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.admin-settings__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-settings__desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.admin-toggle__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 0.2s ease;
+}
+
+.admin-toggle__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.admin-toggle input:checked + .admin-toggle__track {
+  background: var(--red);
+}
+
+.admin-toggle input:checked + .admin-toggle__track::after {
+  transform: translateX(20px);
+}
+
+.admin-toggle input:disabled + .admin-toggle__track {
+  opacity: 0.6;
+}
+
+.admin-toggle__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-toggle__label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-toggle__hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 /* KPI Cards */
 .admin-kpis {
   display: grid;
@@ -336,7 +438,6 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 1rem;
 }
@@ -550,5 +651,106 @@ body {
 
   .admin-main {
     padding: 1rem;
+  }
+}
+
+.admin-kpis--payment {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.payment-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  padding: 1.25rem 1.5rem;
+}
+
+.payment-admin-preview {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payment-admin-preview__img {
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  display: block;
+}
+
+.payment-admin-preview__empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.payment-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.payment-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.payment-admin-field__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.payment-admin-file {
+  font-size: 0.9rem;
+}
+
+.payment-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.payment-webhook-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-webhook-info__url {
+  font-size: 13px;
+}
+
+.payment-webhook-info__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.payment-webhook-info__sample {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #e8e8e8;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+@media (max-width: 900px) {
+  .payment-admin-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,4 +1,3 @@
-const QR_SLOT = { left: 38, top: 72.8, width: 24, height: 10.2 };
 const PRINT_QR_PX = 450;
 const PRINT_DASH_GAP_FROM_PHOTO = 60;
 const PRINT_DASH_TO_QR_GAP = 24;
@@ -25,20 +24,6 @@ async function getPublicDownloadBase() {
   const data = await response.json();
   cachedPublicUrl = data.publicUrl || data.apiBase;
   return cachedPublicUrl;
-}
-
-function getQRSlotRect(canvasWidth, canvasHeight) {
-  const slotX = (QR_SLOT.left / 100) * canvasWidth;
-  const slotY = (QR_SLOT.top / 100) * canvasHeight;
-  const slotW = (QR_SLOT.width / 100) * canvasWidth;
-  const slotH = (QR_SLOT.height / 100) * canvasHeight;
-  return { slotX, slotY, slotW, slotH };
-}
-
-function coverMockQRSlot(ctx, canvasWidth, canvasHeight) {
-  const { slotX, slotY, slotW, slotH } = getQRSlotRect(canvasWidth, canvasHeight);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(slotX, slotY, slotW, slotH);
 }
 
 function loadImage(src) {
@@ -164,20 +149,44 @@ function drawImageCoverForPrint(ctx, img, dx, dy, dw, dh) {
 }
 
 async function drawFrameOnly(ctx, frameConfig, canvasWidth, canvasHeight) {
-  const frameImg = await loadImage(frameConfig.imagePath);
-  ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
-  coverMockQRSlot(ctx, canvasWidth, canvasHeight);
+  const previewPath =
+    typeof getSelectedFramePreviewPath === "function"
+      ? getSelectedFramePreviewPath()
+      : null;
+
+  if (previewPath) {
+    const previewImg = await loadImage(previewPath);
+    ctx.drawImage(previewImg, 0, 0, canvasWidth, canvasHeight);
+  } else {
+    const frameImg = await loadImage(frameConfig.imagePath);
+    ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+  }
 }
 
-async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight) {
-  const frameImg = await loadImage(frameConfig.imagePath);
+async function drawDecorativeOverlay(ctx, canvasWidth, canvasHeight) {
+  const overlayPath =
+    typeof getSelectedFramePreviewPath === "function"
+      ? getSelectedFramePreviewPath()
+      : null;
+  if (!overlayPath) return;
 
-  ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
-  coverMockQRSlot(ctx, canvasWidth, canvasHeight);
+  const overlayImg = await loadImage(overlayPath);
+  ctx.drawImage(overlayImg, 0, 0, canvasWidth, canvasHeight);
+}
 
-  const count = Math.min(frameConfig.photoCount, photos.length);
+async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawPhotoFn = drawImageCover) {
+  const slots =
+    typeof getActivePhotoSlots === "function"
+      ? getActivePhotoSlots(frameConfig)
+      : frameConfig.slots;
+  const frameId = getSelectedFrameId();
+
+  console.info(`[composite] frame=${frameId} slot=`, slots[0] || null);
+
+  const count = Math.min(frameConfig.photoCount, photos.length, slots.length);
+
   for (let i = 0; i < count; i++) {
-    const slot = frameConfig.slots[i];
+    const slot = slots[i];
     if (!slot || !photos[i]) continue;
 
     const photo = await loadImage(photos[i]);
@@ -186,8 +195,25 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
     const w = (slot.width / 100) * canvasWidth;
     const h = (slot.height / 100) * canvasHeight;
 
-    drawImageCover(ctx, photo, x, y, w, h);
+    drawPhotoFn(ctx, photo, x, y, w, h);
   }
+}
+
+async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight) {
+  const previewPath =
+    typeof getSelectedFramePreviewPath === "function"
+      ? getSelectedFramePreviewPath()
+      : null;
+
+  if (previewPath) {
+    const previewImg = await loadImage(previewPath);
+    ctx.drawImage(previewImg, 0, 0, canvasWidth, canvasHeight);
+  } else {
+    const frameImg = await loadImage(frameConfig.imagePath);
+    ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+  }
+
+  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight);
 }
 
 async function drawQRAt(ctx, qrDataUrl, x, y, size) {
@@ -200,8 +226,12 @@ async function drawQRAt(ctx, qrDataUrl, x, y, size) {
 }
 
 function getPhotosBottomPx(frameConfig, canvasHeight) {
+  const slots =
+    typeof getActivePhotoSlots === "function"
+      ? getActivePhotoSlots(frameConfig)
+      : frameConfig.slots;
   let maxBottom = 0;
-  for (const slot of frameConfig.slots) {
+  for (const slot of slots) {
     maxBottom = Math.max(maxBottom, ((slot.top + slot.height) / 100) * canvasHeight);
   }
   return maxBottom;
@@ -276,10 +306,14 @@ function drawDashedSeparatorLine(ctx, frameW, y) {
 }
 
 async function drawComposite(canvas, frameConfig, photos) {
-  const frameImg = await loadImage(frameConfig.imagePath);
+  const previewPath =
+    typeof getSelectedFramePreviewPath === "function"
+      ? getSelectedFramePreviewPath()
+      : null;
+  const sizeImg = await loadImage(previewPath || frameConfig.imagePath);
 
-  canvas.width = frameImg.naturalWidth;
-  canvas.height = frameImg.naturalHeight;
+  canvas.width = sizeImg.naturalWidth;
+  canvas.height = sizeImg.naturalHeight;
 
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -291,7 +325,11 @@ async function drawComposite(canvas, frameConfig, photos) {
 async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, options = {}) {
   const { thermal = true } = options;
   const drawPhoto = thermal ? drawImageCoverForPrint : drawImageCover;
-  const frameImg = await loadImage(frameConfig.imagePath);
+  const previewPath =
+    typeof getSelectedFramePreviewPath === "function"
+      ? getSelectedFramePreviewPath()
+      : null;
+  const frameImg = await loadImage(previewPath || frameConfig.imagePath);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
@@ -315,18 +353,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, photosBottom, frameW, canvas.height - photosBottom);
 
-  const count = Math.min(frameConfig.photoCount, photos.length);
-  for (let i = 0; i < count; i++) {
-    const slot = frameConfig.slots[i];
-    if (!slot || !photos[i]) continue;
-
-    const photo = await loadImage(photos[i]);
-    const x = (slot.left / 100) * frameW;
-    const y = (slot.top / 100) * frameH;
-    const w = (slot.width / 100) * frameW;
-    const h = (slot.height / 100) * frameH;
-    drawPhoto(ctx, photo, x, y, w, h);
-  }
+  await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhoto);
 
   const qrX = (frameW - PRINT_QR_PX) / 2;
   drawDashedSeparatorLine(ctx, frameW, dashY);
@@ -368,22 +395,22 @@ async function createDownloadQR(downloadId) {
 }
 
 async function preparePrintReceipt() {
-  const frameId = sessionStorage.getItem("selectedFrame");
-  const frame = getFrameById(frameId);
+  const layoutId = getSelectedLayoutId();
+  const layout = getLayoutById(layoutId);
   const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
   const printCanvas = document.getElementById("print-receipt-canvas");
 
-  if (!frame || !data.photos || !printCanvas) {
+  if (!layout || !data.photos || !printCanvas) {
     throw new Error("Missing print data");
   }
 
   const downloadId = crypto.randomUUID();
   const { qrCodeUrl, downloadUrl } = await createDownloadQR(downloadId);
 
-  await drawCompositeForPrint(printCanvas, frame, data.photos, qrCodeUrl, { thermal: true });
+  await drawCompositeForPrint(printCanvas, layout, data.photos, qrCodeUrl, { thermal: true });
 
   const downloadCanvas = document.createElement("canvas");
-  await drawCompositeForPrint(downloadCanvas, frame, data.photos, qrCodeUrl, {
+  await drawCompositeForPrint(downloadCanvas, layout, data.photos, qrCodeUrl, {
     thermal: false,
   });
   const scaledColor = scaleCanvasForThermal(downloadCanvas, RAWBT_TARGET_WIDTH_PX);
@@ -455,7 +482,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth5";
+const PRINT_BUILD = "booth21";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 

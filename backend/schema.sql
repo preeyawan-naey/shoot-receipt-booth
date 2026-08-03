@@ -21,3 +21,30 @@ CREATE INDEX IF NOT EXISTS idx_receipt_tickets_status ON receipt_tickets (status
 CREATE INDEX IF NOT EXISTS idx_receipt_tickets_used_at ON receipt_tickets (used_at);
 
 ALTER TABLE receipt_tickets ADD COLUMN IF NOT EXISTS print_count INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS booth_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO booth_settings (setting_key, setting_value)
+VALUES ('code_entry_enabled', 'true')
+ON CONFLICT (setting_key) DO NOTHING;
+
+INSERT INTO booth_settings (setting_key, setting_value)
+VALUES ('payment_amount', '59')
+ON CONFLICT (setting_key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  id UUID PRIMARY KEY,
+  amount INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  paid_at TIMESTAMPTZ,
+  raw_notification TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions (status);
+CREATE INDEX IF NOT EXISTS idx_payment_sessions_created_at ON payment_sessions (created_at);

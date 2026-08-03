@@ -1,91 +1,114 @@
 /**
- * ข้อมูล config ของเฟรมทั้ง 4 แบบ
- * ขนาด PNG จริง: 1152 × 2904 px (aspect-ratio 1152/2904)
+ * Decorative frame options per layout (currently layout 1 only)
  */
-const FRAME_NATURAL_WIDTH = 1152;
-const FRAME_NATURAL_HEIGHT = 2904;
+const FRAMES_BY_LAYOUT = {
+  "Layout-1": [
+    {
+      id: "none",
+      label: "ไม่เลือก",
+      selectImagePath: null,
+      previewImagePath: "img/Layout/frame/frame-preview/Layout1-none.png",
+    },
+    {
+      id: "layout1-frame-1",
+      label: "Frame 1",
+      selectImagePath: "img/Layout/frame/frame-select/Layout1-Frame1.png",
+      previewImagePath: "img/Layout/frame/frame-preview/Layout1-Frame1.png",
+      slots: [{ left: 5, top: 35.00, width: 90, height: 41.16 }],
+    },
+    {
+      id: "layout1-frame-2",
+      label: "Frame 2",
+      selectImagePath: "img/Layout/frame/frame-select/Layout1-Frame2.png",
+      previewImagePath: "img/Layout/frame/frame-preview/Layout1-Frame2.png",
+      slots: [{ left: 7.5, top: 17.00, width: 85, height: 40 }],
+    },
+    {
+      id: "layout1-frame-3",
+      label: "Frame 3",
+      selectImagePath: "img/Layout/frame/frame-select/Layout1-Frame3.png",
+      previewImagePath: "img/Layout/frame/frame-preview/Layout1-Frame3.png",
+    },
+    {
+      id: "layout1-frame-4",
+      label: "Frame 4",
+      selectImagePath: "img/Layout/frame/frame-select/Layout1-Frame4.png",
+      previewImagePath: "img/Layout/frame/frame-preview/Layout1-Frame4.png",
+    },
+  ],
+};
 
-const FRAMES = [
-  {
-    id: "frame-01",
-    //label: "(01)",
-    photoCount: 1,
-    imagePath: "img/Frame/frame_1.png",
-    selectImagePath: "img/Frame/frame-select-1.png",
-    slots: [{ left: 9.72, top: 32.53, width: 80.93, height: 35.58 }],
-  },
-  {
-    id: "frame-02",
-    //label: "(02)",
-    photoCount: 2,
-    imagePath: "img/Frame/frame_2.png",
-    selectImagePath: "img/Frame/frame-select-2.png",
-    slots: [
-      { left: 9.72, top: 32.53, width: 80.47, height: 26.79 },
-      { left: 9.72, top: 60.15, width: 80.47, height: 26.79 },
-    ],
-  },
-  {
-    id: "frame-03",
-    //label: "(03)",
-    photoCount: 3,
-    imagePath: "img/Frame/frame_3.png",
-    selectImagePath: "img/Frame/frame-select-3.png",
-    slots: [
-      { left: 9.72, top: 32.53, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 51.47, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 70.41, width: 80.47, height: 18.11 },
-    ],
-  },
-  {
-    id: "frame-04",
-    //label: "(04)",
-    photoCount: 4,
-    selectImagePath: "img/Frame/frame-select-4.png",
-    imagePath: "img/Frame/frame_4.png",
-    slots: [
-      { left: 9.72, top: 32.53, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 32.53, width: 39.24, height: 22.11 },
-      { left: 9.72, top: 55.47, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 55.47, width: 39.24, height: 22.11 },
-    ],
-  },
-];
-
-function getFrameById(frameId) {
-  return FRAMES.find((f) => f.id === frameId);
+function layoutHasFrames(layoutId) {
+  return Boolean(FRAMES_BY_LAYOUT[layoutId]?.length);
 }
 
-function playReceiptPrintAnimation() {
-  const receiptEl = document.getElementById("receipt-composite");
-  if (!receiptEl) return;
+function getFramesForLayout(layoutId) {
+  return FRAMES_BY_LAYOUT[layoutId] || [];
+}
 
-  receiptEl.classList.remove(
-    "preview-dispenser__receipt--printing",
-    "preview-dispenser__receipt--done"
+function getFrameById(layoutId, frameId) {
+  return getFramesForLayout(layoutId).find((frame) => frame.id === frameId) || null;
+}
+
+function getSelectedFramePreviewPath() {
+  const layoutId = getSelectedLayoutId();
+  const frameId = getSelectedFrameId();
+  if (!layoutId) return null;
+
+  const frame = getFrameById(layoutId, frameId);
+  return frame?.previewImagePath || null;
+}
+
+function getActivePhotoSlots(layoutConfig) {
+  if (!layoutConfig?.slots?.length) return [];
+
+  const frameId = getSelectedFrameId();
+  if (frameId === "none") {
+    return layoutConfig.slots;
+  }
+
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(BOOTH_STORAGE.frameConfig) || "null");
+    if (stored?.id === frameId && stored.slots?.length) {
+      return stored.slots;
+    }
+  } catch {
+    /* ignore invalid JSON */
+  }
+
+  const layoutId = getSelectedLayoutId();
+  const frame = getFrameById(layoutId, frameId);
+  if (frame?.slots?.length) {
+    return frame.slots;
+  }
+
+  return layoutConfig.slots;
+}
+
+function persistFrameSelection(layoutId, frameId) {
+  if (frameId === "none") {
+    sessionStorage.removeItem(BOOTH_STORAGE.frameConfig);
+    return;
+  }
+
+  const frame = getFrameById(layoutId, frameId);
+  if (!frame) {
+    sessionStorage.removeItem(BOOTH_STORAGE.frameConfig);
+    return;
+  }
+
+  sessionStorage.setItem(
+    BOOTH_STORAGE.frameConfig,
+    JSON.stringify({
+      id: frame.id,
+      label: frame.label,
+      slots: frame.slots || null,
+      previewImagePath: frame.previewImagePath || null,
+    })
   );
-  void receiptEl.offsetWidth;
-  receiptEl.classList.add("preview-dispenser__receipt--printing");
-
-  const onDone = (e) => {
-    if (e.animationName !== "home-receipt-out") return;
-    receiptEl.classList.remove("preview-dispenser__receipt--printing");
-    receiptEl.classList.add("preview-dispenser__receipt--done");
-    receiptEl.removeEventListener("animationend", onDone);
-  };
-  receiptEl.addEventListener("animationend", onDone);
 }
 
-/**
- * แสดง preview (ไม่มี QR) + animation ปริ้นออกจากเครื่องพิมพ์
- */
-async function showPreviewPage(capturedPhotosArray, selectedFrameId) {
-  const frameConfig = getFrameById(selectedFrameId);
-  const canvas = document.getElementById("receipt-canvas");
-
-  if (!frameConfig || !canvas) return;
-
-  await drawComposite(canvas, frameConfig, capturedPhotosArray);
-  resetPrintCopiesUI();
-  playReceiptPrintAnimation();
+/** @deprecated use layoutHasFrames */
+function layoutSupportsFrameSelection(layoutId) {
+  return layoutHasFrames(layoutId);
 }

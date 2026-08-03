@@ -26,6 +26,39 @@ function runSqliteMigration() {
   if (!hasPrintCount) {
     sqlite.exec("ALTER TABLE receipt_tickets ADD COLUMN print_count INTEGER NOT NULL DEFAULT 0");
   }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS booth_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  const defaultSetting = sqlite
+    .prepare("SELECT 1 FROM booth_settings WHERE setting_key = ?")
+    .get("code_entry_enabled");
+  if (!defaultSetting) {
+    sqlite
+      .prepare(
+        "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
+      )
+      .run("code_entry_enabled", "true");
+  }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS payment_sessions (
+      id TEXT PRIMARY KEY,
+      amount INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'expired', 'cancelled')),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      paid_at TEXT,
+      raw_notification TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions (status);
+    CREATE INDEX IF NOT EXISTS idx_payment_sessions_created_at ON payment_sessions (created_at);
+  `);
 }
 
 async function runPostgresMigration() {

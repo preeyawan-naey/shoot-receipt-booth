@@ -10,35 +10,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth5" />
+    <link rel="stylesheet" href="css/styles.css?v=booth23" />
   </head>
   <body>
     <div class="viewport">
       <div class="booth-screen" id="booth-screen">
         <!-- ==================== HOME PAGE ==================== -->
-        <section class="page page--active home--animate" id="page-home" data-page="home">
+        <section class="page page--active" id="page-home" data-page="home">
           <header class="home-header">
-            <img src="img/logo2.png" alt="SHOOT Receipt Booth" class="home-header__logo"> 
+            <img src="img/logo2.png" alt="SHOOT Receipt Booth" class="home-header__logo">
           </header>
 
           <div class="home-visual">
-            <div class="dispenser">
-              <img src="img/printer.png" alt="PRINTER" class="home-header_printer" />
-              <div class="receipt-preview home-receipt-preview">
-                <div class="home-receipt-shadow">
-                  <div class="home-receipt-clip">
-                    <img
-                      src="img/receipt.png"
-                      alt="RECEIPT"
-                      class="home-header_receipt home-receipt--animate"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              src="img/Frame-index.png"
+              alt=""
+              class="home-index-art"
+            />
           </div>
 
           <footer class="home-footer">
@@ -48,12 +39,11 @@
               type="button"
               aria-label="Tap to START"
             ></button>
-          
-            <button class="start-btn" id="btn-start" type="button">
-              Tap to <span class="start-btn__highlight">START</span>
+
+            <button class="start-btn start-btn--blink" id="btn-start" type="button">
+              <span class="start-btn__highlight">TAP</span> to START
             </button>
           </footer>
-          
         </section>
 
         <!-- ==================== CODE ENTRY PAGE ==================== -->
@@ -80,19 +70,88 @@
           </div>
         </section>
 
-        <!-- ==================== FRAME SELECTION PAGE ==================== -->
-        <section class="page" id="page-frame-select" data-page="frame-select">
+        <!-- ==================== PAYMENT PAGE ==================== -->
+        <section class="page" id="page-payment" data-page="payment">
           <header class="frame-header">
-            <button class="back-btn back-btn--icon" id="btn-back" type="button" aria-label="กลับ">
-              <!-- 🌟 ใส่ไอคอนลูกศรซ้ายของ Lucide ตรงนี้เลย -->
+            <button class="back-btn back-btn--icon" id="btn-payment-back" type="button" aria-label="กลับ">
               <i data-lucide="chevron-left"></i>
             </button>
             <div class="frame-title">
-              <img src="img/chosse-frame.png" alt="FRAME" class="frame-title__image"/>
+              <h1 class="frame-title__heading frame-title__heading--payment">PAYMENT</h1>
             </div>
           </header>
 
-          <div class="frame-grid" id="frame-grid" role="listbox" aria-label="เลือกเฟรม">
+          <div class="payment-body">
+            <p class="payment-body__amount" id="payment-amount-text">สแกนเงินจำนวน 59 บาท</p>
+
+            <div class="payment-body__qr-wrap" id="payment-qr-wrap">
+              <img
+                id="payment-qr-image"
+                class="payment-body__qr"
+                src=""
+                alt="PromptPay QR Code"
+                hidden
+              />
+              <p class="payment-body__qr-placeholder" id="payment-qr-placeholder">
+                ยังไม่ได้อัปโหลด QR — ตั้งค่าใน Backoffice
+              </p>
+            </div>
+
+            <p class="payment-body__status" id="payment-status" data-state="idle" hidden>
+              รอการชำระเงิน...
+            </p>
+
+            <p class="payment-body__countdown">
+              กลับหน้าหลักภายใน <span id="payment-countdown">300</span> วินาที
+            </p>
+          </div>
+
+          <footer class="payment-footer">
+            <button
+              class="payment-footer__overlay"
+              id="btn-payment-continue-overlay"
+              type="button"
+              aria-label="ดำเนินการต่อ"
+            ></button>
+            <button class="payment-footer__btn" id="btn-payment-continue" type="button">
+              ถัดไป
+            </button>
+          </footer>
+        </section>
+
+        <!-- ==================== LAYOUT SELECTION PAGE ==================== -->
+        <section class="page" id="page-layout-select" data-page="layout-select">
+          <header class="frame-header">
+            <button class="back-btn back-btn--icon" id="btn-layout-back" type="button" aria-label="กลับ">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div class="frame-title">
+              <h1 class="frame-title__heading">LAYOUT</h1>
+            </div>
+          </header>
+
+          <div class="layout-grid" id="layout-grid" role="listbox" aria-label="เลือก layout">
+            <!-- Layout cards rendered by JS -->
+          </div>
+        </section>
+
+        <!-- ==================== FRAME SELECTION PAGE ==================== -->
+        <section class="page" id="page-frame-select" data-page="frame-select">
+          <header class="frame-header">
+            <button class="back-btn back-btn--icon" id="btn-frame-back" type="button" aria-label="กลับ">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div class="frame-title">
+              <h1 class="frame-title__heading frame-title__heading--frame">FRAME</h1>
+            </div>
+          </header>
+
+          <div
+            class="frame-picker-row"
+            id="frame-grid"
+            role="listbox"
+            aria-label="เลือก frame"
+          >
             <!-- Frame cards rendered by JS -->
           </div>
         </section>
@@ -163,9 +222,8 @@
               </div>
             </div>
 
-            <div class="preview-controls">
             <div class="preview-prints">
-              <p class="preview-prints__label">Total prints</p>
+              <p class="preview-prints__label">จำนวนรูปภาพ</p>
               <div class="preview-prints__counter">
                 <button
                   type="button"
@@ -188,9 +246,8 @@
             </div>
 
             <div class="preview-actions">
-              <button class="preview-btn preview-btn--retake" type="button" id="btn-retake">Retake</button>
-              <button class="preview-btn preview-btn--print" type="button" id="btn-print">Print</button>
-            </div>
+              <button class="preview-btn preview-btn--retake" type="button" id="btn-retake">ถ่ายใหม่</button>
+              <button class="preview-btn preview-btn--print" type="button" id="btn-print">ปริ้น</button>
             </div>
           </div>
         </section>
@@ -246,16 +303,20 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/booth-settings.js?v=booth23"></script>
     <script src="js/tickets.js"></script>
-    <script src="js/frames.js"></script>
-    <script src="js/navigation.js?v=booth5"></script>
+    <script src="js/booth-storage.js?v=booth23"></script>
+    <script src="js/layouts.js?v=booth23"></script>
+    <script src="js/frames.js?v=booth23"></script>
+    <script src="js/navigation.js?v=booth23"></script>
+    <script src="js/payment.js?v=booth23"></script>
     <script src="js/code-entry.js"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
-    <script src="js/native-print.js?v=booth5"></script>
-    <script src="js/composite.js?v=booth5"></script>
-    <script src="js/camera.js?v=booth5"></script>
-    <script src="js/app.js?v=booth5"></script>
+    <script src="js/native-print.js?v=booth23"></script>
+    <script src="js/composite.js?v=booth23"></script>
+    <script src="js/camera.js?v=booth23"></script>
+    <script src="js/app.js?v=booth23"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
   </body>

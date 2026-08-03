@@ -87,7 +87,7 @@ function initCodeEntryModule() {
     try {
       const result = await verifyTicketCode(code);
       setVerifiedTicketCode(result.ticket_code || code);
-      goToFrameSelect();
+      goToPayment();
     } catch (error) {
       showError(error.message || "ไม่สามารถตรวจสอบรหัสได้");
       inputs.forEach((input) => {

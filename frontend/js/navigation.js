@@ -8,13 +8,15 @@ const pages = {};
 function initNavigation() {
   pages.home = document.getElementById("page-home");
   pages["code-entry"] = document.getElementById("page-code-entry");
+  pages.payment = document.getElementById("page-payment");
+  pages["layout-select"] = document.getElementById("page-layout-select");
   pages["frame-select"] = document.getElementById("page-frame-select");
   pages.camera = document.getElementById("page-camera");
   pages.process = document.getElementById("page-process");
   pages["qr-download"] = document.getElementById("page-qr-download");
   if (pages.home) {
     pages.home.style.cursor = "pointer";
-    pages.home.addEventListener("click", goToCodeEntry);
+    pages.home.addEventListener("click", goToBoothStart);
   }
 }
 
@@ -42,6 +44,10 @@ function goToCodeEntry() {
   navigateTo("code-entry");
 }
 
+function goToLayoutSelect() {
+  navigateTo("layout-select");
+}
+
 function goToFrameSelect() {
   navigateTo("frame-select");
 }
@@ -50,19 +56,12 @@ function goToHome() {
   if (typeof clearQrCountdown === "function") {
     clearQrCountdown();
   }
+  if (typeof clearPaymentCountdown === "function") {
+    clearPaymentCountdown();
+  }
   navigateTo("home");
-  replayHomeAnimations();
 }
 
 function goToQrDownload() {
   navigateTo("qr-download");
-}
-
-function replayHomeAnimations() {
-  const home = pages.home;
-  if (!home) return;
-
-  home.classList.remove("home--animate");
-  void home.offsetWidth;
-  home.classList.add("home--animate");
 }

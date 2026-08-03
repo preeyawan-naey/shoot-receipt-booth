@@ -10,6 +10,7 @@
     search: "",
     page: 1,
     limit: 20,
+    view: "dashboard",
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -61,7 +62,11 @@
     }
 
     if (!res.ok) {
-      const message = data.message || `Request failed (${res.status})`;
+      let message = data.message || `Request failed (${res.status})`;
+      if (res.status === 404 && path.startsWith("/payment")) {
+        message =
+          "Payment API not found — restart backend server (npm start) or redeploy latest code";
+      }
       if (res.status === 503) {
         showLogin(message);
       }
@@ -242,13 +247,253 @@
       .replace(/"/g, "&quot;");
   }
 
+  function formatDateShort(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("th-TH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function showAdminView(viewName) {
+    state.view = viewName;
+    const dashboardView = $("#view-dashboard");
+    const paymentView = $("#view-payment");
+    const generateBtn = $("#btn-generate-codes");
+
+    document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {
+      item.classList.toggle("admin-nav__item--active", item.dataset.view === viewName);
+    });
+
+    if (dashboardView) dashboardView.hidden = viewName !== "dashboard";
+    if (paymentView) paymentView.hidden = viewName !== "payment";
+    if (generateBtn) generateBtn.hidden = viewName !== "dashboard";
+
+    const eyebrow = $("#admin-topbar-eyebrow");
+    const title = $("#admin-topbar-title");
+    if (viewName === "payment") {
+      if (eyebrow) eyebrow.textContent = "Backoffice / Payment";
+      if (title) title.textContent = "Payment Settings";
+    } else {
+      if (eyebrow) eyebrow.textContent = "Backoffice / Dashboard";
+      if (title) title.textContent = "Control Tower";
+    }
+  }
+
+  async function loadPaymentAdmin() {
+    const [paymentData, settingsData] = await Promise.all([
+      apiFetch("/payment"),
+      apiFetch("/settings"),
+    ]);
+
+    const payment = paymentData.payment || {};
+    const settings = settingsData.settings || {};
+    const amount = payment.payment_amount ?? 59;
+    const hasQr = Boolean(payment.payment_qr_url);
+
+    setText("payment-kpi-amount", formatMoney(amount));
+    setText("payment-kpi-status", hasQr ? "Active" : "Not set");
+    setText(
+      "payment-kpi-updated",
+      payment.payment_qr_updated_at
+        ? `Updated ${formatDateShort(payment.payment_qr_updated_at)}`
+        : "No upload yet"
+    );
+    setText("payment-kpi-code-entry", settings.code_entry_enabled === false ? "Off" : "On");
+
+    const amountInput = $("#payment-amount-input");
+    if (amountInput) amountInput.value = String(amount);
+
+    const qrImg = $("#payment-admin-qr");
+    const qrEmpty = $("#payment-admin-qr-empty");
+    if (qrImg && qrEmpty) {
+      if (hasQr) {
+        qrImg.src = `${payment.payment_qr_url}?t=${Date.now()}`;
+        qrImg.hidden = false;
+        qrEmpty.hidden = true;
+      } else {
+        qrImg.removeAttribute("src");
+        qrImg.hidden = true;
+        qrEmpty.hidden = false;
+      }
+    }
+
+    const webhookUrlInput = $("#payment-webhook-url");
+    const webhookSecretStatus = $("#payment-webhook-secret-status");
+    if (webhookUrlInput) {
+      webhookUrlInput.value = payment.webhook_url || "";
+    }
+    if (webhookSecretStatus) {
+      webhookSecretStatus.textContent = payment.webhook_secret_configured
+        ? "Secret: configured on server (BANK_WEBHOOK_SECRET)"
+        : "Secret: NOT SET — set BANK_WEBHOOK_SECRET on Render";
+    }
+  }
+
+  async function savePaymentAmount() {
+    const input = $("#payment-amount-input");
+    const err = $("#payment-admin-error");
+    const success = $("#payment-admin-success");
+    const btn = $("#btn-save-payment-amount");
+    const amount = Number(input?.value);
+
+    if (err) err.hidden = true;
+    if (success) success.hidden = true;
+
+    if (!Number.isFinite(amount) || amount < 1) {
+      if (err) {
+        err.textContent = "Enter a valid amount (minimum 1 baht)";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+    }
+
+    try {
+      await apiFetch("/payment", {
+        method: "PATCH",
+        body: JSON.stringify({ payment_amount: amount }),
+      });
+      if (success) {
+        success.textContent = "Saved — booth will sync within ~15 seconds";
+        success.hidden = false;
+      }
+      await loadPaymentAdmin();
+    } catch (saveErr) {
+      if (err) {
+        err.textContent = saveErr.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "บันทึกจำนวนเงิน";
+      }
+    }
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Could not read file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadPaymentQr() {
+    const fileInput = $("#payment-qr-file");
+    const err = $("#payment-admin-error");
+    const success = $("#payment-admin-success");
+    const btn = $("#btn-upload-payment-qr");
+    const file = fileInput?.files?.[0];
+
+    if (err) err.hidden = true;
+    if (success) success.hidden = true;
+
+    if (!file) {
+      if (err) {
+        err.textContent = "Choose an image file first";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Uploading...";
+    }
+
+    try {
+      const imageBase64 = await readFileAsDataUrl(file);
+      await apiFetch("/payment/qr", {
+        method: "POST",
+        body: JSON.stringify({ imageBase64 }),
+      });
+      if (success) {
+        success.textContent = "QR uploaded — booth will sync within ~15 seconds";
+        success.hidden = false;
+      }
+      if (fileInput) fileInput.value = "";
+      await loadPaymentAdmin();
+    } catch (uploadErr) {
+      if (err) {
+        err.textContent = uploadErr.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "อัปโหลด QR";
+      }
+    }
+  }
+
   async function refresh() {
-    await Promise.all([loadDashboard(), loadTickets()]);
+    if (state.view === "payment") {
+      await loadPaymentAdmin();
+      return;
+    }
+    await Promise.all([loadDashboard(), loadTickets(), loadBoothSettings()]);
+  }
+
+  async function loadBoothSettings() {
+    const toggle = $("#toggle-code-entry");
+    if (!toggle) return;
+
+    try {
+      const data = await apiFetch("/settings");
+      const enabled = data.settings?.code_entry_enabled !== false;
+      toggle.checked = enabled;
+      updateCodeEntryToggleHint(enabled);
+    } catch (err) {
+      console.error("[admin settings]", err);
+    }
+  }
+
+  function updateCodeEntryToggleHint(enabled) {
+    const hint = $("#toggle-code-entry-hint");
+    if (!hint) return;
+    hint.textContent = enabled
+      ? "เปิดอยู่ — ลูกค้าต้องกรอก code ก่อนชำระเงิน"
+      : "ปิดอยู่ — กด START แล้วไปหน้าชำระเงิน";
+  }
+
+  async function saveCodeEntryEnabled(enabled) {
+    const toggle = $("#toggle-code-entry");
+    if (toggle) toggle.disabled = true;
+
+    try {
+      const data = await apiFetch("/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ code_entry_enabled: enabled }),
+      });
+      const nextEnabled = data.settings?.code_entry_enabled !== false;
+      if (toggle) toggle.checked = nextEnabled;
+      updateCodeEntryToggleHint(nextEnabled);
+    } catch (err) {
+      console.error("[admin settings save]", err);
+      if (toggle) toggle.checked = !enabled;
+      updateCodeEntryToggleHint(toggle?.checked !== false);
+      alert(err.message || "Could not save booth settings");
+    } finally {
+      if (toggle) toggle.disabled = false;
+    }
   }
 
   async function enterDashboard(key) {
     setApiKey(key);
     showApp();
+    showAdminView("dashboard");
     try {
       await refresh();
     } catch (err) {
@@ -418,6 +663,27 @@
     });
     $("#generate-modal")?.addEventListener("click", (e) => {
       if (e.target.id === "generate-modal") hideGenerateModal();
+    });
+
+    $("#toggle-code-entry")?.addEventListener("change", (e) => {
+      saveCodeEntryEnabled(e.target.checked).catch(console.error);
+    });
+
+    document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {
+      item.addEventListener("click", () => {
+        const viewName = item.dataset.view;
+        if (!viewName) return;
+        showAdminView(viewName);
+        refresh().catch(console.error);
+      });
+    });
+
+    $("#btn-save-payment-amount")?.addEventListener("click", () => {
+      savePaymentAmount().catch(console.error);
+    });
+
+    $("#btn-upload-payment-qr")?.addEventListener("click", () => {
+      uploadPaymentQr().catch(console.error);
     });
   }
 
