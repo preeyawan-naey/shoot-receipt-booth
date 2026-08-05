@@ -49,9 +49,10 @@ function buildNativePrintIntentUrl(httpUrl, copies = 1) {
   return url;
 }
 
-function buildNativeViewIntentUrl(httpUrl) {
+function buildNativeViewIntentUrl(httpUrl, copies = 1) {
+  const targetUrl = withNativeCopiesInUrl(httpUrl, copies);
   return (
-    `intent:${encodeURI(httpUrl)}#Intent;` +
+    `intent:${encodeURI(targetUrl)}#Intent;` +
     `action=${NATIVE_PRINT_ACTION_VIEW};` +
     `component=${NATIVE_PRINT_COMPONENT};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
@@ -59,9 +60,10 @@ function buildNativeViewIntentUrl(httpUrl) {
   );
 }
 
-function buildNativePackageViewIntentUrl(httpUrl) {
+function buildNativePackageViewIntentUrl(httpUrl, copies = 1) {
+  const targetUrl = withNativeCopiesInUrl(httpUrl, copies);
   return (
-    `intent:${encodeURI(httpUrl)}#Intent;` +
+    `intent:${encodeURI(targetUrl)}#Intent;` +
     `action=${NATIVE_PRINT_ACTION_VIEW};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
     `package=${NATIVE_PRINT_PACKAGE};end;`
@@ -73,36 +75,27 @@ function launchNativeViaFully(api, httpUrl, copies = 1) {
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies);
 
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_PRINT, targetUrl);
-      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-print";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native print failed", err);
-    }
-  }
-
   if (typeof api.startIntent === "function") {
     try {
       api.startIntent(printIntentUrl);
-      return copies > 1 ? `fully-startIntent-copies-${copies}` : "fully-startIntent-print";
+      return count > 1 ? `fully-startIntent-copies-${count}` : "fully-startIntent-print";
     } catch (err) {
       console.warn("[print] fully.startIntent native print failed", err);
     }
   }
 
-  if (count === 1 && typeof api.startApplication === "function") {
+  if (typeof api.startApplication === "function") {
     try {
       api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, targetUrl);
-      return "fully-startApplication-view";
+      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
     } catch (err) {
       console.warn("[print] fully.startApplication native view failed", err);
     }
   }
 
   const variants = [
-    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl) },
-    { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl) },
+    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl, count) },
+    { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl, count) },
   ];
 
   if (typeof api.startIntent === "function") {

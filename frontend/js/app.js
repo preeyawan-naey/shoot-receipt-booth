@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth46";
+const BOOTH_BUILD = "booth47";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -272,13 +272,6 @@ function bindEvents() {
       playReceiptPrintAnimation();
 
       const ticketCode = getVerifiedTicketCode();
-      if (typeof getPrintDriver === "function" && getPrintDriver() === "native") {
-        showPrintOverlay(
-          copies > 1
-            ? `กำลังพิมพ์ ${copies} ใบ — กดอนุญาต USB ถ้ามี popup`
-            : "กำลังพิมพ์ — กดอนุญาต USB ถ้ามี popup"
-        );
-      }
       await printReceiptDirect(copies, {
         printUrl: receipt.printUrl,
         downloadUrl: receipt.downloadUrl,
