@@ -20,11 +20,24 @@ class PrintActivity : android.app.Activity() {
         Log.i(
             TAG,
             "intent action=${intent?.action} data=${intent?.dataString} " +
-                "resolved=${PrintEngine.resolvePrintUrl(intent)} extras=${intent?.extras?.summary()}",
+                "resolved=${PrintEngine.resolvePrintUrl(intent)} " +
+                "copies=${PrintEngine.resolveCopies(intent)} extras=${intent?.extras?.summary()}",
         )
 
+        startPrintJob(intent)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        Log.i(TAG, "onNewIntent copies=${PrintEngine.resolveCopies(intent)}")
+        startPrintJob(intent)
+    }
+
+    private fun startPrintJob(incoming: android.content.Intent?) {
+        val jobIntent = incoming ?: intent
         Thread {
-            PrintJobRunner.run(this, intent)
+            PrintJobRunner.run(this, jobIntent)
             runOnUiThread {
                 finish()
                 overridePendingTransition(0, 0)
@@ -37,6 +50,7 @@ class PrintActivity : android.app.Activity() {
         const val ACTION_PRINT = "com.shootreceipt.print.action.PRINT"
         const val ACTION_CUT = "com.shootreceipt.print.action.CUT"
         const val EXTRA_PRINT_URL = "com.shootreceipt.print.extra.PRINT_URL"
+        const val EXTRA_COPIES = "com.shootreceipt.print.extra.COPIES"
     }
 }
 
@@ -77,22 +91,67 @@ object PrintEngine {
         return null
     }
 
+    fun resolveCopies(intent: android.content.Intent?): Int {
+        if (intent == null) return 1
+
+        if (intent.hasExtra(PrintActivity.EXTRA_COPIES)) {
+            return intent.getIntExtra(PrintActivity.EXTRA_COPIES, 1).coerceIn(1, 10)
+        }
+
+        resolvePrintUrl(intent)?.let { url -> copiesFromUrl(url)?.let { return it } }
+
+        intent.extras?.let { bundle ->
+            for (key in bundle.keySet()) {
+                if (!key.contains("COPIES", ignoreCase = true)) continue
+                when (val value = bundle.get(key)) {
+                    is Int -> return value.coerceIn(1, 10)
+                    is String -> value.toIntOrNull()?.coerceIn(1, 10)?.let { return it }
+                }
+            }
+        }
+
+        return 1
+    }
+
+    private fun copiesFromUrl(url: String): Int? {
+        return try {
+            val uri = Uri.parse(url)
+            uri.getQueryParameter("shoot_copies")?.toIntOrNull()?.coerceIn(1, 10)
+                ?: uri.getQueryParameter("copies")?.toIntOrNull()?.coerceIn(1, 10)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun uriToHttp(uri: Uri): String? {
         val scheme = uri.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return null
         return uri.toString()
     }
 
-    fun printImageUrl(context: android.content.Context, url: String) {
-        Log.i(TAG, "print url=$url")
+    fun printImageUrl(context: android.content.Context, url: String, copies: Int = 1) {
+        val count = copies.coerceIn(1, 10)
+        Log.i(TAG, "print url=$url copies=$count")
+        val device = UsbEscPosPrinter(context).findPrinterDevice()
+            ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
+        if (!UsbPermissionHelper.waitForPermission(context, device)) {
+            throw IllegalStateException(
+                "USB permission not granted. Accept USB access on tablet.",
+            )
+        }
+
         val source = downloadBitmap(url)
         val scaled = scaleToPrintWidth(source)
         if (scaled !== source) {
             source.recycle()
         }
 
-        UsbEscPosPrinter(context).printBitmap(scaled)
-        scaled.recycle()
+        val printer = UsbEscPosPrinter(context)
+        try {
+            printer.printBitmapCopies(scaled, count)
+        } finally {
+            scaled.recycle()
+        }
     }
 
     fun cutPaper(context: android.content.Context) {

@@ -32,7 +32,8 @@ object PrintJobRunner {
                 else -> {
                     val url = PrintEngine.resolvePrintUrl(intent)
                         ?: throw IllegalArgumentException("No http(s) print URL in intent")
-                    PrintEngine.printImageUrl(appContext, url)
+                    val copies = PrintEngine.resolveCopies(intent)
+                    PrintEngine.printImageUrl(appContext, url, copies)
                 }
             }
             Log.i(TAG, "Print job completed")

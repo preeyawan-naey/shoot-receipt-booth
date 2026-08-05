@@ -20,21 +20,34 @@ class UsbEscPosPrinter(private val context: Context) {
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
     fun printBitmap(source: Bitmap, bandHeight: Int = BAND_HEIGHT_PX) {
+        printBitmapCopies(source, 1, bandHeight)
+    }
+
+    fun printBitmapCopies(source: Bitmap, copies: Int, bandHeight: Int = BAND_HEIGHT_PX) {
+        val count = copies.coerceIn(1, 10)
         val dithered = AtkinsonDither.toBlackWhiteBitmap(source)
         val recycleDithered = dithered !== source
+        val bands = splitIntoBands(dithered, bandHeight)
         val connection = openConnection()
         try {
-            connection.write(INIT)
-            val bands = splitIntoBands(dithered, bandHeight)
+            for (copyIndex in 1..count) {
+                Log.i(TAG, "USB print copy $copyIndex/$count")
+                connection.write(INIT)
+                for (band in bands) {
+                    connection.write(bitmapToRaster(band))
+                }
+                connection.write(FEED_AND_CUT)
+                if (copyIndex < count) {
+                    Thread.sleep(350)
+                }
+            }
+        } finally {
+            connection.close()
             for (band in bands) {
-                connection.write(bitmapToRaster(band))
                 if (band !== dithered) {
                     band.recycle()
                 }
             }
-            connection.write(FEED_AND_CUT)
-        } finally {
-            connection.close()
             if (recycleDithered) {
                 dithered.recycle()
             }

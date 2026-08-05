@@ -20,7 +20,7 @@
             android:name=".PrintActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
             android:noHistory="true"
             android:taskAffinity="com.shootreceipt.print.job"
             android:theme="@style/Theme.ShootPrint.Transparent">

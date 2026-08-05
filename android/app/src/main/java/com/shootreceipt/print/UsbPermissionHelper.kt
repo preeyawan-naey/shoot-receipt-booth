@@ -3,6 +3,7 @@ package com.shootreceipt.print
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 
@@ -29,7 +30,7 @@ object UsbPermissionHelper {
         return device
     }
 
-    fun waitForPermission(context: Context, device: UsbDevice, timeoutMs: Long = 15_000): Boolean {
+    fun waitForPermission(context: Context, device: UsbDevice, timeoutMs: Long = 60_000): Boolean {
         val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
         if (usbManager.hasPermission(device)) return true
 
