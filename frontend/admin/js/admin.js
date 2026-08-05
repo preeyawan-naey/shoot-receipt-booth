@@ -294,44 +294,44 @@
     const payment = paymentData.payment || {};
     const settings = settingsData.settings || {};
     const amount = payment.payment_amount ?? 59;
-    const hasQr = Boolean(payment.payment_qr_url);
 
     setText("payment-kpi-amount", formatMoney(amount));
-    setText("payment-kpi-status", hasQr ? "Active" : "Not set");
     setText(
-      "payment-kpi-updated",
-      payment.payment_qr_updated_at
-        ? `Updated ${formatDateShort(payment.payment_qr_updated_at)}`
-        : "No upload yet"
+      "payment-kpi-omise",
+      payment.omise_configured ? "Connected" : "Not set"
+    );
+    setText(
+      "payment-kpi-omise-hint",
+      payment.omise_configured
+        ? "QR สร้างจาก Omise ต่อรอบ"
+        : "ตั้ง SECRET_KEY บน server"
     );
     setText("payment-kpi-code-entry", settings.code_entry_enabled === false ? "Off" : "On");
 
     const amountInput = $("#payment-amount-input");
     if (amountInput) amountInput.value = String(amount);
 
-    const qrImg = $("#payment-admin-qr");
-    const qrEmpty = $("#payment-admin-qr-empty");
-    if (qrImg && qrEmpty) {
-      if (hasQr) {
-        qrImg.src = `${payment.payment_qr_url}?t=${Date.now()}`;
-        qrImg.hidden = false;
-        qrEmpty.hidden = true;
-      } else {
-        qrImg.removeAttribute("src");
-        qrImg.hidden = true;
-        qrEmpty.hidden = false;
-      }
-    }
-
     const webhookUrlInput = $("#payment-webhook-url");
     const webhookSecretStatus = $("#payment-webhook-secret-status");
+    const providerHint = $("#payment-webhook-provider-hint");
     if (webhookUrlInput) {
       webhookUrlInput.value = payment.webhook_url || "";
     }
     if (webhookSecretStatus) {
-      webhookSecretStatus.textContent = payment.webhook_secret_configured
-        ? "Secret: configured on server (BANK_WEBHOOK_SECRET)"
-        : "Secret: NOT SET — set BANK_WEBHOOK_SECRET on Render";
+      if (payment.omise_configured) {
+        webhookSecretStatus.textContent = payment.omise_public_key_configured
+          ? "Omise: configured (test/live keys on server)"
+          : "Omise: secret key set — public key missing";
+      } else {
+        webhookSecretStatus.textContent = payment.webhook_secret_configured
+          ? "Legacy bank webhook secret configured"
+          : "Omise: NOT SET — add OMISE_SECRET_KEY / SECRET_KEY on server";
+      }
+    }
+    if (providerHint) {
+      providerHint.textContent = payment.payment_provider === "omise"
+        ? "Booth ใช้ Omise PromptPay QR ต่อรอบ — webhook charge.complete + poll อัตโนมัติ"
+        : "Omise ยังไม่ได้ตั้งค่า — ตั้ง SECRET_KEY บน server";
     }
   }
 
@@ -345,9 +345,9 @@
     if (err) err.hidden = true;
     if (success) success.hidden = true;
 
-    if (!Number.isFinite(amount) || amount < 1) {
+    if (!Number.isFinite(amount) || amount < 20) {
       if (err) {
-        err.textContent = "Enter a valid amount (minimum 1 baht)";
+        err.textContent = "Enter a valid amount (minimum 20 baht for Omise PromptPay)";
         err.hidden = false;
       }
       return;
@@ -377,63 +377,6 @@
       if (btn) {
         btn.disabled = false;
         btn.textContent = "บันทึกจำนวนเงิน";
-      }
-    }
-  }
-
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Could not read file"));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function uploadPaymentQr() {
-    const fileInput = $("#payment-qr-file");
-    const err = $("#payment-admin-error");
-    const success = $("#payment-admin-success");
-    const btn = $("#btn-upload-payment-qr");
-    const file = fileInput?.files?.[0];
-
-    if (err) err.hidden = true;
-    if (success) success.hidden = true;
-
-    if (!file) {
-      if (err) {
-        err.textContent = "Choose an image file first";
-        err.hidden = false;
-      }
-      return;
-    }
-
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Uploading...";
-    }
-
-    try {
-      const imageBase64 = await readFileAsDataUrl(file);
-      await apiFetch("/payment/qr", {
-        method: "POST",
-        body: JSON.stringify({ imageBase64 }),
-      });
-      if (success) {
-        success.textContent = "QR uploaded — booth will sync within ~15 seconds";
-        success.hidden = false;
-      }
-      if (fileInput) fileInput.value = "";
-      await loadPaymentAdmin();
-    } catch (uploadErr) {
-      if (err) {
-        err.textContent = uploadErr.message;
-        err.hidden = false;
-      }
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "อัปโหลด QR";
       }
     }
   }
@@ -680,10 +623,6 @@
 
     $("#btn-save-payment-amount")?.addEventListener("click", () => {
       savePaymentAmount().catch(console.error);
-    });
-
-    $("#btn-upload-payment-qr")?.addEventListener("click", () => {
-      uploadPaymentQr().catch(console.error);
     });
   }
 

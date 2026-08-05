@@ -658,6 +658,11 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.payment-admin-form--amount-only {
+  max-width: 420px;
+  padding: 1.25rem 1.5rem;
+}
+
 .payment-admin-grid {
   display: grid;
   grid-template-columns: minmax(220px, 280px) 1fr;

@@ -1,5 +1,5 @@
 /**
- * Payment page — PromptPay QR; auto-advance via webhook when available, manual continue as fallback
+ * Payment page — Omise PromptPay QR (dynamic) with poll auto-advance
  */
 
 const PAYMENT_TIMEOUT_SEC = 60;
@@ -8,6 +8,14 @@ const PAYMENT_POLL_MS = 2500;
 let paymentCountdownTimer = null;
 let paymentPollTimer = null;
 let paymentSessionId = null;
+let activePaymentSession = null;
+let paymentFlowGeneration = 0;
+let paymentQrLoadGeneration = 0;
+
+function clearPaymentSessionState() {
+  paymentSessionId = null;
+  activePaymentSession = null;
+}
 
 function clearPaymentCountdown() {
   if (paymentCountdownTimer) {
@@ -26,7 +34,7 @@ function clearPaymentPolling() {
 function clearPaymentFlow() {
   clearPaymentCountdown();
   clearPaymentPolling();
-  paymentSessionId = null;
+  clearPaymentSessionState();
 }
 
 function setPaymentStatus(state, message, visible = false) {
@@ -75,31 +83,84 @@ function formatPaymentAmount(amount) {
   });
 }
 
-function renderPaymentPage(sessionAmount) {
-  const amount = sessionAmount ?? boothSettingsState?.payment_amount ?? 59;
-  const qrBaseUrl = boothSettingsState?.payment_qr_url || null;
+function resolvePaymentQrUrl(session) {
+  if (!session?.qr_image_url) return null;
+
+  const path = session.qr_image_url.startsWith("/")
+    ? session.qr_image_url
+    : `/${session.qr_image_url}`;
+  return `${API_URL}${path}?t=${Date.now()}`;
+}
+
+function setPaymentQrLoading(isLoading, message = "กำลังโหลด QR PromptPay...", isError = false) {
+  const qrWrap = document.getElementById("payment-qr-wrap");
+  const loadingEl = document.getElementById("payment-qr-loading");
+  const loadingText = document.getElementById("payment-qr-loading-text");
+
+  if (loadingText) loadingText.textContent = message;
+  if (loadingEl) {
+    loadingEl.hidden = !isLoading;
+    loadingEl.classList.toggle("payment-body__qr-loading--error", isError);
+  }
+  if (qrWrap) qrWrap.classList.toggle("payment-body__qr-wrap--loading", isLoading && !isError);
+}
+
+function loadPaymentQrImage(qrImage, qrUrl) {
+  paymentQrLoadGeneration += 1;
+  const loadId = paymentQrLoadGeneration;
+
+  qrImage.onload = null;
+  qrImage.onerror = null;
+  qrImage.hidden = true;
+  setPaymentQrLoading(true, "กำลังโหลด QR PromptPay...");
+
+  const finish = (ok) => {
+    if (loadId !== paymentQrLoadGeneration) return;
+
+    if (ok) {
+      setPaymentQrLoading(false);
+      qrImage.hidden = false;
+      return;
+    }
+
+    setPaymentQrLoading(true, "โหลด QR ไม่สำเร็จ — กำลังลองใหม่...");
+  };
+
+  qrImage.onload = () => finish(true);
+  qrImage.onerror = () => finish(false);
+  qrImage.src = qrUrl;
+
+  if (qrImage.complete && qrImage.naturalWidth > 0) {
+    finish(true);
+  }
+}
+
+function renderPaymentPage(sessionAmount, session = activePaymentSession) {
+  const amount = sessionAmount ?? session?.amount ?? boothSettingsState?.payment_amount ?? 59;
   const amountEl = document.getElementById("payment-amount-text");
   const qrImage = document.getElementById("payment-qr-image");
   const qrWrap = document.getElementById("payment-qr-wrap");
+  const qrUrl = resolvePaymentQrUrl(session);
 
   if (amountEl) {
     amountEl.textContent = `สแกนโอน ${formatPaymentAmount(amount)} บาท`;
   }
 
-  if (qrImage && qrWrap) {
-    const placeholder = document.getElementById("payment-qr-placeholder");
-    if (qrBaseUrl) {
-      qrImage.src = `${API_URL}${qrBaseUrl}?t=${Date.now()}`;
-      qrImage.hidden = false;
-      if (placeholder) placeholder.hidden = true;
-      qrWrap.hidden = false;
-    } else {
-      qrImage.removeAttribute("src");
-      qrImage.hidden = true;
-      if (placeholder) placeholder.hidden = false;
-      qrWrap.hidden = false;
-    }
+  if (!qrImage || !qrWrap) return;
+
+  qrWrap.hidden = false;
+
+  if (qrUrl) {
+    loadPaymentQrImage(qrImage, qrUrl);
+    return;
   }
+
+  paymentQrLoadGeneration += 1;
+  qrImage.onload = null;
+  qrImage.onerror = null;
+  qrImage.removeAttribute("src");
+  qrImage.hidden = true;
+  setPaymentQrLoading(true, "กำลังเตรียม QR PromptPay...");
 }
 
 async function createPaymentSession() {
@@ -128,7 +189,7 @@ async function fetchPaymentSession(sessionId) {
 async function cancelPaymentSession() {
   if (!paymentSessionId) return;
   const sessionId = paymentSessionId;
-  paymentSessionId = null;
+  clearPaymentSessionState();
 
   try {
     await fetch(`${API_URL}/api/booth/payment-sessions/${sessionId}/cancel`, {
@@ -148,8 +209,12 @@ function proceedFromPayment() {
 async function pollPaymentSessionOnce() {
   if (!paymentSessionId) return;
 
+  const sessionId = paymentSessionId;
+
   try {
-    const session = await fetchPaymentSession(paymentSessionId);
+    const session = await fetchPaymentSession(sessionId);
+    if (sessionId !== paymentSessionId) return;
+
     if (session.status === "paid") {
       setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปเลือก layout...", true);
       proceedFromPayment();
@@ -174,30 +239,50 @@ function startPaymentPolling() {
   }, PAYMENT_POLL_MS);
 }
 
-async function startAutoPaymentSession() {
+async function startAutoPaymentSession(flowId) {
   try {
     const session = await createPaymentSession();
+    if (flowId !== paymentFlowGeneration) return;
+
     paymentSessionId = session.id;
-    renderPaymentPage(session.amount);
+    activePaymentSession = session;
+    renderPaymentPage(session.amount, session);
+
     setPaymentStatus(
       "waiting",
-      "รอการชำระเงิน — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อโอนสำเร็จ",
+      "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ",
       true
     );
     startPaymentPolling();
   } catch (error) {
-    console.warn("[payment] auto session unavailable:", error.message);
-    setPaymentStatus("idle", "", false);
+    if (flowId !== paymentFlowGeneration) return;
+
+    console.warn("[payment] omise session failed:", error.message);
+    clearPaymentSessionState();
+    renderPaymentPage();
+    setPaymentQrLoading(
+      true,
+      error.message || "ไม่สามารถสร้าง QR ชำระเงินได้",
+      true
+    );
+    setPaymentStatus(
+      "error",
+      error.message || "ไม่สามารถสร้าง QR ชำระเงินได้",
+      true
+    );
   }
 }
 
 function goToPayment() {
+  paymentFlowGeneration += 1;
+  const flowId = paymentFlowGeneration;
+
   clearPaymentFlow();
   renderPaymentPage();
   navigateTo("payment");
   setPaymentStatus("idle", "", false);
   startPaymentCountdown(PAYMENT_TIMEOUT_SEC);
-  void startAutoPaymentSession();
+  void startAutoPaymentSession(flowId);
 }
 
 function initPaymentModule() {

@@ -59,12 +59,26 @@ function runSqliteMigration() {
     CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions (status);
     CREATE INDEX IF NOT EXISTS idx_payment_sessions_created_at ON payment_sessions (created_at);
   `);
+
+  const paymentColumns = sqlite.prepare("PRAGMA table_info(payment_sessions)").all();
+  if (!paymentColumns.some((col) => col.name === "omise_source_id")) {
+    sqlite.exec("ALTER TABLE payment_sessions ADD COLUMN omise_source_id TEXT");
+  }
+  if (!paymentColumns.some((col) => col.name === "omise_charge_id")) {
+    sqlite.exec("ALTER TABLE payment_sessions ADD COLUMN omise_charge_id TEXT");
+  }
 }
 
 async function runPostgresMigration() {
   const schemaPath = path.join(__dirname, "schema.sql");
   const sql = fs.readFileSync(schemaPath, "utf8");
   await pgPool.query(sql);
+
+  await pgPool.query(`
+    ALTER TABLE payment_sessions
+      ADD COLUMN IF NOT EXISTS omise_source_id TEXT,
+      ADD COLUMN IF NOT EXISTS omise_charge_id TEXT;
+  `);
 }
 
 async function initDb() {

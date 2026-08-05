@@ -1,7 +1,6 @@
-const PRINT_QR_PX = 450;
-const PRINT_DASH_GAP_FROM_PHOTO = 60;
-const PRINT_DASH_TO_QR_GAP = 24;
-const PRINT_DASH_STROKE = 2;
+const PRINT_QR_WIDTH_RATIO = 450 / 1152;
+const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 };
+const PRINT_QR_GAP_FROM_PHOTO = 24;
 const PRINT_QR_TEXT_GAP = 24;
 const PRINT_THANK_YOU_TEXT = "* THANK YOU & HAVE A NICE DAY *";
 const PRINT_THANK_YOU_FONT_SIZE = 36;
@@ -216,6 +215,28 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
   await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight);
 }
 
+function getPrintQrSize(frameW) {
+  return Math.round(frameW * PRINT_QR_WIDTH_RATIO);
+}
+
+function getPrintQrRect(frameW, frameH, photosBottom = null) {
+  const size = getPrintQrSize(frameW);
+
+  if (photosBottom != null) {
+    return {
+      x: (frameW - size) / 2,
+      y: photosBottom + PRINT_QR_GAP_FROM_PHOTO,
+      size,
+    };
+  }
+
+  return {
+    x: (PRINT_QR_SLOT.left / 100) * frameW,
+    y: (PRINT_QR_SLOT.top / 100) * frameH,
+    size,
+  };
+}
+
 async function drawQRAt(ctx, qrDataUrl, x, y, size) {
   const pad = size * 0.04;
   ctx.fillStyle = "#ffffff";
@@ -290,21 +311,6 @@ async function drawThankYouText(ctx, centerX, y) {
   ctx.fillText(PRINT_THANK_YOU_TEXT, centerX, y);
 }
 
-function drawDashedSeparatorLine(ctx, frameW, y) {
-  const marginX = frameW * 0.0972;
-  const lineW = frameW * 0.8047;
-
-  ctx.save();
-  ctx.strokeStyle = "#1a1a1a";
-  ctx.lineWidth = PRINT_DASH_STROKE;
-  ctx.setLineDash([12, 8]);
-  ctx.beginPath();
-  ctx.moveTo(marginX, y);
-  ctx.lineTo(marginX + lineW, y);
-  ctx.stroke();
-  ctx.restore();
-}
-
 async function drawComposite(canvas, frameConfig, photos) {
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
@@ -332,10 +338,26 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   const frameImg = await loadImage(previewPath || frameConfig.imagePath);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
+
+  if (!thermal) {
+    canvas.width = frameW;
+    canvas.height = frameH;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, frameW, frameH);
+    await drawFrameOnly(ctx, frameConfig, frameW, frameH);
+    await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhoto);
+
+    const { x, y, size } = getPrintQrRect(frameW, frameH);
+    await drawQRAt(ctx, qrDataUrl, x, y, size);
+    const textY = y + size + PRINT_QR_TEXT_GAP;
+    await drawThankYouText(ctx, frameW / 2, textY);
+    return canvas;
+  }
+
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
-  const dashY = photosBottom + PRINT_DASH_GAP_FROM_PHOTO + PRINT_DASH_STROKE / 2;
-  const qrY = photosBottom + PRINT_DASH_GAP_FROM_PHOTO + PRINT_DASH_STROKE + PRINT_DASH_TO_QR_GAP;
-  const textY = qrY + PRINT_QR_PX + PRINT_QR_TEXT_GAP;
+  const { x: qrX, y: qrY, size: qrSize } = getPrintQrRect(frameW, frameH, photosBottom);
+  const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
   const textHeight = await measureThankYouTextHeight();
   const bottomPadding = measureFrameTopMargin(frameImg);
   const totalH = textY + textHeight + bottomPadding;
@@ -354,10 +376,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   ctx.fillRect(0, photosBottom, frameW, canvas.height - photosBottom);
 
   await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhoto);
-
-  const qrX = (frameW - PRINT_QR_PX) / 2;
-  drawDashedSeparatorLine(ctx, frameW, dashY);
-  await drawQRAt(ctx, qrDataUrl, qrX, qrY, PRINT_QR_PX);
+  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
   await drawThankYouText(ctx, frameW / 2, textY);
 
   return canvas;
@@ -474,15 +493,15 @@ async function setupPrintCopies(count) {
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_JPEG_QUALITY = 0.92;
-const RAWBT_COPY_DELAY_MS = 3500;
+const RAWBT_COPY_DELAY_MS = 900;
 const RAWBT_CUT_DELAY_MS = 4500;
-const ESCPOS_COPY_DELAY_MS = 1200;
-const THERMER_COPY_DELAY_MS = 3500;
+const ESCPOS_COPY_DELAY_MS = 500;
+const THERMER_COPY_DELAY_MS = 900;
 const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth21";
+const PRINT_BUILD = "booth25";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -831,9 +850,7 @@ async function printViaEscPos(source, copies = 1, urls = {}) {
 }
 
 function launchRawBtPrint(targetUrl) {
-  const method = launchRawBtView(targetUrl);
-  refocusBoothAfterPrint();
-  return method;
+  return launchRawBtView(targetUrl);
 }
 
 async function printViaThermer(source, copies = 1, urls = {}) {
@@ -854,9 +871,10 @@ async function printViaThermer(source, copies = 1, urls = {}) {
     if (!imageUrl) continue;
 
     const method = launchThermerPrint(imageUrl);
-    refocusBoothAfterPrint();
     console.info(`[print] thermer launch=${method || "failed"} url=${imageUrl}`);
   }
+
+  refocusBoothAfterPrint();
 }
 
 async function printViaRawBt(source, copies = 1, urls = {}) {
@@ -887,8 +905,10 @@ async function printViaRawBt(source, copies = 1, urls = {}) {
 
     await new Promise((resolve) => window.setTimeout(resolve, RAWBT_CUT_DELAY_MS));
     const cutMethod = launchRawBtCut();
-    console.info(`[print] rawbt cut launch=${cutMethod || "failed"}`);
+    console.info(`[print] rawbt cut launch=${cutMethod || "failed"} copy=${i + 1}/${count}`);
   }
+
+  refocusBoothAfterPrint();
 }
 
 function printViaFully(source, copies = 1) {

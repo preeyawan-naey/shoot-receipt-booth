@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth23" />
+    <link rel="stylesheet" href="css/styles.css?v=booth41" />
   </head>
   <body>
     <div class="viewport">
@@ -85,16 +85,21 @@
             <p class="payment-body__amount" id="payment-amount-text">สแกนเงินจำนวน 59 บาท</p>
 
             <div class="payment-body__qr-wrap" id="payment-qr-wrap">
-              <img
-                id="payment-qr-image"
-                class="payment-body__qr"
-                src=""
-                alt="PromptPay QR Code"
-                hidden
-              />
-              <p class="payment-body__qr-placeholder" id="payment-qr-placeholder">
-                ยังไม่ได้อัปโหลด QR — ตั้งค่าใน Backoffice
-              </p>
+              <div class="payment-body__qr-slot">
+                <img
+                  id="payment-qr-image"
+                  class="payment-body__qr"
+                  src=""
+                  alt="PromptPay QR Code"
+                  hidden
+                />
+                <div class="payment-body__qr-loading" id="payment-qr-loading" aria-live="polite">
+                  <div class="payment-body__qr-spinner" aria-hidden="true"></div>
+                  <p class="payment-body__qr-loading-text" id="payment-qr-loading-text">
+                    กำลังโหลด QR PromptPay...
+                  </p>
+                </div>
+              </div>
             </div>
 
             <p class="payment-body__status" id="payment-status" data-state="idle" hidden>
@@ -105,18 +110,6 @@
               กลับหน้าหลักภายใน <span id="payment-countdown">300</span> วินาที
             </p>
           </div>
-
-          <footer class="payment-footer">
-            <button
-              class="payment-footer__overlay"
-              id="btn-payment-continue-overlay"
-              type="button"
-              aria-label="ดำเนินการต่อ"
-            ></button>
-            <button class="payment-footer__btn" id="btn-payment-continue" type="button">
-              ถัดไป
-            </button>
-          </footer>
         </section>
 
         <!-- ==================== LAYOUT SELECTION PAGE ==================== -->
@@ -163,13 +156,13 @@
               <i data-lucide="chevron-left"></i>
             </button>
             <div class="frame-title">
-              <img src="img/take-a-photo.png" alt="take photo" class="frame-title__image" />
+              <h1 class="frame-title__heading">CAMERA</h1>
             </div>
           </header>
 
           <div class="camera-body">
             <div class="camera-status">
-              <span class="camera-status__label">PICTURE :</span>
+              <span class="camera-status__label">จำนวนรูปภาพ</span>
               <span class="camera-status__counter" id="camera-photo-counter">00/01</span>
             </div>
 
@@ -303,20 +296,20 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-settings.js?v=booth23"></script>
+    <script src="js/booth-settings.js?v=booth41"></script>
     <script src="js/tickets.js"></script>
-    <script src="js/booth-storage.js?v=booth23"></script>
-    <script src="js/layouts.js?v=booth23"></script>
-    <script src="js/frames.js?v=booth23"></script>
-    <script src="js/navigation.js?v=booth23"></script>
-    <script src="js/payment.js?v=booth23"></script>
+    <script src="js/booth-storage.js?v=booth41"></script>
+    <script src="js/layouts.js?v=booth41"></script>
+    <script src="js/frames.js?v=booth41"></script>
+    <script src="js/navigation.js?v=booth41"></script>
+    <script src="js/payment.js?v=booth41"></script>
     <script src="js/code-entry.js"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
-    <script src="js/native-print.js?v=booth23"></script>
-    <script src="js/composite.js?v=booth23"></script>
-    <script src="js/camera.js?v=booth23"></script>
-    <script src="js/app.js?v=booth23"></script>
+    <script src="js/native-print.js?v=booth41"></script>
+    <script src="js/composite.js?v=booth41"></script>
+    <script src="js/camera.js?v=booth41"></script>
+    <script src="js/app.js?v=booth41"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
   </body>

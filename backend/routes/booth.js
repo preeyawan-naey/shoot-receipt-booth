@@ -2,6 +2,8 @@ const express = require("express");
 const boothSettings = require("../boothSettings");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
+const omise = require("../omise");
+const db = require("../db");
 
 const router = express.Router();
 
@@ -31,6 +33,44 @@ router.get("/payment-qr", async (_req, res) => {
   } catch (error) {
     console.error("[booth/payment-qr]", error);
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/payment-sessions/:id/qr-image", async (req, res) => {
+  try {
+    const row = await db.queryOne(
+      `SELECT id, status, omise_charge_id
+       FROM payment_sessions
+       WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (!row?.omise_charge_id || !omise.isConfigured()) {
+      return res.status(404).json({
+        success: false,
+        message: "Omise QR not available for this session",
+      });
+    }
+
+    const charge = await omise.getCharge(row.omise_charge_id);
+    const downloadUri = charge?.source?.scannable_code?.image?.download_uri;
+    if (!downloadUri) {
+      return res.status(404).json({
+        success: false,
+        message: "Omise QR image not found",
+      });
+    }
+
+    const { buffer, contentType } = await omise.fetchQrImageBuffer(downloadUri);
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", contentType.split(";")[0] || "image/png");
+    return res.send(buffer);
+  } catch (error) {
+    console.error("[booth/payment-sessions/qr-image]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 

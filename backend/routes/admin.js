@@ -5,6 +5,7 @@ const tickets = require("../tickets");
 const boothSettings = require("../boothSettings");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
+const omise = require("../omise");
 
 const router = express.Router();
 
@@ -160,12 +161,20 @@ router.patch("/settings", async (req, res) => {
 router.get("/payment", async (_req, res) => {
   try {
     const payment = await paymentSettings.getPaymentSettings();
+    const omiseEnabled = omise.isConfigured();
     return res.json({
       success: true,
       payment: {
         ...payment,
-        webhook_url: `${config.publicUrl}/api/webhook/bank-notify`,
-        webhook_secret_configured: Boolean(config.bankWebhookSecret),
+        payment_provider: omiseEnabled ? "omise" : "manual",
+        omise_configured: omiseEnabled,
+        omise_public_key_configured: Boolean(config.omisePublicKey),
+        webhook_url: omiseEnabled
+          ? `${config.publicUrl}/api/webhook/omise`
+          : `${config.publicUrl}/api/webhook/bank-notify`,
+        webhook_secret_configured: omiseEnabled
+          ? true
+          : Boolean(config.bankWebhookSecret),
         payment_session_ttl_sec: Math.round(paymentSessions.SESSION_TTL_MS / 1000),
       },
     });
@@ -188,47 +197,19 @@ router.patch("/payment", async (req, res) => {
       });
     }
 
-    await paymentSettings.setPaymentAmount(amount);
+    const rounded = Math.round(Number(amount));
+    if (!Number.isFinite(rounded) || rounded < 20) {
+      return res.status(400).json({
+        success: false,
+        message: "payment_amount must be at least 20 baht (Omise PromptPay)",
+      });
+    }
+
+    await paymentSettings.setPaymentAmount(rounded);
     const payment = await paymentSettings.getPaymentSettings();
     return res.json({ success: true, payment });
   } catch (error) {
     console.error("[admin/payment]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-router.post("/payment/qr", async (req, res) => {
-  try {
-    const { imageBase64 } = req.body;
-    if (!imageBase64 || typeof imageBase64 !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "imageBase64 is required",
-      });
-    }
-
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-    const buffer = Buffer.from(base64Data, "base64");
-    if (buffer.length < 64) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid image data",
-      });
-    }
-
-    const updatedAt = await paymentSettings.savePaymentQr(buffer);
-    const payment = await paymentSettings.getPaymentSettings();
-
-    return res.json({
-      success: true,
-      payment,
-      updated_at: updatedAt,
-    });
-  } catch (error) {
-    console.error("[admin/payment/qr]", error);
     return res.status(500).json({
       success: false,
       message: error.message,

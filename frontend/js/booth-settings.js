@@ -19,11 +19,7 @@ async function fetchBoothSettings() {
     const prev = boothSettingsState.code_entry_enabled;
     boothSettingsState = data.settings;
 
-    if (typeof getCurrentPage === "function" && getCurrentPage() === "payment") {
-      if (typeof renderPaymentPage === "function") {
-        renderPaymentPage();
-      }
-    }
+    /* Payment page uses Omise QR per session — do not re-render static admin QR here */
 
     if (prev !== boothSettingsState.code_entry_enabled) {
       onBoothSettingsChanged();

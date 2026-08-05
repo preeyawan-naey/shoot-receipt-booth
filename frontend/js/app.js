@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth23";
+const BOOTH_BUILD = "booth41";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -104,12 +104,18 @@ function selectLayout(layoutId) {
   navigateToCamera(layoutId);
 }
 
+function resetFrameGridScroll() {
+  const row = document.getElementById("frame-grid");
+  if (row) row.scrollLeft = 0;
+}
+
 function initFrameGrid(layoutId) {
   const row = document.getElementById("frame-grid");
   if (!row) return;
 
   const options = getFramesForLayout(layoutId);
   row.innerHTML = options.map((option) => buildFrameCard(option)).join("");
+  resetFrameGridScroll();
 
   row.querySelectorAll(".frame-picker-card").forEach((card) => {
     card.addEventListener("click", () => {
@@ -203,8 +209,14 @@ function bindEvents() {
     updatePrintCopiesUI();
   });
 
-  btnStartOverlay?.addEventListener("click", goToBoothStart);
-  btnStart?.addEventListener("click", goToBoothStart);
+  btnStartOverlay?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    goToBoothStart();
+  });
+  btnStart?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    goToBoothStart();
+  });
 
   btnLayoutBack?.addEventListener("click", () => {
     appState.selectedLayout = null;
@@ -249,14 +261,14 @@ function bindEvents() {
     const btn = btnPrint;
     const copies = getPrintCopies();
     btn.disabled = true;
-    btn.textContent = "Preparing...";
+    btn.textContent = "กำลังเตรียม...";
 
     try {
       showPrintOverlay("กำลังเตรียมใบเสร็จ...");
       const receipt = await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
 
-      showPrintOverlay("กำลังพิมพ์...");
+      showPrintOverlay(copies > 1 ? `กำลังพิมพ์ ${copies} ใบ...` : "กำลังพิมพ์...");
       playReceiptPrintAnimation();
 
       const ticketCode = getVerifiedTicketCode();
@@ -281,7 +293,7 @@ function bindEvents() {
       alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Print";
+      btn.textContent = "ปริ้น";
     }
   });
 }
@@ -360,6 +372,7 @@ function finishQrDownloadSession() {
   clearBoothSelection();
   clearVerifiedTicketCode();
   resetPrintCopiesUI();
+  resetFrameGridScroll();
 
   goToHome();
 }

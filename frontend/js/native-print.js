@@ -7,7 +7,7 @@ const NATIVE_PRINT_PACKAGE = "com.shootreceipt.print";
 const NATIVE_PRINT_COMPONENT = "com.shootreceipt.print/.PrintActivity";
 const NATIVE_PRINT_ACTION_VIEW = "android.intent.action.VIEW";
 const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
-const NATIVE_COPY_DELAY_MS = 3500;
+const NATIVE_COPY_DELAY_MS = 900;
 /** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
 const NATIVE_LAUNCH_FLAGS = "0x10010000";
 /** Print ~576x1375 + Atkinson dither + USB */
@@ -123,11 +123,10 @@ function launchNativePrint(httpUrl) {
 async function printViaNative(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const imageUrl = resolveRawBtHttpUrl(urls);
-  const onFully = !!getFullyBridge();
 
   if (!imageUrl) {
     console.error("[print] native requires http image url — none available");
-    if (onFully) return;
+    return;
   }
 
   for (let i = 0; i < count; i += 1) {
@@ -135,14 +134,10 @@ async function printViaNative(source, copies = 1, urls = {}) {
       await new Promise((resolve) => window.setTimeout(resolve, NATIVE_COPY_DELAY_MS));
     }
 
-    if (!imageUrl) continue;
-
     const method = launchNativePrint(imageUrl);
-    console.info(`[print] native launch=${method || "failed"} url=${imageUrl}`);
-
-    if (!method) continue;
-
-    refocusBoothAfterNativePrint();
-    await new Promise((resolve) => window.setTimeout(resolve, NATIVE_REFOCUS_DELAY_MS));
+    console.info(`[print] native copy ${i + 1}/${count} launch=${method || "failed"}`);
   }
+
+  refocusBoothAfterNativePrint();
+  await new Promise((resolve) => window.setTimeout(resolve, NATIVE_REFOCUS_DELAY_MS));
 }

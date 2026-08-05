@@ -16,10 +16,22 @@ function initNavigation() {
   pages["qr-download"] = document.getElementById("page-qr-download");
   if (pages.home) {
     pages.home.style.cursor = "pointer";
-    pages.home.addEventListener("click", goToBoothStart);
+    pages.home.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      goToBoothStart();
+    });
   }
 }
 
+
+function resetFramePickerScroll() {
+  const row = document.getElementById("frame-grid");
+  if (!row) return;
+  row.scrollLeft = 0;
+  if (typeof row.scrollTo === "function") {
+    row.scrollTo({ left: 0, behavior: "instant" });
+  }
+}
 
 function navigateTo(pageName) {
   if (!pages[pageName]) return;
@@ -29,6 +41,10 @@ function navigateTo(pageName) {
       el.classList.toggle("page--active", name === pageName);
     }
   });
+
+  if (pageName === "frame-select") {
+    resetFramePickerScroll();
+  }
 
   currentPage = pageName;
 }
@@ -49,6 +65,7 @@ function goToLayoutSelect() {
 }
 
 function goToFrameSelect() {
+  resetFramePickerScroll();
   navigateTo("frame-select");
 }
 

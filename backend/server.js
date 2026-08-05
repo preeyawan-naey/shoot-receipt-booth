@@ -245,6 +245,12 @@ async function startServer() {
     console.log(`💾 Storage: ${storage.getStorageMode()}`);
     console.log(`🎫 Tickets API: ${config.publicUrl}/api/tickets/verify`);
     console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
+    if (config.omiseSecretKey) {
+      console.log(`💳 Omise: enabled (${config.omisePublicKey ? "public+secret" : "secret only"})`);
+      console.log(`🔔 Omise webhook: ${config.publicUrl}/api/webhook/omise`);
+    } else {
+      console.log("💳 Omise: not configured (manual/static QR fallback)");
+    }
   });
 }
 

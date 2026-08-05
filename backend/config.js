@@ -49,6 +49,10 @@ const config = {
     process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
   adminApiKey: process.env.ADMIN_API_KEY || "",
   bankWebhookSecret: process.env.BANK_WEBHOOK_SECRET || "",
+  omisePublicKey:
+    process.env.OMISE_PUBLIC_KEY || process.env.PUBLIC_KEY || "",
+  omiseSecretKey:
+    process.env.OMISE_SECRET_KEY || process.env.SECRET_KEY || "",
   supabase: supabaseEnabled
     ? {
         url: supabaseUrl,

@@ -173,12 +173,12 @@
             <article class="kpi-card kpi-card--primary">
               <p class="kpi-card__label">Payment Amount</p>
               <p class="kpi-card__value" id="payment-kpi-amount">—</p>
-              <p class="kpi-card__hint">แสดงบนหน้า booth</p>
+              <p class="kpi-card__hint">แสดงบนหน้า booth + ส่งไป Omise ทุกรอบ</p>
             </article>
             <article class="kpi-card">
-              <p class="kpi-card__label">QR Status</p>
-              <p class="kpi-card__value" id="payment-kpi-status">—</p>
-              <p class="kpi-card__hint" id="payment-kpi-updated">—</p>
+              <p class="kpi-card__label">Omise</p>
+              <p class="kpi-card__value" id="payment-kpi-omise">—</p>
+              <p class="kpi-card__hint" id="payment-kpi-omise-hint">PromptPay QR สร้างอัตโนมัติ</p>
             </article>
             <article class="kpi-card">
               <p class="kpi-card__label">Code Entry</p>
@@ -190,46 +190,34 @@
           <section class="admin-panel admin-panel--payment">
             <div class="admin-panel__header">
               <div>
-                <h2 class="admin-panel__title">PromptPay QR</h2>
-                <p class="admin-panel__subtitle">อัปโหลด QR ใหม่จะแสดงบนตู้ภายใน ~15 วินาที</p>
+                <h2 class="admin-panel__title">จำนวนเงินชำระ</h2>
+                <p class="admin-panel__subtitle">
+                  Booth สร้าง QR PromptPay จาก Omise ตามยอดนี้ทุกครั้งที่ลูกค้าชำระเงิน
+                </p>
               </div>
             </div>
 
-            <div class="payment-admin-grid">
-              <div class="payment-admin-preview">
-                <img id="payment-admin-qr" class="payment-admin-preview__img" alt="Current payment QR" hidden />
-                <p id="payment-admin-qr-empty" class="payment-admin-preview__empty">ยังไม่มี QR — อัปโหลดด้านขวา</p>
-              </div>
+            <div class="payment-admin-form payment-admin-form--amount-only">
+              <label class="payment-admin-field">
+                <span class="payment-admin-field__label">จำนวนเงิน (บาท)</span>
+                <input
+                  class="admin-login__input"
+                  id="payment-amount-input"
+                  type="number"
+                  min="20"
+                  step="1"
+                  value="59"
+                />
+              </label>
+              <p class="payment-webhook-info__hint">ขั้นต่ำ 20 บาท (Omise PromptPay)</p>
 
-              <div class="payment-admin-form">
-                <label class="payment-admin-field">
-                  <span class="payment-admin-field__label">จำนวนเงิน (บาท)</span>
-                  <input
-                    class="admin-login__input"
-                    id="payment-amount-input"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value="59"
-                  />
-                </label>
+              <p class="admin-login__error" id="payment-admin-error" hidden></p>
+              <p class="admin-modal__result" id="payment-admin-success" hidden></p>
 
-                <label class="payment-admin-field">
-                  <span class="payment-admin-field__label">อัปโหลด QR ใหม่ (PNG/JPG)</span>
-                  <input class="payment-admin-file" id="payment-qr-file" type="file" accept="image/png,image/jpeg,image/webp" />
-                </label>
-
-                <p class="admin-login__error" id="payment-admin-error" hidden></p>
-                <p class="admin-modal__result" id="payment-admin-success" hidden></p>
-
-                <div class="payment-admin-actions">
-                  <button class="admin-btn admin-btn--primary" id="btn-save-payment-amount" type="button">
-                    บันทึกจำนวนเงิน
-                  </button>
-                  <button class="admin-btn admin-btn--ghost" id="btn-upload-payment-qr" type="button">
-                    อัปโหลด QR
-                  </button>
-                </div>
+              <div class="payment-admin-actions">
+                <button class="admin-btn admin-btn--primary" id="btn-save-payment-amount" type="button">
+                  บันทึกจำนวนเงิน
+                </button>
               </div>
             </div>
           </section>
@@ -237,9 +225,9 @@
           <section class="admin-panel admin-panel--payment">
             <div class="admin-panel__header">
               <div>
-                <h2 class="admin-panel__title">Bank Webhook (MacroDroid)</h2>
+                <h2 class="admin-panel__title">Omise Webhook</h2>
                 <p class="admin-panel__subtitle">
-                  มือถือ Android บ้านอ่านแจ้งเตือนธนาคาร → HTTP POST มาที่ URL นี้
+                  ตั้งค่าใน Omise Dashboard → Webhooks → Event: charge.complete
                 </p>
               </div>
             </div>
@@ -255,15 +243,10 @@
                 />
               </label>
               <p class="payment-webhook-info__hint" id="payment-webhook-secret-status">
-                Secret: —
+                Omise: —
               </p>
-              <pre class="payment-webhook-info__sample" id="payment-webhook-sample">{
-  "text": "{not_text}",
-  "package": "{notification_package}"
-}</pre>
-              <p class="payment-webhook-info__hint">
-                MacroDroid: Trigger = Notification posted (แอปธนาคาร) → Action = HTTP POST,
-                Header <code>Authorization: Bearer YOUR_SECRET</code>
+              <p class="payment-webhook-info__hint" id="payment-webhook-provider-hint">
+                Booth จะสร้าง PromptPay QR จาก Omise ต่อรอบชำระเงิน และ poll สถานะ charge อัตโนมัติ
               </p>
             </div>
           </section>

@@ -43,7 +43,9 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL,
   paid_at TIMESTAMPTZ,
-  raw_notification TEXT
+  raw_notification TEXT,
+  omise_source_id TEXT,
+  omise_charge_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions (status);
