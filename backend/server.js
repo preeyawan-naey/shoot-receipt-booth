@@ -54,6 +54,7 @@ app.get("/api/server-info", (_req, res) => {
     publicUrl: config.publicUrl,
     storageMode: storage.getStorageMode(),
     apiBase: config.publicUrl,
+    omiseConfigured: Boolean(config.omiseSecretKey),
   });
 });
 

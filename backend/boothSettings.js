@@ -1,5 +1,6 @@
 const db = require("./db");
 const paymentSettings = require("./paymentSettings");
+const omise = require("./omise");
 
 const CODE_ENTRY_KEY = "code_entry_enabled";
 
@@ -17,6 +18,7 @@ async function getSettings() {
 
   return {
     code_entry_enabled: parseEnabled(row?.setting_value),
+    omise_configured: omise.isConfigured(),
     ...payment,
   };
 }

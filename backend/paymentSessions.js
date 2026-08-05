@@ -128,19 +128,23 @@ async function createSession() {
   );
 
   let omiseMeta = null;
-  if (omise.isConfigured()) {
-    try {
-      omiseMeta = await omise.createPromptPayPayment(amount, id);
-      await db.execute(
-        `UPDATE payment_sessions
-         SET omise_source_id = $1, omise_charge_id = $2
-         WHERE id = $3`,
-        [omiseMeta.sourceId, omiseMeta.chargeId, id]
-      );
-    } catch (error) {
-      console.error("[payment] omise create failed:", error.message);
-      throw new Error(`ไม่สามารถสร้าง QR Omise ได้: ${error.message}`);
-    }
+  if (!omise.isConfigured()) {
+    throw new Error(
+      "Omise ยังไม่ได้ตั้งค่าบน server นี้ — ใส่ OMISE_SECRET_KEY ใน backend/.env หรือ Render env"
+    );
+  }
+
+  try {
+    omiseMeta = await omise.createPromptPayPayment(amount, id);
+    await db.execute(
+      `UPDATE payment_sessions
+       SET omise_source_id = $1, omise_charge_id = $2
+       WHERE id = $3`,
+      [omiseMeta.sourceId, omiseMeta.chargeId, id]
+    );
+  } catch (error) {
+    console.error("[payment] omise create failed:", error.message);
+    throw new Error(`ไม่สามารถสร้าง QR Omise ได้: ${error.message}`);
   }
 
   return getSessionById(id);

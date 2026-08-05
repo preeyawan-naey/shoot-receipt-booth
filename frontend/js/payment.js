@@ -55,6 +55,55 @@ async function readJsonResponse(response) {
   }
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`เชื่อมต่อ server ไม่สำเร็จ (${API_URL}) — ตรวจสอบ Wi‑Fi และ URL ใน Fully`);
+    }
+    throw new Error(`เชื่อมต่อ server ไม่ได้ (${API_URL}) — ${error.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function verifyPaymentBackend() {
+  if (boothSettingsState?.omise_configured === false) {
+    throw new Error(
+      `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — เปิด Fully ด้วย http://<IP-เครื่อง-Mac>:3000`
+    );
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${API_URL}/api/server-info`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    const info = await readJsonResponse(response);
+    if (!info.omiseConfigured) {
+      throw new Error(
+        `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — ใส่ OMISE_SECRET_KEY ใน backend/.env`
+      );
+    }
+  } catch (error) {
+    if (error.message.includes("Omise") || error.message.includes("เชื่อมต่อ")) {
+      throw error;
+    }
+    console.warn("[payment] server-info check skipped:", error.message);
+  }
+}
+
+function assertPaymentSessionHasQr(session) {
+  if (session?.qr_image_url) return;
+  throw new Error(
+    `ไม่ได้รับ QR จาก server (${API_URL}) — ตรวจสอบว่า Fully เปิด URL เดียวกับ Mac (LAN IP :3000)`
+  );
+}
+
 function startPaymentCountdown(seconds = PAYMENT_TIMEOUT_SEC) {
   clearPaymentCountdown();
   let remaining = seconds;
@@ -164,7 +213,7 @@ function renderPaymentPage(sessionAmount, session = activePaymentSession) {
 }
 
 async function createPaymentSession() {
-  const response = await fetch(`${API_URL}/api/booth/payment-sessions`, {
+  const response = await fetchWithTimeout(`${API_URL}/api/booth/payment-sessions`, {
     method: "POST",
     headers: { Accept: "application/json" },
   });
@@ -172,6 +221,7 @@ async function createPaymentSession() {
   if (!response.ok || !data.success || !data.session?.id) {
     throw new Error(data.message || "ไม่สามารถเริ่มรอบชำระเงินได้");
   }
+  assertPaymentSessionHasQr(data.session);
   return data.session;
 }
 
@@ -241,6 +291,7 @@ function startPaymentPolling() {
 
 async function startAutoPaymentSession(flowId) {
   try {
+    await verifyPaymentBackend();
     const session = await createPaymentSession();
     if (flowId !== paymentFlowGeneration) return;
 

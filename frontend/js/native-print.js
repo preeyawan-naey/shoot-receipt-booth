@@ -7,11 +7,45 @@ const NATIVE_PRINT_PACKAGE = "com.shootreceipt.print";
 const NATIVE_PRINT_COMPONENT = "com.shootreceipt.print/.PrintActivity";
 const NATIVE_PRINT_ACTION_VIEW = "android.intent.action.VIEW";
 const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
-const NATIVE_COPY_DELAY_MS = 900;
+const NATIVE_PRINT_COPIES_EXTRA = "com.shootreceipt.print.extra.COPIES";
 /** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
 const NATIVE_LAUNCH_FLAGS = "0x10010000";
-/** Print ~576x1375 + Atkinson dither + USB */
-const NATIVE_REFOCUS_DELAY_MS = 14000;
+/** One native job — download once, print N copies inside APK */
+const NATIVE_JOB_WAIT_MS = 22000;
+const NATIVE_EXTRA_COPY_WAIT_MS = 12000;
+
+function withNativeCopiesInUrl(httpUrl, copies = 1) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  if (count <= 1) return httpUrl;
+
+  try {
+    const url = new URL(httpUrl);
+    url.searchParams.set("shoot_copies", String(count));
+    return url.toString();
+  } catch {
+    const joiner = httpUrl.includes("?") ? "&" : "?";
+    return `${httpUrl}${joiner}shoot_copies=${count}`;
+  }
+}
+
+function buildNativePrintIntentUrl(httpUrl, copies = 1) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const targetUrl = withNativeCopiesInUrl(httpUrl, count);
+  const encoded = encodeURIComponent(targetUrl);
+  let url =
+    `intent:#Intent;` +
+    `action=${NATIVE_PRINT_ACTION_VIEW};` +
+    `component=${NATIVE_PRINT_COMPONENT};` +
+    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
+    `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
+
+  if (count > 1) {
+    url += `i.${NATIVE_PRINT_COPIES_EXTRA}=${count};`;
+  }
+
+  url += `package=${NATIVE_PRINT_PACKAGE};end;`;
+  return url;
+}
 
 function buildNativeViewIntentUrl(httpUrl) {
   return (
@@ -19,18 +53,6 @@ function buildNativeViewIntentUrl(httpUrl) {
     `action=${NATIVE_PRINT_ACTION_VIEW};` +
     `component=${NATIVE_PRINT_COMPONENT};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
-    `package=${NATIVE_PRINT_PACKAGE};end;`
-  );
-}
-
-function buildNativeExtraIntentUrl(httpUrl) {
-  const encoded = encodeURIComponent(httpUrl);
-  return (
-    `intent:#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_VIEW};` +
-    `component=${NATIVE_PRINT_COMPONENT};` +
-    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
-    `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};` +
     `package=${NATIVE_PRINT_PACKAGE};end;`
   );
 }
@@ -44,9 +66,28 @@ function buildNativePackageViewIntentUrl(httpUrl) {
   );
 }
 
-function launchNativeViaFully(api, httpUrl) {
+function launchNativeViaFully(api, httpUrl, copies = 1) {
+  const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies);
+
+  if (typeof api.startIntent === "function") {
+    try {
+      api.startIntent(printIntentUrl);
+      return copies > 1 ? `fully-startIntent-copies-${copies}` : "fully-startIntent-print";
+    } catch (err) {
+      console.warn("[print] fully.startIntent native print failed", err);
+    }
+  }
+
+  if (copies === 1 && typeof api.startApplication === "function") {
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, withNativeCopiesInUrl(httpUrl, 1));
+      return "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication native view failed", err);
+    }
+  }
+
   const variants = [
-    { id: "extra-url", url: buildNativeExtraIntentUrl(httpUrl) },
     { id: "view-component", url: buildNativeViewIntentUrl(httpUrl) },
     { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl) },
   ];
@@ -62,23 +103,14 @@ function launchNativeViaFully(api, httpUrl) {
     }
   }
 
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, httpUrl);
-      return "fully-startApplication-view-fallback";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native fallback failed", err);
-    }
-  }
-
   return null;
 }
 
-function refocusBoothAfterNativePrint() {
+function refocusBoothAfterNativePrint(totalWaitMs) {
   const api = getFullyBridge();
   if (!api || typeof api.bringToForeground !== "function") return;
 
-  for (const delayMs of [NATIVE_REFOCUS_DELAY_MS, NATIVE_REFOCUS_DELAY_MS + 3000]) {
+  for (const delayMs of [3000, totalWaitMs, totalWaitMs + 4000]) {
     window.setTimeout(() => {
       try {
         api.bringToForeground();
@@ -89,35 +121,27 @@ function refocusBoothAfterNativePrint() {
   }
 }
 
-function launchNativePrint(httpUrl) {
+function launchNativePrint(httpUrl, copies = 1) {
   if (!httpUrl || !/^https?:\/\//i.test(httpUrl)) {
     console.error("[print] native invalid image url", httpUrl);
     return null;
   }
 
   logFullyPrintDiagnostics();
-  console.info(`[print] native url=${httpUrl}`);
+  console.info(`[print] native url=${httpUrl} copies=${copies}`);
 
   const api = getFullyBridge();
   if (api) {
-    const method = launchNativeViaFully(api, httpUrl);
+    const method = launchNativeViaFully(api, httpUrl, copies);
     if (method) return method;
   }
 
-  for (const url of [
-    buildNativeViewIntentUrl(httpUrl),
-    buildNativeExtraIntentUrl(httpUrl),
-    buildNativePackageViewIntentUrl(httpUrl),
-  ]) {
-    try {
-      window.location.href = url;
-      return "location-intent-native";
-    } catch {
-      /* try next */
-    }
+  try {
+    window.location.href = buildNativePrintIntentUrl(httpUrl, copies);
+    return "location-intent-native";
+  } catch {
+    return null;
   }
-
-  return null;
 }
 
 async function printViaNative(source, copies = 1, urls = {}) {
@@ -129,15 +153,14 @@ async function printViaNative(source, copies = 1, urls = {}) {
     return;
   }
 
-  for (let i = 0; i < count; i += 1) {
-    if (i > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, NATIVE_COPY_DELAY_MS));
-    }
+  const method = launchNativePrint(imageUrl, count);
+  console.info(`[print] native job launch=${method || "failed"} copies=${count}`);
 
-    const method = launchNativePrint(imageUrl);
-    console.info(`[print] native copy ${i + 1}/${count} launch=${method || "failed"}`);
+  if (!method) {
+    throw new Error("เปิด Shoot Print ไม่ได้ — ตรวจสอบว่าติดตั้ง APK และอนุญาต USB");
   }
 
-  refocusBoothAfterNativePrint();
-  await new Promise((resolve) => window.setTimeout(resolve, NATIVE_REFOCUS_DELAY_MS));
+  const totalWaitMs = NATIVE_JOB_WAIT_MS + Math.max(0, count - 1) * NATIVE_EXTRA_COPY_WAIT_MS;
+  await new Promise((resolve) => window.setTimeout(resolve, totalWaitMs));
+  refocusBoothAfterNativePrint(totalWaitMs);
 }
