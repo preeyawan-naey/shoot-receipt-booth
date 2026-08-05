@@ -6,6 +6,7 @@
 const NATIVE_PRINT_PACKAGE = "com.shootreceipt.print";
 const NATIVE_PRINT_COMPONENT = "com.shootreceipt.print/.PrintActivity";
 const NATIVE_PRINT_ACTION_VIEW = "android.intent.action.VIEW";
+const NATIVE_PRINT_ACTION_PRINT = "com.shootreceipt.print.action.PRINT";
 const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
 const NATIVE_PRINT_COPIES_EXTRA = "com.shootreceipt.print.extra.COPIES";
 /** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
@@ -33,14 +34,15 @@ function buildNativePrintIntentUrl(httpUrl, copies = 1) {
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const encoded = encodeURIComponent(targetUrl);
   let url =
-    `intent:#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_VIEW};` +
+    `intent:${encodeURI(targetUrl)}#Intent;` +
+    `action=${NATIVE_PRINT_ACTION_PRINT};` +
     `component=${NATIVE_PRINT_COMPONENT};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
     `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
 
   if (count > 1) {
     url += `i.${NATIVE_PRINT_COPIES_EXTRA}=${count};`;
+    url += `i.copies=${count};`;
   }
 
   url += `package=${NATIVE_PRINT_PACKAGE};end;`;
@@ -67,7 +69,18 @@ function buildNativePackageViewIntentUrl(httpUrl) {
 }
 
 function launchNativeViaFully(api, httpUrl, copies = 1) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies);
+
+  if (typeof api.startApplication === "function") {
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_PRINT, targetUrl);
+      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-print";
+    } catch (err) {
+      console.warn("[print] fully.startApplication native print failed", err);
+    }
+  }
 
   if (typeof api.startIntent === "function") {
     try {
@@ -78,9 +91,9 @@ function launchNativeViaFully(api, httpUrl, copies = 1) {
     }
   }
 
-  if (copies === 1 && typeof api.startApplication === "function") {
+  if (count === 1 && typeof api.startApplication === "function") {
     try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, withNativeCopiesInUrl(httpUrl, 1));
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, targetUrl);
       return "fully-startApplication-view";
     } catch (err) {
       console.warn("[print] fully.startApplication native view failed", err);

@@ -53,6 +53,11 @@ const config = {
     process.env.OMISE_PUBLIC_KEY || process.env.PUBLIC_KEY || "",
   omiseSecretKey:
     process.env.OMISE_SECRET_KEY || process.env.SECRET_KEY || "",
+  codeEntryDefault:
+    process.env.CODE_ENTRY_ENABLED !== undefined
+      ? String(process.env.CODE_ENTRY_ENABLED).toLowerCase() !== "false" &&
+        String(process.env.CODE_ENTRY_ENABLED) !== "0"
+      : null,
   supabase: supabaseEnabled
     ? {
         url: supabaseUrl,

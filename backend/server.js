@@ -229,6 +229,8 @@ app.use(express.static(FRONTEND_DIR, {
 async function startServer() {
   try {
     await db.initDb();
+    const boothSettings = require("./boothSettings");
+    await boothSettings.syncCodeEntryFromEnv();
   } catch (error) {
     console.error("❌ Database init failed:", error.message);
     process.exit(1);

@@ -1,12 +1,22 @@
 const db = require("./db");
 const paymentSettings = require("./paymentSettings");
 const omise = require("./omise");
+const config = require("./config");
 
 const CODE_ENTRY_KEY = "code_entry_enabled";
 
 function parseEnabled(value) {
   if (value === null || value === undefined) return true;
   return String(value).toLowerCase() !== "false" && String(value) !== "0";
+}
+
+async function syncCodeEntryFromEnv() {
+  if (config.codeEntryDefault === null) return;
+
+  await setCodeEntryEnabled(config.codeEntryDefault);
+  console.log(
+    `⚙️  Code entry: ${config.codeEntryDefault ? "enabled" : "disabled"} (from CODE_ENTRY_ENABLED env)`
+  );
 }
 
 async function getSettings() {
@@ -49,4 +59,5 @@ async function setCodeEntryEnabled(enabled) {
 module.exports = {
   getSettings,
   setCodeEntryEnabled,
+  syncCodeEntryFromEnv,
 };

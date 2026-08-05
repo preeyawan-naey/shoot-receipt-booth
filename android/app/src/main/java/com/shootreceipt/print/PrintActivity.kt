@@ -94,15 +94,23 @@ object PrintEngine {
     fun resolveCopies(intent: android.content.Intent?): Int {
         if (intent == null) return 1
 
+        intent.data?.let { uri ->
+            copiesFromUri(uri)?.let { return it }
+        }
+
         if (intent.hasExtra(PrintActivity.EXTRA_COPIES)) {
             return intent.getIntExtra(PrintActivity.EXTRA_COPIES, 1).coerceIn(1, 10)
+        }
+
+        if (intent.hasExtra("copies")) {
+            return intent.getIntExtra("copies", 1).coerceIn(1, 10)
         }
 
         resolvePrintUrl(intent)?.let { url -> copiesFromUrl(url)?.let { return it } }
 
         intent.extras?.let { bundle ->
             for (key in bundle.keySet()) {
-                if (!key.contains("COPIES", ignoreCase = true)) continue
+                if (!key.contains("COPIES", ignoreCase = true) && key != "copies") continue
                 when (val value = bundle.get(key)) {
                     is Int -> return value.coerceIn(1, 10)
                     is String -> value.toIntOrNull()?.coerceIn(1, 10)?.let { return it }
@@ -113,11 +121,14 @@ object PrintEngine {
         return 1
     }
 
+    private fun copiesFromUri(uri: Uri): Int? {
+        return uri.getQueryParameter("shoot_copies")?.toIntOrNull()?.coerceIn(1, 10)
+            ?: uri.getQueryParameter("copies")?.toIntOrNull()?.coerceIn(1, 10)
+    }
+
     private fun copiesFromUrl(url: String): Int? {
         return try {
-            val uri = Uri.parse(url)
-            uri.getQueryParameter("shoot_copies")?.toIntOrNull()?.coerceIn(1, 10)
-                ?: uri.getQueryParameter("copies")?.toIntOrNull()?.coerceIn(1, 10)
+            copiesFromUri(Uri.parse(url))
         } catch (_: Exception) {
             null
         }

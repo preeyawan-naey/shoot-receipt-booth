@@ -231,7 +231,7 @@ function getPrintQrRect(frameW, frameH, photosBottom = null) {
   }
 
   return {
-    x: (PRINT_QR_SLOT.left / 100) * frameW,
+    x: (frameW - size) / 2,
     y: (PRINT_QR_SLOT.top / 100) * frameH,
     size,
   };
@@ -348,7 +348,8 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     await drawFrameOnly(ctx, frameConfig, frameW, frameH);
     await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhoto);
 
-    const { x, y, size } = getPrintQrRect(frameW, frameH);
+    const photosBottom = getPhotosBottomPx(frameConfig, frameH);
+    const { x, y, size } = getPrintQrRect(frameW, frameH, photosBottom);
     await drawQRAt(ctx, qrDataUrl, x, y, size);
     const textY = y + size + PRINT_QR_TEXT_GAP;
     await drawThankYouText(ctx, frameW / 2, textY);
@@ -501,7 +502,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth25";
+const PRINT_BUILD = "booth46";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
