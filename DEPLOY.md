@@ -89,6 +89,41 @@ curl https://your-app.up.railway.app/api/health
          → มือถือสแกน QR → ดาวน์โหลดรูปได้ทุกที่
 ```
 
+## ลบรูปอัตโนมัติ (Cron — เก็บ 5 วัน)
+
+รูปใน Supabase จะถูกลบเมื่อ **เก่ากว่า 5 วัน** (ปรับได้ด้วย `PHOTO_RETENTION_DAYS`)
+
+### Environment
+
+```
+PHOTO_RETENTION_DAYS=5
+# PHOTO_CLEANUP_SECRET=...  (ไม่ใส่ = ใช้ ADMIN_API_KEY)
+```
+
+### ทดสอบด้วยมือ
+
+```bash
+curl "https://shoot-receipt-boot.onrender.com/api/cron/cleanup-photos?secret=YOUR_ADMIN_API_KEY"
+```
+
+ควรได้:
+
+```json
+{"success":true,"retentionDays":5,"mode":"supabase","deleted":0,"kept":12,...}
+```
+
+### ตั้ง Cron บน Render
+
+1. Render Dashboard → **New** → **Cron Job**
+2. **Schedule:** `0 3 * * *` (ทุกวัน 03:00 UTC — ปรับได้)
+3. **Command / URL:** เรียก web service:
+   ```
+   GET https://shoot-receipt-boot.onrender.com/api/cron/cleanup-photos?secret=YOUR_ADMIN_API_KEY
+   ```
+   หรือใส่ header `x-cron-secret: YOUR_ADMIN_API_KEY`
+
+> QR ของรูปที่ถูกลบแล้วจะโหลดไม่ได้ — เหมาะกับ booth ที่ให้ดาวน์โหลดภายในไม่กี่วันหลังถ่าย
+
 ## หมายเหตุ
 
 - **PUBLIC_URL** ต้องเป็น URL สาธารณะที่มือถือเข้าถึงได้ (HTTPS)

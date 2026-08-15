@@ -58,6 +58,14 @@ const config = {
       ? String(process.env.CODE_ENTRY_ENABLED).toLowerCase() !== "false" &&
         String(process.env.CODE_ENTRY_ENABLED) !== "0"
       : null,
+  photoRetentionDays: Math.max(
+    1,
+    Number(process.env.PHOTO_RETENTION_DAYS) || 5
+  ),
+  photoCleanupSecret:
+    process.env.PHOTO_CLEANUP_SECRET ||
+    process.env.ADMIN_API_KEY ||
+    "",
   supabase: supabaseEnabled
     ? {
         url: supabaseUrl,

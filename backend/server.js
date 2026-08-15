@@ -12,6 +12,7 @@ const ticketRoutes = require("./routes/tickets");
 const adminRoutes = require("./routes/admin");
 const boothRoutes = require("./routes/booth");
 const webhookRoutes = require("./routes/webhook");
+const cronRoutes = require("./routes/cron");
 
 const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
 
@@ -192,6 +193,7 @@ app.get("/api/health", async (_req, res) => {
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/booth", boothRoutes);
 app.use("/api/webhook", webhookRoutes);
+app.use("/api/cron", cronRoutes);
 app.use("/api/admin", adminRoutes);
 
 const adminDir = path.join(FRONTEND_DIR, "admin");
@@ -246,6 +248,7 @@ async function startServer() {
     console.log(`🚀 Backend running on port ${config.port}`);
     console.log(`🌐 Public URL: ${config.publicUrl}`);
     console.log(`💾 Storage: ${storage.getStorageMode()}`);
+    console.log(`🧹 Photo retention: ${config.photoRetentionDays} days (/api/cron/cleanup-photos)`);
     console.log(`🎫 Tickets API: ${config.publicUrl}/api/tickets/verify`);
     console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
     if (config.omiseSecretKey) {
