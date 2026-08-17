@@ -148,7 +148,7 @@
     const m = data.metrics || {};
 
     setText("kpi-revenue", formatMoney(m.totalRevenue));
-    setText("kpi-revenue-hint", `${m.totalSessions || 0} used × ฿${m.ticketPrice || 59}`);
+    setText("kpi-revenue-hint", `${m.totalSessions || 0} paid sessions`);
     setText("kpi-cafe", formatMoney(m.cafeShare));
     setText("kpi-noey", formatMoney(m.noeyShare));
     setText("kpi-sessions", String(m.totalSessions ?? "—"));
@@ -156,27 +156,27 @@
     setText("table-period-label", data.periodLabel || state.period);
   }
 
-  async function loadTickets() {
+  async function loadPayments() {
     const qs = buildQuery({ page: state.page, limit: state.limit });
-    const data = await apiFetch(`/tickets?${qs}`);
-    const tbody = $("#tickets-tbody");
+    const data = await apiFetch(`/payments?${qs}`);
+    const tbody = $("#payments-tbody");
     if (!tbody) return;
 
-    const items = data.tickets || [];
+    const items = data.payments || [];
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="admin-table__empty">No tickets found</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="admin-table__empty">No payments found</td></tr>`;
     } else {
       tbody.innerHTML = items
         .map(
           (row) => `
         <tr>
-          <td class="ticket-code">${escapeHtml(row.ticket_code)}</td>
+          <td class="session-id">${escapeHtml(String(row.id).slice(0, 8))}…</td>
           <td><span class="status-badge status-badge--${row.status}">${escapeHtml(row.status)}</span></td>
+          <td>${formatMoney(row.amount)}</td>
           <td>${formatDate(row.created_at)}</td>
-          <td>${formatDate(row.used_at)}</td>
-          <td>${row.status === "used" ? row.print_count : "—"}</td>
-          <td>${row.chosen_frame ? escapeHtml(row.chosen_frame) : "—"}</td>
+          <td>${formatDate(row.paid_at)}</td>
+          <td>${escapeHtml(row.payment_provider || "—")}</td>
         </tr>`
         )
         .join("");
@@ -264,7 +264,6 @@
     state.view = viewName;
     const dashboardView = $("#view-dashboard");
     const paymentView = $("#view-payment");
-    const generateBtn = $("#btn-generate-codes");
 
     document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {
       item.classList.toggle("admin-nav__item--active", item.dataset.view === viewName);
@@ -272,7 +271,6 @@
 
     if (dashboardView) dashboardView.hidden = viewName !== "dashboard";
     if (paymentView) paymentView.hidden = viewName !== "payment";
-    if (generateBtn) generateBtn.hidden = viewName !== "dashboard";
 
     const eyebrow = $("#admin-topbar-eyebrow");
     const title = $("#admin-topbar-title");
@@ -286,13 +284,9 @@
   }
 
   async function loadPaymentAdmin() {
-    const [paymentData, settingsData] = await Promise.all([
-      apiFetch("/payment"),
-      apiFetch("/settings"),
-    ]);
+    const paymentData = await apiFetch("/payment");
 
     const payment = paymentData.payment || {};
-    const settings = settingsData.settings || {};
     const amount = payment.payment_amount ?? 59;
 
     setText("payment-kpi-amount", formatMoney(amount));
@@ -306,7 +300,6 @@
         ? "QR สร้างจาก Omise ต่อรอบ"
         : "ตั้ง SECRET_KEY บน server"
     );
-    setText("payment-kpi-code-entry", settings.code_entry_enabled === false ? "Off" : "On");
 
     const amountInput = $("#payment-amount-input");
     if (amountInput) amountInput.value = String(amount);
@@ -386,51 +379,7 @@
       await loadPaymentAdmin();
       return;
     }
-    await Promise.all([loadDashboard(), loadTickets(), loadBoothSettings()]);
-  }
-
-  async function loadBoothSettings() {
-    const toggle = $("#toggle-code-entry");
-    if (!toggle) return;
-
-    try {
-      const data = await apiFetch("/settings");
-      const enabled = data.settings?.code_entry_enabled !== false;
-      toggle.checked = enabled;
-      updateCodeEntryToggleHint(enabled);
-    } catch (err) {
-      console.error("[admin settings]", err);
-    }
-  }
-
-  function updateCodeEntryToggleHint(enabled) {
-    const hint = $("#toggle-code-entry-hint");
-    if (!hint) return;
-    hint.textContent = enabled
-      ? "เปิดอยู่ — ลูกค้าต้องกรอก code ก่อนชำระเงิน"
-      : "ปิดอยู่ — กด START แล้วไปหน้าชำระเงิน";
-  }
-
-  async function saveCodeEntryEnabled(enabled) {
-    const toggle = $("#toggle-code-entry");
-    if (toggle) toggle.disabled = true;
-
-    try {
-      const data = await apiFetch("/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ code_entry_enabled: enabled }),
-      });
-      const nextEnabled = data.settings?.code_entry_enabled !== false;
-      if (toggle) toggle.checked = nextEnabled;
-      updateCodeEntryToggleHint(nextEnabled);
-    } catch (err) {
-      console.error("[admin settings save]", err);
-      if (toggle) toggle.checked = !enabled;
-      updateCodeEntryToggleHint(toggle?.checked !== false);
-      alert(err.message || "Could not save booth settings");
-    } finally {
-      if (toggle) toggle.disabled = false;
-    }
+    await Promise.all([loadDashboard(), loadPayments()]);
   }
 
   async function enterDashboard(key) {
@@ -469,82 +418,6 @@
       }
     } finally {
       setLoginLoading(false);
-    }
-  }
-
-  function showGenerateModal() {
-    const modal = $("#generate-modal");
-    const input = $("#generate-count-input");
-    const err = $("#generate-modal-error");
-    const result = $("#generate-modal-result");
-    if (!modal) return;
-    if (input) input.value = "10";
-    if (err) err.hidden = true;
-    if (result) {
-      result.hidden = true;
-      result.textContent = "";
-    }
-    modal.hidden = false;
-    input?.focus();
-    input?.select();
-  }
-
-  function hideGenerateModal() {
-    const modal = $("#generate-modal");
-    if (modal) modal.hidden = true;
-  }
-
-  async function confirmGenerateCodes() {
-    const input = $("#generate-count-input");
-    const err = $("#generate-modal-error");
-    const result = $("#generate-modal-result");
-    const btn = $("#btn-generate-confirm");
-    const count = parseInt(input?.value || "0", 10);
-
-    if (err) err.hidden = true;
-    if (result) result.hidden = true;
-
-    if (!Number.isFinite(count) || count < 1 || count > 500) {
-      if (err) {
-        err.textContent = "Enter a number between 1 and 500";
-        err.hidden = false;
-      }
-      return;
-    }
-
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Generating...";
-    }
-
-    try {
-      const data = await apiFetch("/tickets/generate", {
-        method: "POST",
-        body: JSON.stringify({ count }),
-      });
-
-      if (result) {
-        const sample = (data.sample || []).join("\n");
-        result.textContent = `Created ${data.inserted} code(s)\n\nSample:\n${sample}`;
-        result.hidden = false;
-      }
-
-      state.period = "all";
-      state.page = 1;
-      document.querySelectorAll(".admin-tab").forEach((tab) => {
-        tab.classList.toggle("admin-tab--active", tab.dataset.period === "all");
-      });
-      await refresh();
-    } catch (generateErr) {
-      if (err) {
-        err.textContent = generateErr.message;
-        err.hidden = false;
-      }
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "Generate";
-      }
     }
   }
 
@@ -587,29 +460,13 @@
     });
 
     let searchTimer;
-    $("#ticket-search")?.addEventListener("input", (e) => {
+    $("#payment-search")?.addEventListener("input", (e) => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         state.search = e.target.value.trim();
         state.page = 1;
         refresh().catch(console.error);
       }, 350);
-    });
-
-    $("#btn-generate-codes")?.addEventListener("click", showGenerateModal);
-    $("#btn-generate-cancel")?.addEventListener("click", hideGenerateModal);
-    $("#btn-generate-confirm")?.addEventListener("click", () => {
-      confirmGenerateCodes().catch(console.error);
-    });
-    $("#generate-count-input")?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") confirmGenerateCodes().catch(console.error);
-    });
-    $("#generate-modal")?.addEventListener("click", (e) => {
-      if (e.target.id === "generate-modal") hideGenerateModal();
-    });
-
-    $("#toggle-code-entry")?.addEventListener("change", (e) => {
-      saveCodeEntryEnabled(e.target.checked).catch(console.error);
     });
 
     document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {

@@ -1,6 +1,5 @@
 const db = require("./db");
 
-const TICKET_PRICE_THB = 59;
 const CAFE_SHARE_RATE = 0.3;
 const NOEY_SHARE_RATE = 0.7;
 
@@ -42,20 +41,13 @@ function parsePeriod(period, from, to) {
   return { start: null, end: null, label: "All time" };
 }
 
-function buildUsedAtFilter(range, paramStartIndex = 1) {
+function buildPaidAtFilter(range, paramStartIndex = 1) {
   if (!range?.start || !range?.end) {
-    return { clause: "status = 'used'", params: [] };
-  }
-
-  if (db.getDbMode() === "postgres") {
-    return {
-      clause: `status = 'used' AND used_at >= $${paramStartIndex} AND used_at <= $${paramStartIndex + 1}`,
-      params: [range.start.toISOString(), range.end.toISOString()],
-    };
+    return { clause: "status = 'paid'", params: [] };
   }
 
   return {
-    clause: `status = 'used' AND used_at >= $${paramStartIndex} AND used_at <= $${paramStartIndex + 1}`,
+    clause: `status = 'paid' AND paid_at >= $${paramStartIndex} AND paid_at <= $${paramStartIndex + 1}`,
     params: [range.start.toISOString(), range.end.toISOString()],
   };
 }
@@ -66,20 +58,20 @@ async function getDashboardMetrics(period, from, to) {
     return { ok: false, status: 400, message: "Invalid custom date range" };
   }
 
-  const { clause, params } = buildUsedAtFilter(range);
+  const { clause, params } = buildPaidAtFilter(range);
 
   const aggregate = await db.queryOne(
     `SELECT
        COUNT(*) AS total_sessions,
-       COALESCE(SUM(print_count), 0) AS total_prints
-     FROM receipt_tickets
+       COALESCE(SUM(amount), 0) AS total_revenue
+     FROM payment_sessions
      WHERE ${clause}`,
     params
   );
 
   const totalSessions = Number(aggregate?.total_sessions || 0);
-  const totalPrints = Number(aggregate?.total_prints || 0);
-  const totalRevenue = totalSessions * TICKET_PRICE_THB;
+  const totalRevenue = Number(aggregate?.total_revenue || 0);
+  const ticketPrice = totalSessions > 0 ? Math.round(totalRevenue / totalSessions) : 59;
   const cafeShare = Math.round(totalRevenue * CAFE_SHARE_RATE);
   const noeyShare = Math.round(totalRevenue * NOEY_SHARE_RATE);
 
@@ -89,18 +81,18 @@ async function getDashboardMetrics(period, from, to) {
     periodLabel: range.label,
     metrics: {
       totalRevenue,
-      ticketPrice: TICKET_PRICE_THB,
+      ticketPrice,
       cafeShare,
       noeyShare,
       cafeShareRate: CAFE_SHARE_RATE,
       noeyShareRate: NOEY_SHARE_RATE,
       totalSessions,
-      totalPrints,
+      totalPrints: totalSessions,
     },
   };
 }
 
-async function listTicketHistory({
+async function listPaymentHistory({
   period,
   from,
   to,
@@ -121,29 +113,29 @@ async function listTicketHistory({
   const where = [];
   const params = [];
 
-  if (status === "used" || status === "unused") {
+  if (status === "paid" || status === "pending" || status === "expired" || status === "cancelled") {
     where.push(`status = $${params.length + 1}`);
     params.push(status);
   }
 
   if (range?.start && range?.end) {
     where.push(
-      `( (status = 'used' AND used_at >= $${params.length + 1} AND used_at <= $${params.length + 2})
-         OR (status = 'unused' AND created_at >= $${params.length + 1} AND created_at <= $${params.length + 2}) )`
+      `( (status = 'paid' AND paid_at >= $${params.length + 1} AND paid_at <= $${params.length + 2})
+         OR (status != 'paid' AND created_at >= $${params.length + 1} AND created_at <= $${params.length + 2}) )`
     );
     params.push(range.start.toISOString(), range.end.toISOString());
   }
 
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch) {
-    where.push(`ticket_code LIKE $${params.length + 1}`);
-    params.push(`%${trimmedSearch.replace(/[^0-9]/g, "")}%`);
+    where.push(`CAST(id AS TEXT) LIKE $${params.length + 1}`);
+    params.push(`%${trimmedSearch.replace(/[^0-9a-f-]/gi, "")}%`);
   }
 
   const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const countRow = await db.queryOne(
-    `SELECT COUNT(*) AS total FROM receipt_tickets ${whereClause}`,
+    `SELECT COUNT(*) AS total FROM payment_sessions ${whereClause}`,
     params
   );
   const total = Number(countRow?.total || 0);
@@ -153,17 +145,17 @@ async function listTicketHistory({
   const offsetIdx = params.length + 2;
 
   const rows = await db.queryAll(
-    `SELECT ticket_code, status, created_at, used_at, print_count, chosen_frame
-     FROM receipt_tickets
+    `SELECT id, amount, status, created_at, paid_at, omise_charge_id
+     FROM payment_sessions
      ${whereClause}
-     ORDER BY COALESCE(used_at, created_at) DESC
+     ORDER BY COALESCE(paid_at, created_at) DESC
      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
     listParams
   );
 
   return {
     ok: true,
-    tickets: rows.map(formatTicketRow),
+    payments: rows.map(formatPaymentRow),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -173,20 +165,19 @@ async function listTicketHistory({
   };
 }
 
-function formatTicketRow(row) {
+function formatPaymentRow(row) {
   return {
-    ticket_code: row.ticket_code,
+    id: row.id,
+    amount: Number(row.amount || 0),
     status: row.status,
     created_at: row.created_at,
-    used_at: row.used_at,
-    print_count: Number(row.print_count || 0),
-    chosen_frame: row.chosen_frame,
+    paid_at: row.paid_at,
+    payment_provider: row.omise_charge_id ? "omise" : "manual",
   };
 }
 
 module.exports = {
-  TICKET_PRICE_THB,
   getDashboardMetrics,
-  listTicketHistory,
+  listPaymentHistory,
   parsePeriod,
 };

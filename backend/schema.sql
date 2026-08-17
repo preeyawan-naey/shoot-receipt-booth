@@ -29,10 +29,6 @@ CREATE TABLE IF NOT EXISTS booth_settings (
 );
 
 INSERT INTO booth_settings (setting_key, setting_value)
-VALUES ('code_entry_enabled', 'true')
-ON CONFLICT (setting_key) DO NOTHING;
-
-INSERT INTO booth_settings (setting_key, setting_value)
 VALUES ('payment_amount', '59')
 ON CONFLICT (setting_key) DO NOTHING;
 

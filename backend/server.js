@@ -8,7 +8,6 @@ const fs = require("fs");
 const config = require("./config");
 const storage = require("./storage");
 const db = require("./db");
-const ticketRoutes = require("./routes/tickets");
 const adminRoutes = require("./routes/admin");
 const boothRoutes = require("./routes/booth");
 const webhookRoutes = require("./routes/webhook");
@@ -174,13 +173,11 @@ app.get("/api/print/:id", (req, res) => {
 
 app.get("/api/health", async (_req, res) => {
   try {
-    const stats = await require("./tickets").getTicketStats();
     res.json({
       ok: true,
       storageMode: storage.getStorageMode(),
       publicUrl: config.publicUrl,
       database: db.getDbMode(),
-      tickets: stats,
     });
   } catch (error) {
     res.status(503).json({
@@ -190,7 +187,6 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-app.use("/api/tickets", ticketRoutes);
 app.use("/api/booth", boothRoutes);
 app.use("/api/webhook", webhookRoutes);
 app.use("/api/cron", cronRoutes);
@@ -231,8 +227,6 @@ app.use(express.static(FRONTEND_DIR, {
 async function startServer() {
   try {
     await db.initDb();
-    const boothSettings = require("./boothSettings");
-    await boothSettings.syncCodeEntryFromEnv();
   } catch (error) {
     console.error("❌ Database init failed:", error.message);
     process.exit(1);
@@ -249,7 +243,6 @@ async function startServer() {
     console.log(`🌐 Public URL: ${config.publicUrl}`);
     console.log(`💾 Storage: ${storage.getStorageMode()}`);
     console.log(`🧹 Photo retention: ${config.photoRetentionDays} days (/api/cron/cleanup-photos)`);
-    console.log(`🎫 Tickets API: ${config.publicUrl}/api/tickets/verify`);
     console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
     if (config.omiseSecretKey) {
       console.log(`💳 Omise: enabled (${config.omisePublicKey ? "public+secret" : "secret only"})`);

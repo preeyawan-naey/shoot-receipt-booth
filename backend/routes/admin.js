@@ -1,7 +1,6 @@
 const express = require("express");
 const config = require("../config");
 const admin = require("../admin");
-const tickets = require("../tickets");
 const boothSettings = require("../boothSettings");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
@@ -56,7 +55,7 @@ router.get("/dashboard", async (req, res) => {
   }
 });
 
-router.get("/tickets", async (req, res) => {
+router.get("/payments", async (req, res) => {
   try {
     const {
       period = "today",
@@ -68,7 +67,7 @@ router.get("/tickets", async (req, res) => {
       status = "",
     } = req.query;
 
-    const result = await admin.listTicketHistory({
+    const result = await admin.listPaymentHistory({
       period,
       from,
       to,
@@ -87,35 +86,7 @@ router.get("/tickets", async (req, res) => {
 
     return res.json({ success: true, ...result });
   } catch (error) {
-    console.error("[admin/tickets]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-router.post("/tickets/generate", async (req, res) => {
-  try {
-    const count = Number(req.body?.count);
-    if (!Number.isInteger(count) || count < 1 || count > 1000) {
-      return res.status(400).json({
-        success: false,
-        message: "count must be between 1 and 1000",
-      });
-    }
-
-    const codes = tickets.generateUniqueCodes(count);
-    const { inserted, skipped } = await tickets.insertTickets(codes);
-
-    return res.json({
-      success: true,
-      inserted,
-      skipped,
-      sample: codes.slice(0, 5),
-    });
-  } catch (error) {
-    console.error("[admin/tickets/generate]", error);
+    console.error("[admin/payments]", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -126,28 +97,6 @@ router.post("/tickets/generate", async (req, res) => {
 router.get("/settings", async (_req, res) => {
   try {
     const settings = await boothSettings.getSettings();
-    return res.json({ success: true, settings });
-  } catch (error) {
-    console.error("[admin/settings]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-router.patch("/settings", async (req, res) => {
-  try {
-    if (typeof req.body?.code_entry_enabled !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "code_entry_enabled must be a boolean",
-      });
-    }
-
-    await boothSettings.setCodeEntryEnabled(req.body.code_entry_enabled);
-    const settings = await boothSettings.getSettings();
-
     return res.json({ success: true, settings });
   } catch (error) {
     console.error("[admin/settings]", error);

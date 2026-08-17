@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth48";
+const BOOTH_BUILD = "booth49";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -221,7 +221,6 @@ function bindEvents() {
   btnLayoutBack?.addEventListener("click", () => {
     appState.selectedLayout = null;
     clearBoothSelection();
-    clearVerifiedTicketCode();
     goToPayment();
   });
 
@@ -271,19 +270,10 @@ function bindEvents() {
       showPrintOverlay(copies > 1 ? `กำลังพิมพ์ ${copies} ใบ...` : "กำลังพิมพ์...");
       playReceiptPrintAnimation();
 
-      const ticketCode = getVerifiedTicketCode();
       await printReceiptDirect(copies, {
         printUrl: receipt.printUrl,
         downloadUrl: receipt.downloadUrl,
       });
-
-      if (ticketCode) {
-        try {
-          await recordTicketPrintCount(ticketCode, copies);
-        } catch (printErr) {
-          console.warn("[print-count]", printErr);
-        }
-      }
 
       hidePrintOverlay();
       showQrDownloadPage();
@@ -370,7 +360,6 @@ function finishQrDownloadSession() {
   appState.selectedLayout = null;
   appState.selectedFrame = "none";
   clearBoothSelection();
-  clearVerifiedTicketCode();
   resetPrintCopiesUI();
   resetFrameGridScroll();
 

@@ -58,33 +58,11 @@
             <h1 class="admin-topbar__title" id="admin-topbar-title">Control Tower</h1>
           </div>
           <div class="admin-topbar__actions">
-            <button class="admin-btn admin-btn--ghost" id="btn-generate-codes" type="button">
-              + Generate Codes
-            </button>
             <button class="admin-btn admin-btn--ghost" id="btn-logout" type="button">Logout</button>
           </div>
         </header>
 
         <div id="view-dashboard">
-        <section class="admin-settings" id="booth-settings-panel">
-          <div class="admin-settings__info">
-            <h2 class="admin-settings__title">Booth Settings</h2>
-            <p class="admin-settings__desc">
-              ซิงค์ไปยังตู้อัตโนมัติภายใน ~15 วินาที
-            </p>
-          </div>
-          <label class="admin-toggle">
-            <input type="checkbox" id="toggle-code-entry" checked />
-            <span class="admin-toggle__track" aria-hidden="true"></span>
-            <span class="admin-toggle__text">
-              <span class="admin-toggle__label">เปิดหน้ากรอก Code</span>
-              <span class="admin-toggle__hint" id="toggle-code-entry-hint">
-                ปิด = กด START แล้วไปหน้าชำระเงิน
-              </span>
-            </span>
-          </label>
-        </section>
-
         <section class="admin-filters">
           <div class="admin-filters__tabs" id="period-tabs">
             <button class="admin-tab admin-tab--active" type="button" data-period="today">Today</button>
@@ -105,7 +83,7 @@
           <article class="kpi-card kpi-card--primary">
             <p class="kpi-card__label">Total Revenue</p>
             <p class="kpi-card__value" id="kpi-revenue">—</p>
-            <p class="kpi-card__hint" id="kpi-revenue-hint">used codes × ฿59</p>
+            <p class="kpi-card__hint" id="kpi-revenue-hint">paid sessions</p>
           </article>
           <article class="kpi-card">
             <p class="kpi-card__label">Cafe Share (30%)</p>
@@ -118,27 +96,27 @@
           <article class="kpi-card">
             <p class="kpi-card__label">Total Sessions</p>
             <p class="kpi-card__value" id="kpi-sessions">—</p>
-            <p class="kpi-card__hint">tickets used</p>
+            <p class="kpi-card__hint">paid sessions</p>
           </article>
           <article class="kpi-card">
             <p class="kpi-card__label">Total Prints</p>
             <p class="kpi-card__value" id="kpi-prints">—</p>
-            <p class="kpi-card__hint">receipt copies</p>
+            <p class="kpi-card__hint">estimated 1 print / session</p>
           </article>
         </section>
 
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2 class="admin-panel__title">Code Usage History</h2>
+              <h2 class="admin-panel__title">Payment History</h2>
               <p class="admin-panel__subtitle" id="table-period-label">—</p>
             </div>
             <div class="admin-panel__tools">
               <input
                 class="admin-search"
-                id="ticket-search"
+                id="payment-search"
                 type="search"
-                placeholder="Search ticket code..."
+                placeholder="Search session id..."
               />
             </div>
           </div>
@@ -147,15 +125,15 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Ticket Code</th>
+                  <th>Session</th>
                   <th>Status</th>
-                  <th>Created At</th>
-                  <th>Used At</th>
-                  <th>Print</th>
-                  <th>Chosen Frame</th>
+                  <th>Amount</th>
+                  <th>Created</th>
+                  <th>Paid At</th>
+                  <th>Provider</th>
                 </tr>
               </thead>
-              <tbody id="tickets-tbody">
+              <tbody id="payments-tbody">
                 <tr><td colspan="6" class="admin-table__empty">Loading...</td></tr>
               </tbody>
             </table>
@@ -179,11 +157,6 @@
               <p class="kpi-card__label">Omise</p>
               <p class="kpi-card__value" id="payment-kpi-omise">—</p>
               <p class="kpi-card__hint" id="payment-kpi-omise-hint">PromptPay QR สร้างอัตโนมัติ</p>
-            </article>
-            <article class="kpi-card">
-              <p class="kpi-card__label">Code Entry</p>
-              <p class="kpi-card__value" id="payment-kpi-code-entry">—</p>
-              <p class="kpi-card__hint">จาก Booth Settings</p>
             </article>
           </section>
 
@@ -254,28 +227,6 @@
       </div>
     </div>
 
-    <div class="admin-modal" id="generate-modal" hidden>
-      <div class="admin-modal__card">
-        <h2 class="admin-modal__title">Generate Ticket Codes</h2>
-        <p class="admin-modal__desc">How many 6-digit codes to create?</p>
-        <input
-          class="admin-login__input"
-          id="generate-count-input"
-          type="number"
-          min="1"
-          max="500"
-          value="10"
-          inputmode="numeric"
-        />
-        <p class="admin-login__error" id="generate-modal-error" hidden></p>
-        <div class="admin-modal__actions">
-          <button class="admin-btn admin-btn--ghost" id="btn-generate-cancel" type="button">Cancel</button>
-          <button class="admin-btn admin-btn--primary" id="btn-generate-confirm" type="button">Generate</button>
-        </div>
-        <p class="admin-modal__result" id="generate-modal-result" hidden></p>
-      </div>
-    </div>
-
-    <script src="/admin/js/admin.js?v=8"></script>
+    <script src="/admin/js/admin.js?v=9"></script>
   </body>
 </html>

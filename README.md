@@ -1,6 +1,6 @@
 # SHOOT Receipt BOOTH
 
-Vertical photobooth web app — booth UI, ticket codes, thermal print, QR download, and admin backoffice.
+Vertical photobooth web app — booth UI, Omise PromptPay payment, thermal print, QR download, and admin backoffice.
 
 ## Project structure
 
@@ -23,10 +23,8 @@ Shoot Receipt/
 │   ├── config.js
 │   ├── db.js
 │   ├── storage.js
-│   ├── tickets.js
 │   ├── admin.js
 │   ├── routes/
-│   ├── scripts/              # npm run tickets:generate
 │   ├── schema.sql
 │   ├── schema.mysql.sql
 │   ├── Dockerfile
@@ -60,13 +58,6 @@ npm start
 | http://localhost:3000/admin/ | Backoffice (login with `ADMIN_API_KEY`) |
 
 The backend serves `frontend/` as static files on the same port — no separate frontend server required for normal use.
-
-### Generate ticket codes
-
-```bash
-cd backend
-npm run tickets:generate -- 20
-```
 
 ## Optional: frontend-only preview
 

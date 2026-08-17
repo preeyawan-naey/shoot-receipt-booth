@@ -35,15 +35,15 @@ function runSqliteMigration() {
     );
   `);
 
-  const defaultSetting = sqlite
+  const defaultPayment = sqlite
     .prepare("SELECT 1 FROM booth_settings WHERE setting_key = ?")
-    .get("code_entry_enabled");
-  if (!defaultSetting) {
+    .get("payment_amount");
+  if (!defaultPayment) {
     sqlite
       .prepare(
         "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
       )
-      .run("code_entry_enabled", "true");
+      .run("payment_amount", "59");
   }
 
   sqlite.exec(`

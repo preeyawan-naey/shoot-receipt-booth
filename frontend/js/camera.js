@@ -267,13 +267,6 @@ function finishCaptureSession() {
 
   sessionStorage.setItem("capturedPhotos", JSON.stringify(payload));
 
-  const ticketCode = getVerifiedTicketCode();
-  if (ticketCode) {
-    redeemTicketCode(ticketCode, cameraState.frame.id).catch((error) => {
-      console.error("Ticket redeem failed:", error);
-    });
-  }
-
   stopCameraSession();
   navigateToProcess(payload);
 }
