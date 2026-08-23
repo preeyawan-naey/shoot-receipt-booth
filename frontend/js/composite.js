@@ -350,7 +350,7 @@ function getPrintQrRect(frameW, frameH, photosBottom = null) {
 }
 
 async function drawQRAt(ctx, qrDataUrl, x, y, size, options = {}) {
-  const { background = true } = options;
+  const { background = false } = options;
   const pad = size * 0.04;
 
   if (background) {
@@ -374,10 +374,23 @@ function getPhotosBottomPx(frameConfig, canvasHeight) {
   return maxBottom;
 }
 
+function shouldCropPrintToPhotosBottom() {
+  const frameId =
+    typeof resolveDecorativeFrameId === "function"
+      ? resolveDecorativeFrameId()
+      : getSelectedFrameId();
+  return frameId === "frame-3";
+}
+
 function getPrintCropRect(frameImg, frameConfig, frameH) {
   const bounds = measureFrameContentBounds(frameImg);
+  const photosBottom = getPhotosBottomPx(frameConfig, frameH);
   const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
-  const bottom = frameH - 1;
+  let bottom = Math.max(bounds.bottom, Math.ceil(photosBottom) - 1);
+
+  if (shouldCropPrintToPhotosBottom()) {
+    bottom = Math.ceil(photosBottom) - 1;
+  }
 
   return {
     top,
@@ -477,16 +490,14 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
   const crop = getPrintCropRect(frameImg, frameConfig, frameH);
-  const frameDrawH = frameH - crop.top;
   const qrSize = getPrintQrSize(frameW);
   const qrX = (frameW - qrSize) / 2;
   const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
   const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
-  const qrY = padTop + (PRINT_QR_SLOT.top / 100) * frameH - crop.top;
+  const qrY = padTop + crop.height + PRINT_QR_GAP_FROM_PHOTO;
   const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
   const textHeight = await measureThankYouTextHeight();
-  const contentBottom = Math.max(padTop + frameDrawH, textY + textHeight);
-  const totalH = contentBottom + padBottom;
+  const totalH = textY + textHeight + padBottom;
 
   canvas.width = frameW;
   canvas.height = totalH;
@@ -501,11 +512,11 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     0,
     crop.top,
     frameW,
-    frameDrawH,
+    crop.height,
     0,
     padTop,
     frameW,
-    frameDrawH
+    crop.height
   );
 
   const slots =
@@ -527,7 +538,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     const rotation = slot.rotation || 0;
     const fit = slot.fit || "cover";
 
-    if (y + h < padTop || y > padTop + frameDrawH) continue;
+    if (y + h < padTop || y > padTop + crop.height) continue;
 
     if (thermal) {
       drawImageCoverForPrint(ctx, photo, x, y, w, h, radius, rotation, fit);
@@ -536,11 +547,11 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     }
   }
 
-  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize, { background: false });
+  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
   await drawThankYouText(ctx, frameW / 2, textY);
 
   console.info(
-    `[print] canvas ${frameW}x${totalH} cropTop=${crop.top} layoutH=${frameDrawH} qrY=${Math.round(qrY)} padTop=${padTop} padBottom=${padBottom}`
+    `[print] canvas ${frameW}x${totalH} cropTop=${crop.top} layoutH=${crop.height} padTop=${padTop} padBottom=${padBottom}`
   );
 
   return canvas;
