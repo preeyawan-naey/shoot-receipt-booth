@@ -362,39 +362,51 @@ async function drawQRAt(ctx, qrDataUrl, x, y, size, options = {}) {
   ctx.drawImage(qrImg, x + pad, y + pad, size - pad * 2, size - pad * 2);
 }
 
-function getPhotosBottomPx(frameConfig, canvasHeight) {
+function getPhotosBoundsPx(frameConfig, canvasWidth, canvasHeight) {
   const slots =
     typeof getActivePhotoSlots === "function"
       ? getActivePhotoSlots(frameConfig)
       : frameConfig.slots;
+  let minTop = Infinity;
   let maxBottom = 0;
+
   for (const slot of slots) {
+    minTop = Math.min(minTop, (slot.top / 100) * canvasHeight);
     maxBottom = Math.max(maxBottom, ((slot.top + slot.height) / 100) * canvasHeight);
   }
-  return maxBottom;
+
+  if (!Number.isFinite(minTop)) {
+    return { top: 0, bottom: 0 };
+  }
+
+  return { top: minTop, bottom: maxBottom };
 }
 
-function shouldCropPrintToPhotosBottom() {
-  const frameId =
-    typeof resolveDecorativeFrameId === "function"
-      ? resolveDecorativeFrameId()
-      : getSelectedFrameId();
-  return frameId === "frame-3";
+function getPhotosBottomPx(frameConfig, canvasHeight) {
+  return getPhotosBoundsPx(frameConfig, 0, canvasHeight).bottom;
 }
 
 function getPrintCropRect(frameImg, frameConfig, frameH) {
   const bounds = measureFrameContentBounds(frameImg);
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
   const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
-  let bottom = Math.max(bounds.bottom, Math.ceil(photosBottom) - 1);
-
-  if (shouldCropPrintToPhotosBottom()) {
-    bottom = Math.ceil(photosBottom) - 1;
-  }
+  const bottom = Math.max(top, Math.ceil(photosBottom) - 1);
 
   return {
     top,
     height: Math.max(1, bottom - top + 1),
+  };
+}
+
+function getPrintQrPosition(frameConfig, frameW, frameH, crop, padTop) {
+  const photosBottomPx = getPhotosBottomPx(frameConfig, frameH);
+  const qrSize = getPrintQrSize(frameW);
+  const contentBottomY = padTop + photosBottomPx - crop.top;
+
+  return {
+    x: (frameW - qrSize) / 2,
+    y: contentBottomY + PRINT_QR_GAP_FROM_PHOTO,
+    size: qrSize,
   };
 }
 
@@ -490,11 +502,15 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
   const crop = getPrintCropRect(frameImg, frameConfig, frameH);
-  const qrSize = getPrintQrSize(frameW);
-  const qrX = (frameW - qrSize) / 2;
   const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
   const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
-  const qrY = padTop + crop.height + PRINT_QR_GAP_FROM_PHOTO;
+  const { x: qrX, y: qrY, size: qrSize } = getPrintQrPosition(
+    frameConfig,
+    frameW,
+    frameH,
+    crop,
+    padTop
+  );
   const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
   const textHeight = await measureThankYouTextHeight();
   const totalH = textY + textHeight + padBottom;
