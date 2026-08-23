@@ -24,12 +24,9 @@ function initNavigation() {
 
 
 function resetFramePickerScroll() {
-  const row = document.getElementById("frame-grid");
-  if (!row) return;
-  row.scrollLeft = 0;
-  if (typeof row.scrollTo === "function") {
-    row.scrollTo({ left: 0, behavior: "instant" });
-  }
+  const grid = document.getElementById("frame-grid");
+  if (!grid) return;
+  grid.scrollTop = 0;
 }
 
 function navigateTo(pageName) {

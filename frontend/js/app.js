@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth49";
+const BOOTH_BUILD = "booth66";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -61,6 +61,7 @@ function initLayoutGrid() {
 }
 
 function buildLayoutCard(layout) {
+  const aspect = layout.selectAspectRatio || "662 / 1412";
   return `
     <button
       class="layout-card"
@@ -68,11 +69,13 @@ function buildLayoutCard(layout) {
       data-layout-id="${layout.id}"
       aria-label="เลือก layout ${layout.id}"
     >
-      <img
-        class="layout-card__preview"
-        src="${layout.selectImagePath || layout.imagePath}"
-        alt="Layout ${layout.id}"
-      />
+      <div class="layout-card__frame" style="aspect-ratio: ${aspect}">
+        <img
+          class="layout-card__preview"
+          src="${layout.selectImagePath || layout.imagePath}"
+          alt="Layout ${layout.id}"
+        />
+      </div>
     </button>
   `;
 }
@@ -105,26 +108,32 @@ function selectLayout(layoutId) {
 }
 
 function resetFrameGridScroll() {
-  const row = document.getElementById("frame-grid");
-  if (row) row.scrollLeft = 0;
+  const grid = document.getElementById("frame-grid");
+  if (grid) grid.scrollTop = 0;
 }
 
 function initFrameGrid(layoutId) {
-  const row = document.getElementById("frame-grid");
-  if (!row) return;
+  const grid = document.getElementById("frame-grid");
+  if (!grid) return;
 
   const options = getFramesForLayout(layoutId);
-  row.innerHTML = options.map((option) => buildFrameCard(option)).join("");
+  grid.innerHTML = options.map((option) => buildFrameCard(option)).join("");
   resetFrameGridScroll();
 
-  row.querySelectorAll(".frame-picker-card").forEach((card) => {
+  grid.querySelectorAll(".frame-picker-card").forEach((card) => {
     card.addEventListener("click", () => {
       selectFrame(layoutId, card.dataset.frameId);
     });
   });
+
+  if (typeof lucide !== "undefined" && typeof lucide.createIcons === "function") {
+    lucide.createIcons();
+  }
 }
 
 function buildFrameCard(option) {
+  const aspect = option.selectAspectRatio || "662 / 1412";
+
   if (option.id === "none") {
     return `
       <button
@@ -133,7 +142,12 @@ function buildFrameCard(option) {
         data-frame-id="none"
         aria-label="ไม่เลือก frame"
       >
-        <span class="frame-picker-card__none-label">ไม่เลือก</span>
+        <div class="frame-picker-card__frame frame-picker-card__frame--none" style="aspect-ratio: ${aspect}">
+          <span class="frame-picker-card__none-icon" aria-hidden="true">
+            <i data-lucide="ban"></i>
+          </span>
+          <span class="frame-picker-card__none-label">ไม่เลือก Frame</span>
+        </div>
       </button>
     `;
   }
@@ -145,20 +159,22 @@ function buildFrameCard(option) {
       data-frame-id="${option.id}"
       aria-label="${option.label}"
     >
-      <img
-        class="frame-picker-card__preview"
-        src="${option.selectImagePath}"
-        alt="${option.label}"
-      />
+      <div class="frame-picker-card__frame" style="aspect-ratio: ${aspect}">
+        <img
+          class="frame-picker-card__preview"
+          src="${option.selectImagePath}"
+          alt="${option.label}"
+        />
+      </div>
     </button>
   `;
 }
 
 function selectFrame(layoutId, frameId) {
-  const row = document.getElementById("frame-grid");
+  const grid = document.getElementById("frame-grid");
   appState.selectedFrame = frameId;
 
-  row?.querySelectorAll(".frame-picker-card").forEach((card) => {
+  grid?.querySelectorAll(".frame-picker-card").forEach((card) => {
     card.classList.toggle("frame-picker-card--selected", card.dataset.frameId === frameId);
   });
 

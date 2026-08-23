@@ -1,105 +1,136 @@
 /**
- * Decorative frame options per layout (same structure as Layout 1)
- * Replace img/Layout/frame/.../Layout{N}-Frame*.png when final art is ready.
+ * Decorative frame options — per layout
+ * Assets: img/Layout/frame/frame-select/layout{N}/frame-{1-5}.jpg (662 × 1412)
  */
-const LAYOUT1_FRAME_SLOTS = {
-  none: [{ left: 5, top: 15.0, width: 90, height: 42 }],
-  1: [{ left: 5, top: 35.0, width: 90, height: 42 }],
-  2: [{ left: 7.5, top: 17.0, width: 95, height: 42 }],
-  3: [{ left: 7.5, top: 17.0, width: 95, height: 42 }],
-  4: [{ left: 7.5, top: 17.0, width: 95, height: 42 }],
+const FRAME_ASSET_BASE = "img/Layout/frame/frame-select";
+
+const LAYOUT_FRAME_DIR = {
+  "Layout-1": "layout1",
+  "Layout-2": "layout2",
+  "Layout-3": "layout3",
+  "Layout-4": "layout4",
 };
 
-function layoutFrameAssetPaths(layoutNum, frameNum) {
-  if (frameNum == null) {
-    return {
+const DEFAULT_FRAME_SLOT_MAP = {
+  "frame-1": [{ left: 6.65, top: 29.25, width: 86.1, height: 64.94 }],
+  "frame-2": [{ left: 6.65, top: 21.88, width: 86.1, height: 64.94 }],
+  "frame-3": [{ left: 6.95, top: 16.15, width: 86.1, height: 65.01 }],
+  "frame-4": [{ left: 6.19, top: 2.62, width: 73.80, height: 45.4, rotation: 90 }],
+  "frame-5": [{ left: 6.65, top: 15.72, width: 86.1, height: 65.01 }],
+};
+
+/** Photo slots measured per layout frame artwork */
+const LAYOUT_FRAME_SLOT_MAP = {
+  "Layout-2": {
+    "frame-1": [
+      { left: 6.5, top: 29.25, width: 86.25, height: 31.59 },
+      { left: 6.5, top: 63.53, width: 86.25, height: 31.59 },
+    ],
+    "frame-2": [
+      { left: 6.5, top: 21.88, width: 86.25, height: 31.59 },
+      { left: 6.5, top: 56.16, width: 86.25, height: 31.59 },
+    ],
+    "frame-3": [
+      { left: 6.8, top: 16.22, width: 86.25, height: 36.05 },
+      { left: 6.8, top: 55.03, width: 86.25, height: 36.05 },
+    ],
+    "frame-4": [
+      { left: 6.5, top: 2.76, width: 72.81, height: 22.31, rotation: 90 },
+      { left: 6.5, top: 25.42, width: 72.81, height: 22.45, rotation: 90 },
+    ],
+    "frame-5": [
+      { left: 6.5, top: 15.79, width: 86.25, height: 31.52 },
+      { left: 6.5, top: 50.07, width: 86.25, height: 31.52 },
+    ],
+  },
+};
+
+function getLayoutFrameDir(layoutId) {
+  return LAYOUT_FRAME_DIR[layoutId] || null;
+}
+
+function getFrameAssetDir(layoutId) {
+  const dir = getLayoutFrameDir(layoutId);
+  return dir ? `${FRAME_ASSET_BASE}/${dir}` : null;
+}
+
+function getFrameSlots(layoutId, frameId) {
+  const layoutSlots = LAYOUT_FRAME_SLOT_MAP[layoutId]?.[frameId];
+  if (layoutSlots?.length) return layoutSlots;
+  return DEFAULT_FRAME_SLOT_MAP[frameId] || [];
+}
+
+function buildFramesForLayout(layoutId) {
+  const assetDir = getFrameAssetDir(layoutId);
+  if (!assetDir) return [];
+
+  return [
+    {
+      id: "none",
+      label: "ไม่เลือก Frame",
       selectImagePath: null,
-      previewImagePath:
-        layoutNum === 1
-          ? "img/Layout/frame/frame-preview/Layout1-none.png"
-          : null,
-    };
-  }
-
-  return {
-    selectImagePath: `img/Layout/frame/frame-select/Layout${layoutNum}-Frame${frameNum}.png`,
-    previewImagePath: `img/Layout/frame/frame-preview/Layout${layoutNum}-Frame${frameNum}.png`,
-  };
-}
-
-function buildFramesForLayout(layoutNum) {
-  const singlePhoto = layoutNum === 1;
-  const prefix = `layout${layoutNum}`;
-
-  const defs = [
-    { key: "none", id: "none", label: "ไม่เลือก", frameNum: null },
-    { key: "1", id: `${prefix}-frame-1`, label: "Frame 1", frameNum: 1 },
-    { key: "2", id: `${prefix}-frame-2`, label: "Frame 2", frameNum: 2 },
-    { key: "3", id: `${prefix}-frame-3`, label: "Frame 3", frameNum: 3 },
-    { key: "4", id: `${prefix}-frame-4`, label: "Frame 4", frameNum: 4 },
+      previewImagePath: null,
+    },
+    ...[1, 2, 3, 4, 5].map((n) => {
+      const id = `frame-${n}`;
+      return {
+        id,
+        label: `Frame ${n}`,
+        selectImagePath: `${assetDir}/frame-${n}.jpg`,
+        previewImagePath: `${assetDir}/frame-${n}.jpg`,
+        selectAspectRatio: "662 / 1412",
+        slots: getFrameSlots(layoutId, id),
+      };
+    }),
   ];
-
-  return defs.map(({ key, id, label, frameNum }) => {
-    const paths = layoutFrameAssetPaths(layoutNum, frameNum);
-    const slots = singlePhoto ? LAYOUT1_FRAME_SLOTS[key] : undefined;
-
-    return {
-      id,
-      label,
-      selectImagePath: paths.selectImagePath,
-      previewImagePath: paths.previewImagePath,
-      ...(slots ? { slots } : {}),
-    };
-  });
 }
-
-const FRAMES_BY_LAYOUT = {
-  "Layout-1": buildFramesForLayout(1),
-  "Layout-2": buildFramesForLayout(2),
-  "Layout-3": buildFramesForLayout(3),
-  "Layout-4": buildFramesForLayout(4),
-};
 
 function layoutHasFrames(layoutId) {
-  return Boolean(FRAMES_BY_LAYOUT[layoutId]?.length);
+  return getFramesForLayout(layoutId).length > 0;
 }
 
 function getFramesForLayout(layoutId) {
-  return FRAMES_BY_LAYOUT[layoutId] || [];
+  return buildFramesForLayout(layoutId);
 }
 
 function getFrameById(layoutId, frameId) {
+  if (!frameId || frameId === "none") return null;
   return getFramesForLayout(layoutId).find((frame) => frame.id === frameId) || null;
 }
 
 function getSelectedFramePreviewPath() {
-  const layoutId = getSelectedLayoutId();
   const frameId = getSelectedFrameId();
-  if (!layoutId) return null;
+  if (!frameId || frameId === "none") return null;
 
-  const frame = getFrameById(layoutId, frameId);
+  const frame = getFrameById(getSelectedLayoutId(), frameId);
   return frame?.previewImagePath || null;
+}
+
+function resolveDecorativeFrameId() {
+  const frameId = getSelectedFrameId();
+  if (frameId && frameId !== "none") return frameId;
+
+  try {
+    const captured = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
+    if (captured.decorativeFrameId && captured.decorativeFrameId !== "none") {
+      return captured.decorativeFrameId;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return "none";
 }
 
 function getActivePhotoSlots(layoutConfig) {
   if (!layoutConfig?.slots?.length) return [];
 
-  const frameId = getSelectedFrameId();
+  const frameId = resolveDecorativeFrameId();
   if (frameId === "none") {
     return layoutConfig.slots;
   }
 
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(BOOTH_STORAGE.frameConfig) || "null");
-    if (stored?.id === frameId && stored.slots?.length) {
-      return stored.slots;
-    }
-  } catch {
-    /* ignore invalid JSON */
-  }
-
-  const layoutId = getSelectedLayoutId();
-  const frame = getFrameById(layoutId, frameId);
+  const frame = getFrameById(getSelectedLayoutId(), frameId);
   if (frame?.slots?.length) {
     return frame.slots;
   }
@@ -124,6 +155,7 @@ function persistFrameSelection(layoutId, frameId) {
     JSON.stringify({
       id: frame.id,
       label: frame.label,
+      layoutId,
       slots: frame.slots || null,
       previewImagePath: frame.previewImagePath || null,
     })

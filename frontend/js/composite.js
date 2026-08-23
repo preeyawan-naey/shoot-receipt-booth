@@ -38,6 +38,42 @@ function loadImage(src) {
   });
 }
 
+const PHOTO_SLOT_BORDER_RADIUS = 0;
+
+function clipRoundRect(ctx, x, y, w, h, radius) {
+  const r = Math.min(radius, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.clip();
+}
+
+function getPhotoSlotRadius(canvasWidth) {
+  return PHOTO_SLOT_BORDER_RADIUS * (canvasWidth / LAYOUT_NATURAL_WIDTH);
+}
+
+function drawImageCoverRounded(ctx, img, dx, dy, dw, dh, radius, rotationDeg = 0) {
+  ctx.save();
+  clipRoundRect(ctx, dx, dy, dw, dh, radius);
+  if (rotationDeg) {
+    const rad = (rotationDeg * Math.PI) / 180;
+    ctx.translate(dx + dw / 2, dy + dh / 2);
+    ctx.rotate(rad);
+    drawImageCover(ctx, img, -dh / 2, -dw / 2, dh, dw);
+  } else {
+    drawImageCover(ctx, img, dx, dy, dw, dh);
+  }
+  ctx.restore();
+}
+
 function drawImageCover(ctx, img, dx, dy, dw, dh) {
   const sw = img.naturalWidth;
   const sh = img.naturalHeight;
@@ -128,7 +164,16 @@ function processThermalGrayscale(imageData) {
   }
 }
 
-function drawImageCoverForPrint(ctx, img, dx, dy, dw, dh) {
+function drawImageCoverForPrint(
+  ctx,
+  img,
+  dx,
+  dy,
+  dw,
+  dh,
+  radius = PHOTO_SLOT_BORDER_RADIUS,
+  rotationDeg = 0
+) {
   const w = Math.max(1, Math.round(dw * PRINT_PHOTO_RENDER_SCALE));
   const h = Math.max(1, Math.round(dh * PRINT_PHOTO_RENDER_SCALE));
   const scratch = document.createElement("canvas");
@@ -136,15 +181,25 @@ function drawImageCoverForPrint(ctx, img, dx, dy, dw, dh) {
   scratch.height = h;
 
   const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
-  drawImageCover(scratchCtx, img, 0, 0, w, h);
+  if (rotationDeg) {
+    const rad = (rotationDeg * Math.PI) / 180;
+    scratchCtx.translate(w / 2, h / 2);
+    scratchCtx.rotate(rad);
+    drawImageCover(scratchCtx, img, -h / 2, -w / 2, h, w);
+  } else {
+    drawImageCover(scratchCtx, img, 0, 0, w, h);
+  }
 
   const imageData = scratchCtx.getImageData(0, 0, w, h);
   processThermalGrayscale(imageData);
   scratchCtx.putImageData(imageData, 0, 0);
 
+  ctx.save();
+  clipRoundRect(ctx, dx, dy, dw, dh, radius);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(scratch, dx, dy, dw, dh);
+  ctx.restore();
 }
 
 async function drawFrameOnly(ctx, frameConfig, canvasWidth, canvasHeight) {
@@ -178,11 +233,15 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
     typeof getActivePhotoSlots === "function"
       ? getActivePhotoSlots(frameConfig)
       : frameConfig.slots;
-  const frameId = getSelectedFrameId();
+  const frameId =
+    typeof resolveDecorativeFrameId === "function"
+      ? resolveDecorativeFrameId()
+      : getSelectedFrameId();
 
   console.info(`[composite] frame=${frameId} slot=`, slots[0] || null);
 
   const count = Math.min(frameConfig.photoCount, photos.length, slots.length);
+  const radius = getPhotoSlotRadius(canvasWidth);
 
   for (let i = 0; i < count; i++) {
     const slot = slots[i];
@@ -193,8 +252,13 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
     const y = (slot.top / 100) * canvasHeight;
     const w = (slot.width / 100) * canvasWidth;
     const h = (slot.height / 100) * canvasHeight;
+    const rotation = slot.rotation || 0;
 
-    drawPhotoFn(ctx, photo, x, y, w, h);
+    if (drawPhotoFn === drawImageCover) {
+      drawImageCoverRounded(ctx, photo, x, y, w, h, radius, rotation);
+    } else {
+      drawPhotoFn(ctx, photo, x, y, w, h, radius, rotation);
+    }
   }
 }
 

@@ -210,6 +210,23 @@ function triggerFlash() {
   setTimeout(() => flash.classList.remove("flash-overlay--active"), 280);
 }
 
+const CAPTURE_LANDSCAPE_WIDTH = 960;
+const CAPTURE_LANDSCAPE_HEIGHT = 720;
+
+function getLandscapeVideoCrop(vw, vh, targetRatio = CAPTURE_LANDSCAPE_WIDTH / CAPTURE_LANDSCAPE_HEIGHT) {
+  const videoRatio = vw / vh;
+
+  if (videoRatio > targetRatio) {
+    const sHeight = vh;
+    const sWidth = vh * targetRatio;
+    return { sx: (vw - sWidth) / 2, sy: 0, sWidth, sHeight };
+  }
+
+  const sWidth = vw;
+  const sHeight = vw / targetRatio;
+  return { sx: 0, sy: (vh - sHeight) / 2, sWidth, sHeight };
+}
+
 function capturePhoto() {
   const video = document.getElementById("camera-video");
   const canvas = document.getElementById("camera-canvas");
@@ -220,17 +237,27 @@ function capturePhoto() {
 
   const vw = video.videoWidth || 1280;
   const vh = video.videoHeight || 720;
-  const maxWidth = 960;
-  const scale = Math.min(1, maxWidth / vw);
+  const crop = getLandscapeVideoCrop(vw, vh);
 
-  canvas.width = Math.round(vw * scale);
-  canvas.height = Math.round(vh * scale);
+  canvas.width = CAPTURE_LANDSCAPE_WIDTH;
+  canvas.height = CAPTURE_LANDSCAPE_HEIGHT;
 
   const ctx = canvas.getContext("2d");
   ctx.save();
   ctx.filter = CAMERA_BRIGHTNESS_FILTER;
-  ctx.scale(-scale, scale);
-  ctx.drawImage(video, -vw, 0, vw, vh);
+  ctx.translate(CAPTURE_LANDSCAPE_WIDTH, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(
+    video,
+    crop.sx,
+    crop.sy,
+    crop.sWidth,
+    crop.sHeight,
+    0,
+    0,
+    CAPTURE_LANDSCAPE_WIDTH,
+    CAPTURE_LANDSCAPE_HEIGHT
+  );
   ctx.restore();
 
   const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
@@ -261,6 +288,7 @@ function finishCaptureSession() {
     frameLabel: cameraState.frame.label,
     photoCount: cameraState.frame.photoCount,
     layout: cameraState.frame.layout,
+    decorativeFrameId: getSelectedFrameId(),
     photos: cameraState.capturedPhotos,
     capturedAt: new Date().toISOString(),
   };

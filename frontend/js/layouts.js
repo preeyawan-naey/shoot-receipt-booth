@@ -1,9 +1,9 @@
 /**
  * Layout config — 4 receipt layouts (1–4 photos)
- * Preview/composite PNG: 1152 × 2666 px
+ * Composite PNG: 662 × 1412 px
  */
-const LAYOUT_NATURAL_WIDTH = 1152;
-const LAYOUT_NATURAL_HEIGHT = 2666;
+const LAYOUT_NATURAL_WIDTH = 662;
+const LAYOUT_NATURAL_HEIGHT = 1412;
 
 const LAYOUTS = [
   {
@@ -11,16 +11,18 @@ const LAYOUTS = [
     photoCount: 1,
     imagePath: "img/Layout/Layout-1.png",
     selectImagePath: "img/Layout/Layout-1.png",
-    slots: [{ left: 6.94, top: 28.32, width: 86.10, height: 37.80 }],
+    selectAspectRatio: "662 / 1142",
+    slots: [{ left: 6.65, top: 15.58, width: 86.4, height: 65.3 }],
   },
   {
     id: "Layout-2",
     photoCount: 2,
     imagePath: "img/Layout/Layout-2.png",
     selectImagePath: "img/Layout/Layout-2.png",
+    selectAspectRatio: "662 / 1291",
     slots: [
-      { left: 9.72, top: 32.53, width: 80.47, height: 26.79 },
-      { left: 9.72, top: 60.15, width: 80.47, height: 26.79 },
+      { left: 6.8, top: 15.58, width: 86.4, height: 37.18 },
+      { left: 6.8, top: 54.25, width: 86.4, height: 37.18 },
     ],
   },
   {
@@ -28,10 +30,11 @@ const LAYOUTS = [
     photoCount: 3,
     imagePath: "img/Layout/Layout-3.png",
     selectImagePath: "img/Layout/Layout-3.png",
+    selectAspectRatio: "662 / 1320",
     slots: [
-      { left: 9.72, top: 32.53, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 51.47, width: 80.47, height: 18.11 },
-      { left: 9.72, top: 70.41, width: 80.47, height: 18.11 },
+      { left: 6.65, top: 15.65, width: 86.4, height: 24.93 },
+      { left: 6.65, top: 42.14, width: 86.4, height: 24.93 },
+      { left: 6.65, top: 68.56, width: 86.4, height: 24.93 },
     ],
   },
   {
@@ -39,11 +42,12 @@ const LAYOUTS = [
     photoCount: 4,
     imagePath: "img/Layout/Layout-4.png",
     selectImagePath: "img/Layout/Layout-4.png",
+    selectAspectRatio: "662 / 1203",
     slots: [
-      { left: 9.72, top: 32.53, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 32.53, width: 39.24, height: 22.11 },
-      { left: 9.72, top: 55.47, width: 39.24, height: 22.11 },
-      { left: 51.04, top: 55.47, width: 39.24, height: 22.11 },
+      { left: 6.95, top: 15.65, width: 41.54, height: 33.99 },
+      { left: 51.66, top: 15.65, width: 41.54, height: 33.99 },
+      { left: 6.95, top: 51.2, width: 41.54, height: 33.92 },
+      { left: 51.66, top: 51.2, width: 41.54, height: 33.99 },
     ],
   },
 ];
