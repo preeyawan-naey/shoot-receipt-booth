@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth70";
+const BOOTH_BUILD = "booth76";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -286,11 +286,16 @@ function bindEvents() {
       showPrintOverlay(copies > 1 ? `กำลังพิมพ์ ${copies} ใบ...` : "กำลังพิมพ์...");
       playReceiptPrintAnimation();
 
-      await printReceiptDirect(copies, {
-        printUrl: receipt.printUrl,
-        downloadUrl: receipt.downloadUrl,
-      });
+      await Promise.all([
+        printReceiptDirect(copies, {
+          printUrl: receipt.printUrl,
+          downloadUrl: receipt.downloadUrl,
+        }),
+        waitForReceiptPrintAnimation(),
+      ]);
 
+      showPrintOverlay("ปริ้นเสร็จแล้ว!");
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
       hidePrintOverlay();
       showQrDownloadPage();
     } catch (error) {

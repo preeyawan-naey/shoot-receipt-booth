@@ -3,10 +3,12 @@ const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 }
 const PRINT_QR_GAP_FROM_PHOTO = 24;
 const PRINT_QR_TEXT_GAP = 24;
 const PRINT_BOTTOM_PADDING = 12;
+const PRINT_DOWNLOAD_EDGE_PADDING = 52;
 const PRINT_EXTRA_TOP_TRIM = 0;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
+const PRINT_COMPLETE_FALLBACK_MS = 10000;
 const PRINT_PHOTO_RENDER_SCALE = 3;
 const PRINT_PHOTO_GAMMA = 0.72;
 const PRINT_PHOTO_BRIGHTNESS = 1.25;
@@ -64,17 +66,7 @@ function getPhotoSlotRadius(canvasWidth) {
 }
 
 function drawImageCoverRounded(ctx, img, dx, dy, dw, dh, radius, rotationDeg = 0) {
-  ctx.save();
-  clipRoundRect(ctx, dx, dy, dw, dh, radius);
-  if (rotationDeg) {
-    const rad = (rotationDeg * Math.PI) / 180;
-    ctx.translate(dx + dw / 2, dy + dh / 2);
-    ctx.rotate(rad);
-    drawImageCover(ctx, img, -dh / 2, -dw / 2, dh, dw);
-  } else {
-    drawImageCover(ctx, img, dx, dy, dw, dh);
-  }
-  ctx.restore();
+  drawImageInSlotRounded(ctx, img, dx, dy, dw, dh, radius, rotationDeg, "cover");
 }
 
 function drawImageCover(ctx, img, dx, dy, dw, dh) {
@@ -101,6 +93,53 @@ function drawImageCover(ctx, img, dx, dy, dw, dh) {
   }
 
   ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dw, dh);
+}
+
+function drawImageContain(ctx, img, dx, dy, dw, dh) {
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+  const slotRatio = dw / dh;
+  const imgRatio = sw / sh;
+
+  let destW;
+  let destH;
+  let destX;
+  let destY;
+
+  if (imgRatio > slotRatio) {
+    destW = dw;
+    destH = dw / imgRatio;
+    destX = dx;
+    destY = dy + (dh - destH) / 2;
+  } else {
+    destH = dh;
+    destW = dh * imgRatio;
+    destX = dx + (dw - destW) / 2;
+    destY = dy;
+  }
+
+  ctx.drawImage(img, 0, 0, sw, sh, destX, destY, destW, destH);
+}
+
+function drawImageInSlot(ctx, img, dx, dy, dw, dh, rotationDeg = 0, fit = "cover") {
+  const drawFn = fit === "contain" ? drawImageContain : drawImageCover;
+
+  if (rotationDeg) {
+    const rad = (rotationDeg * Math.PI) / 180;
+    ctx.translate(dx + dw / 2, dy + dh / 2);
+    ctx.rotate(rad);
+    drawFn(ctx, img, -dh / 2, -dw / 2, dh, dw);
+    return;
+  }
+
+  drawFn(ctx, img, dx, dy, dw, dh);
+}
+
+function drawImageInSlotRounded(ctx, img, dx, dy, dw, dh, radius, rotationDeg = 0, fit = "cover") {
+  ctx.save();
+  clipRoundRect(ctx, dx, dy, dw, dh, radius);
+  drawImageInSlot(ctx, img, dx, dy, dw, dh, rotationDeg, fit);
+  ctx.restore();
 }
 
 function boxBlur3x3(source, width, height) {
@@ -178,7 +217,8 @@ function drawImageCoverForPrint(
   dw,
   dh,
   radius = PHOTO_SLOT_BORDER_RADIUS,
-  rotationDeg = 0
+  rotationDeg = 0,
+  fit = "cover"
 ) {
   const w = Math.max(1, Math.round(dw * PRINT_PHOTO_RENDER_SCALE));
   const h = Math.max(1, Math.round(dh * PRINT_PHOTO_RENDER_SCALE));
@@ -187,13 +227,14 @@ function drawImageCoverForPrint(
   scratch.height = h;
 
   const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
+  const drawFn = fit === "contain" ? drawImageContain : drawImageCover;
   if (rotationDeg) {
     const rad = (rotationDeg * Math.PI) / 180;
     scratchCtx.translate(w / 2, h / 2);
     scratchCtx.rotate(rad);
-    drawImageCover(scratchCtx, img, -h / 2, -w / 2, h, w);
+    drawFn(scratchCtx, img, -h / 2, -w / 2, h, w);
   } else {
-    drawImageCover(scratchCtx, img, 0, 0, w, h);
+    drawFn(scratchCtx, img, 0, 0, w, h);
   }
 
   const imageData = scratchCtx.getImageData(0, 0, w, h);
@@ -259,11 +300,12 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
     const w = (slot.width / 100) * canvasWidth;
     const h = (slot.height / 100) * canvasHeight;
     const rotation = slot.rotation || 0;
+    const fit = slot.fit || "cover";
 
     if (drawPhotoFn === drawImageCover) {
-      drawImageCoverRounded(ctx, photo, x, y, w, h, radius, rotation);
+      drawImageInSlotRounded(ctx, photo, x, y, w, h, radius, rotation, fit);
     } else {
-      drawPhotoFn(ctx, photo, x, y, w, h, radius, rotation);
+      drawPhotoFn(ctx, photo, x, y, w, h, radius, rotation, fit);
     }
   }
 }
@@ -307,10 +349,14 @@ function getPrintQrRect(frameW, frameH, photosBottom = null) {
   };
 }
 
-async function drawQRAt(ctx, qrDataUrl, x, y, size) {
+async function drawQRAt(ctx, qrDataUrl, x, y, size, options = {}) {
+  const { background = true } = options;
   const pad = size * 0.04;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(x, y, size, size);
+
+  if (background) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x, y, size, size);
+  }
 
   const qrImg = await loadImage(qrDataUrl);
   ctx.drawImage(qrImg, x + pad, y + pad, size - pad * 2, size - pad * 2);
@@ -326,6 +372,21 @@ function getPhotosBottomPx(frameConfig, canvasHeight) {
     maxBottom = Math.max(maxBottom, ((slot.top + slot.height) / 100) * canvasHeight);
   }
   return maxBottom;
+}
+
+function getPrintCropRect(frameImg, frameConfig, frameH) {
+  const bounds = measureFrameContentBounds(frameImg);
+  const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
+  const bottom = frameH - 1;
+
+  return {
+    top,
+    height: Math.max(1, bottom - top + 1),
+  };
+}
+
+function getDownloadEdgePadding(frameW) {
+  return Math.round(PRINT_DOWNLOAD_EDGE_PADDING * (frameW / LAYOUT_NATURAL_WIDTH));
 }
 
 function measureFrameContentBounds(frameImg) {
@@ -357,23 +418,6 @@ function measureFrameContentBounds(frameImg) {
   }
 
   return { top, bottom };
-}
-
-function getPrintCropRect(frameImg, frameConfig, frameH) {
-  const bounds = measureFrameContentBounds(frameImg);
-  const photosBottom = getPhotosBottomPx(frameConfig, frameH);
-  const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
-  const bottom = Math.max(bounds.bottom, Math.ceil(photosBottom) - 1);
-
-  return {
-    top,
-    height: Math.max(1, bottom - top + 1),
-  };
-}
-
-/** @deprecated use measureFrameContentBounds */
-function measureFrameTopMargin(frameImg) {
-  return measureFrameContentBounds(frameImg).top;
 }
 
 async function measureThankYouTextHeight() {
@@ -424,7 +468,7 @@ async function drawComposite(canvas, frameConfig, photos) {
 }
 
 async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, options = {}) {
-  const { thermal = true } = options;
+  const { thermal = true, edgePadding = false } = options;
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
@@ -433,12 +477,16 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
   const crop = getPrintCropRect(frameImg, frameConfig, frameH);
+  const frameDrawH = frameH - crop.top;
   const qrSize = getPrintQrSize(frameW);
   const qrX = (frameW - qrSize) / 2;
-  const qrY = crop.height + PRINT_QR_GAP_FROM_PHOTO;
+  const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
+  const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
+  const qrY = padTop + (PRINT_QR_SLOT.top / 100) * frameH - crop.top;
   const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
   const textHeight = await measureThankYouTextHeight();
-  const totalH = textY + textHeight + PRINT_BOTTOM_PADDING;
+  const contentBottom = Math.max(padTop + frameDrawH, textY + textHeight);
+  const totalH = contentBottom + padBottom;
 
   canvas.width = frameW;
   canvas.height = totalH;
@@ -448,7 +496,17 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.drawImage(frameImg, 0, crop.top, frameW, crop.height, 0, 0, frameW, crop.height);
+  ctx.drawImage(
+    frameImg,
+    0,
+    crop.top,
+    frameW,
+    frameDrawH,
+    0,
+    padTop,
+    frameW,
+    frameDrawH
+  );
 
   const slots =
     typeof getActivePhotoSlots === "function"
@@ -463,25 +521,26 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
 
     const photo = await loadImage(photos[i]);
     const x = (slot.left / 100) * frameW;
-    const y = (slot.top / 100) * frameH - crop.top;
+    const y = padTop + (slot.top / 100) * frameH - crop.top;
     const w = (slot.width / 100) * frameW;
     const h = (slot.height / 100) * frameH;
     const rotation = slot.rotation || 0;
+    const fit = slot.fit || "cover";
 
-    if (y + h < 0 || y > crop.height) continue;
+    if (y + h < padTop || y > padTop + frameDrawH) continue;
 
     if (thermal) {
-      drawImageCoverForPrint(ctx, photo, x, y, w, h, radius, rotation);
+      drawImageCoverForPrint(ctx, photo, x, y, w, h, radius, rotation, fit);
     } else {
-      drawImageCoverRounded(ctx, photo, x, y, w, h, radius, rotation);
+      drawImageInSlotRounded(ctx, photo, x, y, w, h, radius, rotation, fit);
     }
   }
 
-  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize, { background: false });
   await drawThankYouText(ctx, frameW / 2, textY);
 
   console.info(
-    `[print] canvas ${frameW}x${totalH} cropTop=${crop.top} layoutH=${crop.height} qrY=${qrY}`
+    `[print] canvas ${frameW}x${totalH} cropTop=${crop.top} layoutH=${frameDrawH} qrY=${Math.round(qrY)} padTop=${padTop} padBottom=${padBottom}`
   );
 
   return canvas;
@@ -536,6 +595,7 @@ async function preparePrintReceipt() {
   const downloadCanvas = document.createElement("canvas");
   await drawCompositeForPrint(downloadCanvas, layout, data.photos, qrCodeUrl, {
     thermal: false,
+    edgePadding: true,
   });
   const scaledColor = scaleCanvasForThermal(downloadCanvas, RAWBT_TARGET_WIDTH_PX);
   console.info(`[print] upload size ${scaledColor.width}x${scaledColor.height}`);
@@ -606,9 +666,25 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth47";
+const PRINT_BUILD = "booth74";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
+
+function getPrintJobCompleteDelayMs(driver, copies = 1) {
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+
+  if (driver === "rawbt") {
+    return RAWBT_CUT_DELAY_MS + 2000 + (count - 1) * RAWBT_COPY_DELAY_MS;
+  }
+  if (driver === "thermer") {
+    return 4500 + (count - 1) * THERMER_COPY_DELAY_MS;
+  }
+  if (driver === "escpos") {
+    return 3500 + (count - 1) * ESCPOS_COPY_DELAY_MS;
+  }
+
+  return PRINT_JOB_DISPATCH_DELAY_MS;
+}
 
 function getPrintDriver() {
   const valid = new Set(["thermer", "escpos", "rawbt", "native", "browser"]);
@@ -953,7 +1029,9 @@ async function printViaEscPos(source, copies = 1, urls = {}) {
     console.info(`[print] escpos launch=${method || "failed"}`);
   }
 
-  await new Promise((resolve) => window.setTimeout(resolve, PRINT_JOB_DISPATCH_DELAY_MS));
+  await new Promise((resolve) =>
+    window.setTimeout(resolve, getPrintJobCompleteDelayMs("escpos", count))
+  );
 }
 
 function launchRawBtPrint(targetUrl) {
@@ -982,7 +1060,9 @@ async function printViaThermer(source, copies = 1, urls = {}) {
   }
 
   refocusBoothAfterPrint();
-  await new Promise((resolve) => window.setTimeout(resolve, PRINT_JOB_DISPATCH_DELAY_MS));
+  await new Promise((resolve) =>
+    window.setTimeout(resolve, getPrintJobCompleteDelayMs("thermer", count))
+  );
 }
 
 async function printViaRawBt(source, copies = 1, urls = {}) {
@@ -1018,7 +1098,9 @@ async function printViaRawBt(source, copies = 1, urls = {}) {
   }
 
   refocusBoothAfterPrint();
-  await new Promise((resolve) => window.setTimeout(resolve, PRINT_JOB_DISPATCH_DELAY_MS));
+  await new Promise((resolve) =>
+    window.setTimeout(resolve, getPrintJobCompleteDelayMs("rawbt", count))
+  );
 }
 
 function printViaFully(source, copies = 1) {
@@ -1040,7 +1122,7 @@ function printViaFully(source, copies = 1) {
     };
 
     window.onafterprint = finish;
-    window.setTimeout(finish, 120000);
+    window.setTimeout(finish, PRINT_COMPLETE_FALLBACK_MS);
 
     setupPrintCopies(copies)
       .then(() => {
@@ -1108,7 +1190,7 @@ function printViaBrowserIframe(source, copies = 1) {
     };
 
     win.onafterprint = finish;
-    window.setTimeout(finish, 60000);
+    window.setTimeout(finish, PRINT_COMPLETE_FALLBACK_MS);
 
     window.setTimeout(() => {
       win.focus();
@@ -1131,7 +1213,7 @@ function printViaBrowserOnPage(source, copies = 1) {
     };
 
     window.onafterprint = finish;
-    window.setTimeout(finish, 120000);
+    window.setTimeout(finish, PRINT_COMPLETE_FALLBACK_MS);
 
     setupPrintCopies(copies)
       .then(() => {

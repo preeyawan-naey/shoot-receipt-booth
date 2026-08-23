@@ -76,6 +76,28 @@ function playReceiptPrintAnimation() {
   receiptEl.addEventListener("animationend", onDone);
 }
 
+function waitForReceiptPrintAnimation(timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const receiptEl = document.getElementById("receipt-composite");
+    if (!receiptEl) {
+      resolve();
+      return;
+    }
+
+    const onDone = (e) => {
+      if (e.animationName !== "home-receipt-out") return;
+      receiptEl.removeEventListener("animationend", onDone);
+      resolve();
+    };
+
+    receiptEl.addEventListener("animationend", onDone);
+    window.setTimeout(() => {
+      receiptEl.removeEventListener("animationend", onDone);
+      resolve();
+    }, timeoutMs);
+  });
+}
+
 /**
  * แสดง preview (ไม่มี QR) + animation ปริ้นออกจากเครื่องพิมพ์
  */

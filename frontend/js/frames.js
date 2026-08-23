@@ -47,7 +47,7 @@ const LAYOUT_FRAME_SLOT_MAP = {
 
 function getCaptureSizeForSlot(slot) {
   const fallback = { width: 960, height: 720, ratio: 960 / 720 };
-  if (!slot) return fallback;
+  if (!slot || slot.fit === "contain") return fallback;
 
   let slotW = slot.width;
   let slotH = slot.height;
