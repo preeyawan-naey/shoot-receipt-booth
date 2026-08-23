@@ -210,10 +210,7 @@ function triggerFlash() {
   setTimeout(() => flash.classList.remove("flash-overlay--active"), 280);
 }
 
-const CAPTURE_LANDSCAPE_WIDTH = 960;
-const CAPTURE_LANDSCAPE_HEIGHT = 720;
-
-function getLandscapeVideoCrop(vw, vh, targetRatio = CAPTURE_LANDSCAPE_WIDTH / CAPTURE_LANDSCAPE_HEIGHT) {
+function getVideoCrop(vw, vh, targetRatio) {
   const videoRatio = vw / vh;
 
   if (videoRatio > targetRatio) {
@@ -237,15 +234,19 @@ function capturePhoto() {
 
   const vw = video.videoWidth || 1280;
   const vh = video.videoHeight || 720;
-  const crop = getLandscapeVideoCrop(vw, vh);
+  const captureSize =
+    typeof getCaptureSizeForLayout === "function"
+      ? getCaptureSizeForLayout(cameraState.frame, cameraState.currentShot)
+      : { width: 960, height: 720, ratio: 960 / 720 };
+  const crop = getVideoCrop(vw, vh, captureSize.ratio);
 
-  canvas.width = CAPTURE_LANDSCAPE_WIDTH;
-  canvas.height = CAPTURE_LANDSCAPE_HEIGHT;
+  canvas.width = captureSize.width;
+  canvas.height = captureSize.height;
 
   const ctx = canvas.getContext("2d");
   ctx.save();
   ctx.filter = CAMERA_BRIGHTNESS_FILTER;
-  ctx.translate(CAPTURE_LANDSCAPE_WIDTH, 0);
+  ctx.translate(captureSize.width, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(
     video,
@@ -255,8 +256,8 @@ function capturePhoto() {
     crop.sHeight,
     0,
     0,
-    CAPTURE_LANDSCAPE_WIDTH,
-    CAPTURE_LANDSCAPE_HEIGHT
+    captureSize.width,
+    captureSize.height
   );
   ctx.restore();
 

@@ -45,6 +45,39 @@ const LAYOUT_FRAME_SLOT_MAP = {
   },
 };
 
+function getCaptureSizeForSlot(slot) {
+  const fallback = { width: 960, height: 720, ratio: 960 / 720 };
+  if (!slot) return fallback;
+
+  let slotW = slot.width;
+  let slotH = slot.height;
+  if (Math.abs(slot.rotation || 0) === 90) {
+    [slotW, slotH] = [slotH, slotW];
+  }
+
+  const pixelW = (slotW / 100) * LAYOUT_NATURAL_WIDTH;
+  const pixelH = (slotH / 100) * LAYOUT_NATURAL_HEIGHT;
+  const slotRatio = pixelW / pixelH;
+
+  if (slotRatio >= 1) {
+    const width = 960;
+    const height = Math.max(1, Math.round(width / slotRatio));
+    return { width, height, ratio: width / height };
+  }
+
+  const height = 960;
+  const width = Math.max(1, Math.round(height * slotRatio));
+  return { width, height, ratio: width / height };
+}
+
+function getCaptureSizeForLayout(layout, shotIndex = 0) {
+  const slots =
+    typeof getActivePhotoSlots === "function"
+      ? getActivePhotoSlots(layout)
+      : layout?.slots;
+  return getCaptureSizeForSlot(slots?.[shotIndex] || slots?.[0]);
+}
+
 function getLayoutFrameDir(layoutId) {
   return LAYOUT_FRAME_DIR[layoutId] || null;
 }

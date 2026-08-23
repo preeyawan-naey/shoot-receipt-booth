@@ -3,9 +3,9 @@ const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 }
 const PRINT_QR_GAP_FROM_PHOTO = 24;
 const PRINT_QR_TEXT_GAP = 24;
 const PRINT_BOTTOM_PADDING = 12;
-const PRINT_EXTRA_TOP_TRIM = 28;
+const PRINT_EXTRA_TOP_TRIM = 0;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
-const PRINT_THANK_YOU_FONT_SIZE = 36;
+const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
 const PRINT_PHOTO_RENDER_SCALE = 3;
 const PRINT_PHOTO_GAMMA = 0.72;
@@ -83,7 +83,10 @@ function drawImageCover(ctx, img, dx, dy, dw, dh) {
   const slotRatio = dw / dh;
   const imgRatio = sw / sh;
 
-  let sx, sy, sWidth, sHeight;
+  let sx;
+  let sy;
+  let sWidth;
+  let sHeight;
 
   if (imgRatio > slotRatio) {
     sHeight = sh;
