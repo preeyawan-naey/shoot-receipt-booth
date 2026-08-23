@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth66";
+const BOOTH_BUILD = "booth67";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -348,6 +348,8 @@ function startQrCountdown(seconds = QR_HOME_COUNTDOWN_SEC) {
 }
 
 function showQrDownloadPage() {
+  hidePrintOverlay();
+
   const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
   const qrImage = document.getElementById("qr-download-image");
   const statusEl = document.getElementById("qr-download-status");
