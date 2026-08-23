@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth67";
+const BOOTH_BUILD = "booth68";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {

@@ -530,7 +530,11 @@ async function preparePrintReceipt() {
 
   await drawCompositeForPrint(printCanvas, layout, data.photos, qrCodeUrl, { thermal: true });
 
-  const scaledColor = scaleCanvasForThermal(printCanvas, RAWBT_TARGET_WIDTH_PX);
+  const downloadCanvas = document.createElement("canvas");
+  await drawCompositeForPrint(downloadCanvas, layout, data.photos, qrCodeUrl, {
+    thermal: false,
+  });
+  const scaledColor = scaleCanvasForThermal(downloadCanvas, RAWBT_TARGET_WIDTH_PX);
   console.info(`[print] upload size ${scaledColor.width}x${scaledColor.height}`);
   const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
