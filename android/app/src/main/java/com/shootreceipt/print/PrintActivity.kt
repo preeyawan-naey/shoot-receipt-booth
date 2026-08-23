@@ -51,6 +51,7 @@ class PrintActivity : android.app.Activity() {
         const val ACTION_CUT = "com.shootreceipt.print.action.CUT"
         const val EXTRA_PRINT_URL = "com.shootreceipt.print.extra.PRINT_URL"
         const val EXTRA_COPIES = "com.shootreceipt.print.extra.COPIES"
+        const val EXTRA_CALLBACK_URL = "com.shootreceipt.print.extra.CALLBACK_URL"
     }
 }
 
@@ -119,6 +120,22 @@ object PrintEngine {
         }
 
         return 1
+    }
+
+    fun resolveCallbackUrl(intent: android.content.Intent?): String? {
+        if (intent == null) return null
+
+        intent.getStringExtra(PrintActivity.EXTRA_CALLBACK_URL)?.takeIf { it.startsWith("http") }?.let {
+            return it
+        }
+
+        intent.getStringExtra("callbackUrl")?.takeIf { it.startsWith("http") }?.let { return it }
+
+        intent.data?.let { uri ->
+            uri.getQueryParameter("shoot_callback")?.takeIf { it.startsWith("http") }?.let { return it }
+        }
+
+        return null
     }
 
     private fun copiesFromUri(uri: Uri): Int? {

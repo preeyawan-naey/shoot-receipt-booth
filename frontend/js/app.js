@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth83";
+const BOOTH_BUILD = "booth84";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -35,7 +35,28 @@ function updatePrintCopiesUI() {
   if (btnPlus) btnPlus.disabled = printCopies >= MAX_PRINT_COPIES;
 }
 
+function handleNativePrintResumeOnInit() {
+  if (typeof resumeNativePrintCallbackOnLoad !== "function") return;
+
+  const payload = resumeNativePrintCallbackOnLoad();
+  if (!payload) return;
+
+  console.info(`[print] native resume status=${payload.status} job=${payload.jobId}`);
+
+  if (payload.status === "ok") {
+    hidePrintOverlay();
+    showQrDownloadPage();
+    return;
+  }
+
+  if (payload.status === "error") {
+    hidePrintOverlay();
+    alert("ปริ้นไม่สำเร็จ — ตรวจสอบเครื่องพิมพ์ USB");
+  }
+}
+
 function initApp() {
+  handleNativePrintResumeOnInit();
   initNavigation();
   initLayoutGrid();
   bindEvents();
@@ -286,13 +307,17 @@ function bindEvents() {
       showPrintOverlay(copies > 1 ? `กำลังพิมพ์ ${copies} ใบ...` : "กำลังพิมพ์...");
       playReceiptPrintAnimation();
 
-      await Promise.all([
-        printReceiptDirect(copies, {
-          printUrl: receipt.printUrl,
-          downloadUrl: receipt.downloadUrl,
-        }),
-        waitForReceiptPrintAnimation(),
-      ]);
+      const driver = typeof getPrintDriver === "function" ? getPrintDriver() : "browser";
+      const printTask = printReceiptDirect(copies, {
+        printUrl: receipt.printUrl,
+        downloadUrl: receipt.downloadUrl,
+      });
+
+      if (driver === "native") {
+        await printTask;
+      } else {
+        await Promise.all([printTask, waitForReceiptPrintAnimation()]);
+      }
 
       showPrintOverlay("ปริ้นเสร็จแล้ว!");
       await new Promise((resolve) => window.setTimeout(resolve, 500));

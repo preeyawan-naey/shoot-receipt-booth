@@ -700,6 +700,10 @@ console.info(`[print] composite ${PRINT_BUILD}`);
 function getPrintJobCompleteDelayMs(driver, copies = 1) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
 
+  if (driver === "native") {
+    return 0;
+  }
+
   if (driver === "rawbt") {
     return RAWBT_CUT_DELAY_MS + 2000 + (count - 1) * RAWBT_COPY_DELAY_MS;
   }
@@ -729,13 +733,13 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // RawBT via Supabase URL (proven on this kiosk)
+  // Native Shoot Print APK (default on kiosk)
   if (getFullyBridge()) {
-    return "rawbt";
+    return "native";
   }
 
   if (/Android/i.test(navigator.userAgent)) {
-    return "rawbt";
+    return "native";
   }
 
   return "browser";

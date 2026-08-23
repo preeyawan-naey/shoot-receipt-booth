@@ -1,6 +1,6 @@
 /**
  * Shoot Print Bridge — native Android APK (com.shootreceipt.print)
- * Headless PrintJobService — Fully stays fullscreen
+ * Headless PrintJobService — APK callbacks to booth when print finishes
  */
 
 const NATIVE_PRINT_PACKAGE = "com.shootreceipt.print";
@@ -9,11 +9,152 @@ const NATIVE_PRINT_ACTION_VIEW = "android.intent.action.VIEW";
 const NATIVE_PRINT_ACTION_PRINT = "com.shootreceipt.print.action.PRINT";
 const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
 const NATIVE_PRINT_COPIES_EXTRA = "com.shootreceipt.print.extra.COPIES";
+const NATIVE_PRINT_CALLBACK_EXTRA = "com.shootreceipt.print.extra.CALLBACK_URL";
 /** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
 const NATIVE_LAUNCH_FLAGS = "0x10010000";
-/** One native job — download once, print N copies inside APK */
-const NATIVE_JOB_WAIT_MS = 22000;
-const NATIVE_EXTRA_COPY_WAIT_MS = 12000;
+const NATIVE_CALLBACK_DONE_PARAM = "shoot_print_done";
+const NATIVE_CALLBACK_JOB_PARAM = "job";
+const NATIVE_CALLBACK_STATUS_PARAM = "status";
+const NATIVE_CALLBACK_TIMEOUT_MS = 45000;
+const NATIVE_PRINT_FLOW_KEY = "shoot_print_flow";
+
+let nativePrintWaiter = null;
+
+function createNativePrintJobId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `print-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildNativeCallbackUrl(jobId) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(NATIVE_CALLBACK_DONE_PARAM);
+  url.searchParams.delete(NATIVE_CALLBACK_JOB_PARAM);
+  url.searchParams.delete(NATIVE_CALLBACK_STATUS_PARAM);
+  url.searchParams.set(NATIVE_CALLBACK_DONE_PARAM, "1");
+  url.searchParams.set(NATIVE_CALLBACK_JOB_PARAM, jobId);
+  return url.toString();
+}
+
+function stripNativeCallbackParamsFromUrl() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(NATIVE_CALLBACK_DONE_PARAM) !== "1") {
+    return null;
+  }
+
+  const jobId = url.searchParams.get(NATIVE_CALLBACK_JOB_PARAM);
+  const status = url.searchParams.get(NATIVE_CALLBACK_STATUS_PARAM);
+
+  url.searchParams.delete(NATIVE_CALLBACK_DONE_PARAM);
+  url.searchParams.delete(NATIVE_CALLBACK_JOB_PARAM);
+  url.searchParams.delete(NATIVE_CALLBACK_STATUS_PARAM);
+
+  const cleaned = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(null, "", cleaned);
+
+  return { jobId, status };
+}
+
+function finishNativePrintWaiter(result) {
+  if (!nativePrintWaiter) return false;
+  const waiter = nativePrintWaiter;
+  nativePrintWaiter = null;
+  waiter.cleanup?.();
+  waiter.finish(result);
+  return true;
+}
+
+function consumeNativePrintCallbackFromUrl() {
+  const payload = stripNativeCallbackParamsFromUrl();
+  if (!payload?.jobId || !payload.status) return null;
+
+  console.info(
+    `[print] native callback job=${payload.jobId} status=${payload.status}`
+  );
+
+  if (finishNativePrintWaiter(payload)) {
+    return payload;
+  }
+
+  return payload;
+}
+
+function waitForNativePrintCallback(jobId, timeoutMs = NATIVE_CALLBACK_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(() => {
+      console.warn(`[print] native callback timeout job=${jobId}`);
+      finishNativePrintWaiter({ jobId, status: "timeout" });
+    }, timeoutMs);
+
+    nativePrintWaiter = {
+      jobId,
+      finish: (result) => {
+        window.clearTimeout(timeout);
+        resolve(result);
+      },
+      cleanup: () => {
+        window.clearTimeout(timeout);
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("focus", onVisible);
+        window.removeEventListener("pageshow", onPageShow);
+      },
+    };
+
+    function onVisible() {
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      const payload = consumeNativePrintCallbackFromUrl();
+      if (payload?.jobId === jobId) {
+        finishNativePrintWaiter(payload);
+      }
+    }
+
+    function onPageShow(event) {
+      if (event.persisted) onVisible();
+    }
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+
+    const immediate = consumeNativePrintCallbackFromUrl();
+    if (immediate?.jobId === jobId) {
+      finishNativePrintWaiter(immediate);
+    }
+  });
+}
+
+function persistNativePrintFlow(jobId) {
+  sessionStorage.setItem(
+    NATIVE_PRINT_FLOW_KEY,
+    JSON.stringify({ jobId, startedAt: Date.now() })
+  );
+}
+
+function clearNativePrintFlow() {
+  sessionStorage.removeItem(NATIVE_PRINT_FLOW_KEY);
+}
+
+function readNativePrintFlow() {
+  try {
+    return JSON.parse(sessionStorage.getItem(NATIVE_PRINT_FLOW_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function resumeNativePrintCallbackOnLoad() {
+  const payload = consumeNativePrintCallbackFromUrl();
+  if (!payload?.jobId || !payload.status) return null;
+
+  const flow = readNativePrintFlow();
+  if (!flow || flow.jobId !== payload.jobId) {
+    return payload;
+  }
+
+  clearNativePrintFlow();
+  return payload;
+}
 
 function withNativeCopiesInUrl(httpUrl, copies = 1) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
@@ -29,7 +170,7 @@ function withNativeCopiesInUrl(httpUrl, copies = 1) {
   }
 }
 
-function buildNativePrintIntentUrl(httpUrl, copies = 1) {
+function buildNativePrintIntentUrl(httpUrl, copies = 1, callbackUrl = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const encoded = encodeURIComponent(targetUrl);
@@ -43,6 +184,10 @@ function buildNativePrintIntentUrl(httpUrl, copies = 1) {
   if (count > 1) {
     url += `i.${NATIVE_PRINT_COPIES_EXTRA}=${count};`;
     url += `i.copies=${count};`;
+  }
+
+  if (callbackUrl) {
+    url += `S.${NATIVE_PRINT_CALLBACK_EXTRA}=${encodeURIComponent(callbackUrl)};`;
   }
 
   url += `package=${NATIVE_PRINT_PACKAGE};end;`;
@@ -70,10 +215,10 @@ function buildNativePackageViewIntentUrl(httpUrl, copies = 1) {
   );
 }
 
-function launchNativeViaFully(api, httpUrl, copies = 1) {
+function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
-  const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies);
+  const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies, callbackUrl);
 
   if (typeof api.startIntent === "function") {
     try {
@@ -112,38 +257,36 @@ function launchNativeViaFully(api, httpUrl, copies = 1) {
   return null;
 }
 
-function refocusBoothAfterNativePrint(totalWaitMs) {
+function refocusBoothAfterNativePrint(delayMs = 1500) {
   const api = getFullyBridge();
   if (!api || typeof api.bringToForeground !== "function") return;
 
-  for (const delayMs of [3000, totalWaitMs, totalWaitMs + 4000]) {
-    window.setTimeout(() => {
-      try {
-        api.bringToForeground();
-      } catch (err) {
-        console.warn("[print] bringToForeground native failed", err);
-      }
-    }, delayMs);
-  }
+  window.setTimeout(() => {
+    try {
+      api.bringToForeground();
+    } catch (err) {
+      console.warn("[print] bringToForeground native failed", err);
+    }
+  }, delayMs);
 }
 
-function launchNativePrint(httpUrl, copies = 1) {
+function launchNativePrint(httpUrl, copies = 1, callbackUrl = null) {
   if (!httpUrl || !/^https?:\/\//i.test(httpUrl)) {
     console.error("[print] native invalid image url", httpUrl);
     return null;
   }
 
   logFullyPrintDiagnostics();
-  console.info(`[print] native url=${httpUrl} copies=${copies}`);
+  console.info(`[print] native url=${httpUrl} copies=${copies} callback=${callbackUrl || "(none)"}`);
 
   const api = getFullyBridge();
   if (api) {
-    const method = launchNativeViaFully(api, httpUrl, copies);
+    const method = launchNativeViaFully(api, httpUrl, copies, callbackUrl);
     if (method) return method;
   }
 
   try {
-    window.location.href = buildNativePrintIntentUrl(httpUrl, copies);
+    window.location.href = buildNativePrintIntentUrl(httpUrl, copies, callbackUrl);
     return "location-intent-native";
   } catch {
     return null;
@@ -156,17 +299,34 @@ async function printViaNative(source, copies = 1, urls = {}) {
 
   if (!imageUrl) {
     console.error("[print] native requires http image url — none available");
-    return;
+    throw new Error("ไม่พบ URL รูปสำหรับปริ้น");
   }
 
-  const method = launchNativePrint(imageUrl, count);
-  console.info(`[print] native job launch=${method || "failed"} copies=${count}`);
+  const jobId = createNativePrintJobId();
+  const callbackUrl = buildNativeCallbackUrl(jobId);
+  persistNativePrintFlow(jobId);
+
+  const callbackPromise = waitForNativePrintCallback(jobId);
+  const method = launchNativePrint(imageUrl, count, callbackUrl);
+  console.info(`[print] native job launch=${method || "failed"} copies=${count} job=${jobId}`);
 
   if (!method) {
+    clearNativePrintFlow();
+    finishNativePrintWaiter({ jobId, status: "error" });
     throw new Error("เปิด Shoot Print ไม่ได้ — ตรวจสอบว่าติดตั้ง APK และอนุญาต USB");
   }
 
-  const totalWaitMs = NATIVE_JOB_WAIT_MS + Math.max(0, count - 1) * NATIVE_EXTRA_COPY_WAIT_MS;
-  await new Promise((resolve) => window.setTimeout(resolve, totalWaitMs));
-  refocusBoothAfterNativePrint(totalWaitMs);
+  const result = await callbackPromise;
+  clearNativePrintFlow();
+
+  if (result.status === "error") {
+    throw new Error("ปริ้นไม่สำเร็จ — ตรวจสอบเครื่องพิมพ์ USB");
+  }
+
+  if (result.status === "timeout") {
+    console.warn("[print] native finished without callback — continuing");
+  }
+
+  refocusBoothAfterNativePrint(800);
+  return result;
 }

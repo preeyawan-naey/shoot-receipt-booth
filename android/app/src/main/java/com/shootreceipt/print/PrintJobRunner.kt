@@ -17,6 +17,8 @@ object PrintJobRunner {
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
 
         wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+        var success = false
+        val callbackUrl = PrintEngine.resolveCallbackUrl(intent)
         try {
             when (intent?.action) {
                 PrintActivity.ACTION_CUT -> {
@@ -37,10 +39,12 @@ object PrintJobRunner {
                     PrintEngine.printImageUrl(appContext, url, copies)
                 }
             }
+            success = true
             Log.i(TAG, "Print job completed")
         } catch (e: Exception) {
             Log.e(TAG, "Print job failed", e)
         } finally {
+            PrintCallback.notify(appContext, callbackUrl, success)
             if (wakeLock.isHeld) {
                 wakeLock.release()
             }

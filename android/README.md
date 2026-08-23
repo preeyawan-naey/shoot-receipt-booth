@@ -9,7 +9,8 @@ Fully Kiosk (booth web)
   → driver=native
   → fully.startApplication("com.shootreceipt.print", VIEW, supabaseImageUrl)
   → PrintActivity (no UI)
-  → download JPEG → ESC/POS raster → USB printer
+  → APK callbacks https://booth/?shoot_print_done=1&job=…&status=ok
+  → booth closes print modal / goes to QR page
 ```
 
 Fallback: keep `driver=rawbt` (rawbt11) if native fails.
@@ -102,7 +103,8 @@ location.reload();
 | Package | `com.shootreceipt.print` |
 | Print action | `android.intent.action.VIEW` + `https://...` image URL |
 | Cut action | `com.shootreceipt.print.action.CUT` |
-| Extra (alt) | `com.shootreceipt.print.extra.PRINT_URL` |
+| Extra (callback) | `com.shootreceipt.print.extra.CALLBACK_URL` |
+| Callback query | `shoot_print_done=1&job={uuid}&status=ok|error` |
 
 Fully call (same pattern as RawBT):
 
