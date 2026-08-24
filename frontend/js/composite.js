@@ -3,10 +3,10 @@ const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 }
 const PRINT_QR_GAP_FROM_PHOTO = 16;
 const PRINT_QR_TEXT_GAP = 12;
 const PRINT_QR_EXTRA_DOWN_RATIO = 0;
-const PRINT_EDGE_PADDING = 24;
-const PRINT_BOTTOM_PADDING = PRINT_EDGE_PADDING;
+/** Bottom white after thank-you text (px at 662w). Top uses auto-detect only — do not trim into logo */
+const PRINT_BOTTOM_PADDING = 24;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
-const PRINT_EXTRA_TOP_TRIM = PRINT_EDGE_PADDING;
+const PRINT_EXTRA_TOP_TRIM = 0;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
