@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth91";
+const BOOTH_BUILD = "booth92";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -56,8 +56,8 @@ function handleNativePrintResumeOnInit() {
 }
 
 function initApp() {
-  handleNativePrintResumeOnInit();
   initNavigation();
+  handleNativePrintResumeOnInit();
   initLayoutGrid();
   bindEvents();
   void initBoothSettings();

@@ -278,8 +278,27 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
   const launchUrl = withNativeLaunchParams(httpUrl, count, callbackUrl, returnPackage);
   const bareIntentUrl = buildNativeBareIntentUrl(httpUrl, count, callbackUrl, returnPackage);
 
+  // startApplication first — reliable on Fully; avoids system UI block from startIntent
+  if (typeof api.startApplication === "function") {
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication native view failed", err);
+    }
+  }
+
+  // intent:#Intent fallback — may be blocked by Fully on some devices
+  if (typeof api.startIntent === "function") {
+    try {
+      api.startIntent(bareIntentUrl);
+      return count > 1 ? "fully-startIntent-bare-copies" : "fully-startIntent-bare";
+    } catch (err) {
+      console.warn("[print] fully.startIntent bare failed", err);
+    }
+  }
+
   const intentCandidates = [
-    { id: "startIntent-bare", url: bareIntentUrl },
     {
       id: "startIntent-component",
       url: buildNativeIntentUrl(httpUrl, count, callbackUrl, returnPackage, {
@@ -294,27 +313,8 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
     },
   ];
 
-  // intent:#Intent (no https prefix) — bypasses Fully URL whitelist on Supabase
   if (typeof api.startIntent === "function") {
-    try {
-      api.startIntent(bareIntentUrl);
-      return count > 1 ? "fully-startIntent-bare-copies" : "fully-startIntent-bare";
-    } catch (err) {
-      console.warn("[print] fully.startIntent bare failed", err);
-    }
-  }
-
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
-      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native view failed", err);
-    }
-  }
-
-  if (typeof api.startIntent === "function") {
-    for (const { id, url } of intentCandidates.slice(1)) {
+    for (const { id, url } of intentCandidates) {
       try {
         api.startIntent(url);
         return count > 1 ? `fully-${id}-copies-${count}` : `fully-${id}`;
@@ -409,13 +409,8 @@ async function printViaNative(source, copies = 1, urls = {}) {
   }
 
   if (result.status === "timeout") {
+    console.warn("[print] native finished without callback — continuing to QR");
     refocusBoothAfterNativePrint(0);
-    throw new Error(
-      "ปริ้นไม่ตอบสนอง — ตรวจสอบ:\n" +
-        "1) ติดตั้ง APK com.shootreceipt.print\n" +
-        "2) Fully → Kiosk Mode → App Whitelist → com.shootreceipt.print\n" +
-        "3) ทดสอบใน Console: testNativePrintLaunch()"
-    );
   }
 
   return result;
