@@ -9,7 +9,8 @@ Fully Kiosk (booth web)
   → driver=native
   → fully.startApplication("com.shootreceipt.print", VIEW, supabaseImageUrl)
   → PrintActivity (no UI)
-  → fully.startIntent (component + callback extras) → PrintActivity
+  → fully.startApplication("com.shootreceipt.print", VIEW, imageUrl?shoot_callback=…)
+  → PrintActivity (callback embedded in URL — startIntent blocked by Fully whitelist)
   → APK prints → callbacks booth URL inside Fully (`de.ozerov.fully`)
   → booth closes print modal / goes to QR page
 ```
@@ -61,12 +62,27 @@ Release build (signing required):
 
 ## Fully Kiosk setup
 
-1. Install APK
-2. **Advanced Web Settings → Enable JavaScript Interface** (already on for rawbt)
-3. **Allow opening other apps** ✅
-4. **Kiosk Mode → App Whitelist** → add `com.shootreceipt.print` (required — same as RawBT)
-5. **URL Whitelist** → include booth URL + Supabase storage domain
-6. First print: if asked “Open with Shoot Print?” → **Always**
+1. Install APK (`app-debug.apk`)
+2. **Advanced Web Settings → Enable JavaScript Interface** ✅
+3. **Web Content Settings → Open Other URL Schemes** ✅
+4. **URL Whitelist** → booth URL + Supabase domain (คุณตั้งแล้ว ✅)
+5. **Kiosk Mode → App Whitelist** → เพิ่มบรรทัดนี้ (สำคัญ — ไม่ใช่ URL Whitelist):
+   ```
+   com.shootreceipt.print
+   ```
+6. Restart Fully Kiosk
+7. First print: USB permission dialog → Allow + Always
+
+### ทดสอบว่า APK ถูกเปิดหรือไม่
+
+หลังถ่ายรูปแล้ว เปิด Console พิมพ์:
+
+```javascript
+testNativePrintLaunch()
+```
+
+- เห็น Toast **"Shoot Print กำลังปริ้น..."** → APK ทำงาน (ถ้าไม่พิมพ์ = ปัญหา USB/เครื่องพิมพ์)
+- **ไม่เห็น Toast** → APK ไม่ถูกเปิด → ตรวจ App Whitelist ข้อ 5
 
 ## Enable native driver on booth
 

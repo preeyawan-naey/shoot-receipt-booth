@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth88";
+const BOOTH_BUILD = "booth90";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -326,7 +326,11 @@ function bindEvents() {
     } catch (error) {
       hidePrintOverlay();
       console.error(error);
-      alert("ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
+      const msg =
+        error?.message && /ปริ้น|Shoot Print|APK|USB/i.test(error.message)
+          ? error.message
+          : "ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่";
+      alert(msg);
     } finally {
       btn.disabled = false;
       btn.textContent = "ปริ้น";

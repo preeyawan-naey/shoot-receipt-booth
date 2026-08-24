@@ -189,6 +189,25 @@ function withNativeCopiesInUrl(httpUrl, copies = 1) {
   }
 }
 
+/** Embed callback in print URL — startApplication cannot pass intent extras on this kiosk */
+function withNativeLaunchParams(httpUrl, copies = 1, callbackUrl = null, returnPackage = null) {
+  let targetUrl = withNativeCopiesInUrl(httpUrl, copies);
+  if (!callbackUrl && !returnPackage) return targetUrl;
+
+  try {
+    const url = new URL(targetUrl);
+    if (callbackUrl) url.searchParams.set("shoot_callback", callbackUrl);
+    if (returnPackage) url.searchParams.set("shoot_return_pkg", returnPackage);
+    return url.toString();
+  } catch {
+    const parts = [];
+    if (callbackUrl) parts.push(`shoot_callback=${encodeURIComponent(callbackUrl)}`);
+    if (returnPackage) parts.push(`shoot_return_pkg=${encodeURIComponent(returnPackage)}`);
+    const joiner = targetUrl.includes("?") ? "&" : "?";
+    return `${targetUrl}${joiner}${parts.join("&")}`;
+  }
+}
+
 function buildNativeIntentUrl(
   httpUrl,
   copies = 1,
@@ -230,7 +249,17 @@ function buildNativeIntentUrl(
 
 function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, returnPackage = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const targetUrl = withNativeCopiesInUrl(httpUrl, count);
+  const launchUrl = withNativeLaunchParams(httpUrl, count, callbackUrl, returnPackage);
+
+  // startApplication — same path as RawBT; startIntent is blocked by Fully URL whitelist on Supabase
+  if (typeof api.startApplication === "function") {
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication native view failed", err);
+    }
+  }
 
   const intentCandidates = [
     {
@@ -251,22 +280,11 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
     for (const { id, url } of intentCandidates) {
       try {
         api.startIntent(url);
+        console.warn("[print] startIntent used — add Supabase to Fully URL whitelist if print fails");
         return count > 1 ? `fully-${id}-copies-${count}` : `fully-${id}`;
       } catch (err) {
         console.warn(`[print] fully.${id} native failed`, err);
       }
-    }
-  }
-
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, targetUrl);
-      console.warn(
-        "[print] startApplication omits callback extras — prefer startIntent; whitelist com.shootreceipt.print in Fully"
-      );
-      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native view failed", err);
     }
   }
 
@@ -302,8 +320,9 @@ function launchNativePrint(httpUrl, copies = 1, callbackUrl = null, returnPackag
   }
 
   logFullyPrintDiagnostics();
+  const launchUrl = withNativeLaunchParams(httpUrl, copies, callbackUrl, returnPackage);
   console.info(
-    `[print] native url=${httpUrl} copies=${copies} callback=${callbackUrl || "(none)"} returnPkg=${returnPackage || "(auto)"}`
+    `[print] native launchUrl=${launchUrl} copies=${copies} callback=${callbackUrl || "(none)"} returnPkg=${returnPackage || "(auto)"}`
   );
 
   const api = getFullyBridge();
@@ -356,9 +375,40 @@ async function printViaNative(source, copies = 1, urls = {}) {
   }
 
   if (result.status === "timeout") {
-    console.warn("[print] native finished without callback — continuing");
     refocusBoothAfterNativePrint(0);
+    throw new Error(
+      "ปริ้นไม่ตอบสนอง — ตรวจสอบ:\n" +
+        "1) ติดตั้ง APK com.shootreceipt.print\n" +
+        "2) Fully → Kiosk Mode → App Whitelist → com.shootreceipt.print\n" +
+        "3) ทดสอบใน Console: testNativePrintLaunch()"
+    );
   }
 
   return result;
 }
+
+/** Console diagnostic — uses last uploaded receipt URL from sessionStorage */
+function testNativePrintLaunch() {
+  const api = getFullyBridge();
+  if (!api || typeof api.startApplication !== "function") {
+    console.error("[print] TEST failed — fully.startApplication not available");
+    return false;
+  }
+
+  const imageUrl = resolveNativePrintUrl({});
+  if (!imageUrl) {
+    console.error("[print] TEST failed — no print URL (ถ่ายรูปและกดปริ้นก่อน)");
+    return false;
+  }
+
+  const launchUrl = withNativeLaunchParams(imageUrl, 1, null, getNativeReturnPackage());
+  console.info(`[print] TEST startApplication pkg=${NATIVE_PRINT_PACKAGE} url=${launchUrl}`);
+  api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+  console.info(
+    "[print] TEST sent — ถ้าไม่เห็น Toast \"Shoot Print กำลังปริ้น...\" = APK ไม่ถูกเปิด\n" +
+      "→ Fully → Kiosk Mode → App Whitelist → เพิ่ม com.shootreceipt.print"
+  );
+  return true;
+}
+
+window.testNativePrintLaunch = testNativePrintLaunch;

@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -23,6 +24,8 @@ class PrintActivity : android.app.Activity() {
                 "resolved=${PrintEngine.resolvePrintUrl(intent)} " +
                 "copies=${PrintEngine.resolveCopies(intent)} extras=${intent?.extras?.summary()}",
         )
+
+        Toast.makeText(this, "Shoot Print กำลังปริ้น...", Toast.LENGTH_SHORT).show()
 
         startPrintJob(intent)
     }
@@ -147,6 +150,10 @@ object PrintEngine {
         }
 
         intent.getStringExtra("returnPackage")?.takeIf { it.isNotBlank() }?.let { return it }
+
+        intent.data?.let { uri ->
+            uri.getQueryParameter("shoot_return_pkg")?.takeIf { it.isNotBlank() }?.let { return it }
+        }
 
         return null
     }
