@@ -9,8 +9,9 @@ Fully Kiosk (booth web)
   → driver=native
   → fully.startApplication("com.shootreceipt.print", VIEW, supabaseImageUrl)
   → PrintActivity (no UI)
-  → APK brings Fully back to foreground (no URL redirect)
-  → booth detects return → closes print modal / goes to QR page
+  → fully.startIntent (component + callback extras) → PrintActivity
+  → APK prints → callbacks booth URL inside Fully (`de.ozerov.fully`)
+  → booth closes print modal / goes to QR page
 ```
 
 Fallback: keep `driver=rawbt` (rawbt11) if native fails.
@@ -63,7 +64,9 @@ Release build (signing required):
 1. Install APK
 2. **Advanced Web Settings → Enable JavaScript Interface** (already on for rawbt)
 3. **Allow opening other apps** ✅
-4. First print: if asked “Open with Shoot Print?” → **Always**
+4. **Kiosk Mode → App Whitelist** → add `com.shootreceipt.print` (required — same as RawBT)
+5. **URL Whitelist** → include booth URL + Supabase storage domain
+6. First print: if asked “Open with Shoot Print?” → **Always**
 
 ## Enable native driver on booth
 

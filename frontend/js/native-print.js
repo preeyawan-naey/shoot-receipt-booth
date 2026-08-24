@@ -11,10 +11,9 @@ const NATIVE_PRINT_URL_EXTRA = "com.shootreceipt.print.extra.PRINT_URL";
 const NATIVE_PRINT_COPIES_EXTRA = "com.shootreceipt.print.extra.COPIES";
 const NATIVE_PRINT_CALLBACK_EXTRA = "com.shootreceipt.print.extra.CALLBACK_URL";
 const NATIVE_RETURN_PACKAGE_EXTRA = "com.shootreceipt.print.extra.RETURN_PACKAGE";
-/** Fully Kiosk Browser — callback must open here, not Chrome */
 const FULLY_KIOSK_PACKAGE = "de.ozerov.fully";
-/** NEW_TASK | NO_ANIMATION — avoid fullscreen flash */
-const NATIVE_LAUNCH_FLAGS = "0x10010000";
+/** FLAG_ACTIVITY_NEW_TASK — same as RawBT on this kiosk */
+const NATIVE_LAUNCH_FLAGS = "0x10000000";
 const NATIVE_CALLBACK_DONE_PARAM = "shoot_print_done";
 const NATIVE_CALLBACK_JOB_PARAM = "job";
 const NATIVE_CALLBACK_STATUS_PARAM = "status";
@@ -88,18 +87,8 @@ function consumeNativePrintCallbackFromUrl() {
   return payload;
 }
 
-function waitForNativePrintCallback(jobId, options = {}) {
-  const timeoutMs = options.timeoutMs ?? NATIVE_CALLBACK_TIMEOUT_MS;
-  const foregroundOnly = options.foregroundOnly === true;
-  const launchedAt = options.launchedAt ?? Date.now();
-  const api = getFullyBridge();
-
+function waitForNativePrintCallback(jobId, timeoutMs = NATIVE_CALLBACK_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    let wentHidden = false;
-    let leftFullyForeground = false;
-    let foregroundTimer = null;
-    let pollId = null;
-
     const timeout = window.setTimeout(() => {
       console.warn(`[print] native callback timeout job=${jobId}`);
       finishNativePrintWaiter({ jobId, status: "timeout" });
@@ -109,60 +98,18 @@ function waitForNativePrintCallback(jobId, options = {}) {
       jobId,
       finish: (result) => {
         window.clearTimeout(timeout);
-        if (foregroundTimer) window.clearTimeout(foregroundTimer);
-        if (pollId) window.clearInterval(pollId);
         resolve(result);
       },
       cleanup: () => {
         window.clearTimeout(timeout);
-        if (foregroundTimer) window.clearTimeout(foregroundTimer);
-        if (pollId) window.clearInterval(pollId);
         document.removeEventListener("visibilitychange", onVisible);
         window.removeEventListener("focus", onVisible);
         window.removeEventListener("pageshow", onPageShow);
       },
     };
 
-    function resolveForegroundCallback(source) {
-      const elapsed = Date.now() - launchedAt;
-      if (elapsed < 1500) {
-        window.setTimeout(() => resolveForegroundCallback(source), 1500 - elapsed);
-        return;
-      }
-      console.info(`[print] native foreground return job=${jobId} via=${source}`);
-      finishNativePrintWaiter({ jobId, status: "ok" });
-    }
-
-    function scheduleForegroundResolve(source) {
-      if (foregroundTimer) window.clearTimeout(foregroundTimer);
-      foregroundTimer = window.setTimeout(() => resolveForegroundCallback(source), 250);
-    }
-
-    function onFullyForegroundPoll() {
-      if (!foregroundOnly || !api || typeof api.isInForeground !== "function") return;
-      try {
-        const inFg = api.isInForeground();
-        if (!inFg) leftFullyForeground = true;
-        if (leftFullyForeground && inFg) {
-          scheduleForegroundResolve("isInForeground");
-        }
-      } catch (err) {
-        console.warn("[print] isInForeground poll failed", err);
-      }
-    }
-
     function onVisible() {
-      if (document.visibilityState === "hidden") {
-        wentHidden = true;
-        return;
-      }
       if (document.visibilityState && document.visibilityState !== "visible") return;
-
-      if (foregroundOnly && wentHidden) {
-        scheduleForegroundResolve("visibility");
-        return;
-      }
-
       const payload = consumeNativePrintCallbackFromUrl();
       if (payload?.jobId === jobId) {
         finishNativePrintWaiter(payload);
@@ -177,16 +124,9 @@ function waitForNativePrintCallback(jobId, options = {}) {
     window.addEventListener("focus", onVisible);
     window.addEventListener("pageshow", onPageShow);
 
-    if (foregroundOnly && api && typeof api.isInForeground === "function") {
-      pollId = window.setInterval(onFullyForegroundPoll, 350);
-      onFullyForegroundPoll();
-    }
-
-    if (!foregroundOnly) {
-      const immediate = consumeNativePrintCallbackFromUrl();
-      if (immediate?.jobId === jobId) {
-        finishNativePrintWaiter(immediate);
-      }
+    const immediate = consumeNativePrintCallbackFromUrl();
+    if (immediate?.jobId === jobId) {
+      finishNativePrintWaiter(immediate);
     }
   });
 }
@@ -223,6 +163,18 @@ function resumeNativePrintCallbackOnLoad() {
   return payload;
 }
 
+function resolveNativePrintUrl(urls = {}) {
+  const { printUrl, downloadUrl } = urls;
+  const candidates = [printUrl, downloadUrl];
+  try {
+    const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    candidates.push(cached.printUrl, cached.downloadUrl);
+  } catch {
+    /* ignore */
+  }
+  return candidates.find((url) => url && /^https?:\/\//i.test(url)) || null;
+}
+
 function withNativeCopiesInUrl(httpUrl, copies = 1) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   if (count <= 1) return httpUrl;
@@ -237,91 +189,93 @@ function withNativeCopiesInUrl(httpUrl, copies = 1) {
   }
 }
 
-function buildNativePrintIntentUrl(httpUrl, copies = 1, callbackUrl = null, returnPackage = null) {
+function buildNativeIntentUrl(
+  httpUrl,
+  copies = 1,
+  callbackUrl = null,
+  returnPackage = null,
+  { withComponent = true } = {}
+) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const encoded = encodeURIComponent(targetUrl);
-  let url =
-    `intent:${encodeURI(targetUrl)}#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_VIEW};` +
-    `component=${NATIVE_PRINT_COMPONENT};` +
+
+  let suffix =
+    `#Intent;action=${NATIVE_PRINT_ACTION_VIEW};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
-    `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
+    `package=${NATIVE_PRINT_PACKAGE};`;
+
+  if (withComponent) {
+    suffix += `component=${NATIVE_PRINT_COMPONENT};`;
+  }
+
+  suffix += `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
 
   if (count > 1) {
-    url += `i.${NATIVE_PRINT_COPIES_EXTRA}=${count};`;
-    url += `i.copies=${count};`;
+    suffix += `i.${NATIVE_PRINT_COPIES_EXTRA}=${count};`;
+    suffix += `i.copies=${count};`;
   }
 
   if (callbackUrl) {
-    url += `S.${NATIVE_PRINT_CALLBACK_EXTRA}=${encodeURIComponent(callbackUrl)};`;
+    suffix += `S.${NATIVE_PRINT_CALLBACK_EXTRA}=${encodeURIComponent(callbackUrl)};`;
   }
 
   if (returnPackage) {
-    url += `S.${NATIVE_RETURN_PACKAGE_EXTRA}=${encodeURIComponent(returnPackage)};`;
+    suffix += `S.${NATIVE_RETURN_PACKAGE_EXTRA}=${encodeURIComponent(returnPackage)};`;
   }
 
-  url += `package=${NATIVE_PRINT_PACKAGE};end;`;
-  return url;
-}
-
-function buildNativeViewIntentUrl(httpUrl, copies = 1) {
-  const targetUrl = withNativeCopiesInUrl(httpUrl, copies);
-  return (
-    `intent:${encodeURI(targetUrl)}#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_VIEW};` +
-    `component=${NATIVE_PRINT_COMPONENT};` +
-    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
-    `package=${NATIVE_PRINT_PACKAGE};end;`
-  );
-}
-
-function buildNativePackageViewIntentUrl(httpUrl, copies = 1) {
-  const targetUrl = withNativeCopiesInUrl(httpUrl, copies);
-  return (
-    `intent:${encodeURI(targetUrl)}#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_VIEW};` +
-    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
-    `package=${NATIVE_PRINT_PACKAGE};end;`
-  );
+  suffix += "end;";
+  return `intent:${encodeURI(targetUrl)}${suffix}`;
 }
 
 function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, returnPackage = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
-  const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies, callbackUrl, returnPackage);
+
+  const intentCandidates = [
+    {
+      id: "startIntent-component",
+      url: buildNativeIntentUrl(httpUrl, count, callbackUrl, returnPackage, {
+        withComponent: true,
+      }),
+    },
+    {
+      id: "startIntent-package",
+      url: buildNativeIntentUrl(httpUrl, count, callbackUrl, returnPackage, {
+        withComponent: false,
+      }),
+    },
+  ];
+
+  if (typeof api.startIntent === "function") {
+    for (const { id, url } of intentCandidates) {
+      try {
+        api.startIntent(url);
+        return count > 1 ? `fully-${id}-copies-${count}` : `fully-${id}`;
+      } catch (err) {
+        console.warn(`[print] fully.${id} native failed`, err);
+      }
+    }
+  }
 
   if (typeof api.startApplication === "function") {
     try {
       api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, targetUrl);
+      console.warn(
+        "[print] startApplication omits callback extras — prefer startIntent; whitelist com.shootreceipt.print in Fully"
+      );
       return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
     } catch (err) {
       console.warn("[print] fully.startApplication native view failed", err);
     }
   }
 
-  if (typeof api.startIntent === "function") {
+  if (typeof api.broadcastIntent === "function") {
     try {
-      api.startIntent(printIntentUrl);
-      return count > 1 ? `fully-startIntent-copies-${count}` : "fully-startIntent-view";
+      api.broadcastIntent(intentCandidates[0].url);
+      return "fully-broadcastIntent-component";
     } catch (err) {
-      console.warn("[print] fully.startIntent native view failed", err);
-    }
-  }
-
-  const variants = [
-    { id: "view-component", url: buildNativeViewIntentUrl(httpUrl, count) },
-    { id: "view-package", url: buildNativePackageViewIntentUrl(httpUrl, count) },
-  ];
-
-  if (typeof api.startIntent === "function") {
-    for (const { id, url } of variants) {
-      try {
-        api.startIntent(url);
-        return `fully-startIntent-${id}`;
-      } catch (err) {
-        console.warn(`[print] fully.startIntent native ${id} failed`, err);
-      }
+      console.warn("[print] fully.broadcastIntent native failed", err);
     }
   }
 
@@ -359,7 +313,9 @@ function launchNativePrint(httpUrl, copies = 1, callbackUrl = null, returnPackag
   }
 
   try {
-    window.location.href = buildNativePrintIntentUrl(httpUrl, copies, callbackUrl, returnPackage);
+    window.location.href = buildNativeIntentUrl(httpUrl, copies, callbackUrl, returnPackage, {
+      withComponent: true,
+    });
     return "location-intent-native";
   } catch {
     return null;
@@ -368,7 +324,7 @@ function launchNativePrint(httpUrl, copies = 1, callbackUrl = null, returnPackag
 
 async function printViaNative(source, copies = 1, urls = {}) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const imageUrl = resolveRawBtHttpUrl(urls);
+  const imageUrl = resolveNativePrintUrl(urls);
 
   if (!imageUrl) {
     console.error("[print] native requires http image url — none available");
@@ -377,15 +333,13 @@ async function printViaNative(source, copies = 1, urls = {}) {
 
   const jobId = createNativePrintJobId();
   const returnPackage = getNativeReturnPackage();
-  const foregroundOnly = !!returnPackage;
   const callbackUrl = buildNativeCallbackUrl(jobId);
   persistNativePrintFlow(jobId);
 
-  const launchedAt = Date.now();
-  const callbackPromise = waitForNativePrintCallback(jobId, { foregroundOnly, launchedAt });
+  const callbackPromise = waitForNativePrintCallback(jobId);
   const method = launchNativePrint(imageUrl, count, callbackUrl, returnPackage);
   console.info(
-    `[print] native job launch=${method || "failed"} copies=${count} job=${jobId} foreground=${foregroundOnly}`
+    `[print] native job launch=${method || "failed"} copies=${count} job=${jobId}`
   );
 
   if (!method) {
