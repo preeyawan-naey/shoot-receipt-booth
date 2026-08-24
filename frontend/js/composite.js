@@ -1,11 +1,11 @@
-const PRINT_QR_WIDTH_RATIO = 450 / 1152;
+const PRINT_QR_WIDTH_RATIO = (450 / 1152) * 0.85;
 const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 };
 const PRINT_QR_GAP_FROM_PHOTO = 16;
 const PRINT_QR_TEXT_GAP = 12;
 const PRINT_QR_EXTRA_DOWN_RATIO = 0;
 const PRINT_BOTTOM_PADDING = 4;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
-const PRINT_EXTRA_TOP_TRIM = 45;
+const PRINT_EXTRA_TOP_TRIM = 24;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
@@ -45,6 +45,30 @@ function loadImage(src) {
 }
 
 const PHOTO_SLOT_BORDER_RADIUS = 0;
+/** Expand draw area to cover gray border line inside frame holes (px at 662w) */
+const PHOTO_SLOT_BORDER_BLEED = 4;
+
+function getPhotoSlotBleed(canvasWidth) {
+  return PHOTO_SLOT_BORDER_BLEED * (canvasWidth / LAYOUT_NATURAL_WIDTH);
+}
+
+function slotToDrawRect(slot, canvasWidth, canvasHeight, offsetX = 0, offsetY = 0) {
+  let x = (slot.left / 100) * canvasWidth + offsetX;
+  let y = (slot.top / 100) * canvasHeight + offsetY;
+  let w = (slot.width / 100) * canvasWidth;
+  let h = (slot.height / 100) * canvasHeight;
+
+  const canBleed = !slot.rotation && slot.fit !== "contain";
+  if (canBleed) {
+    const bleed = getPhotoSlotBleed(canvasWidth);
+    x = Math.max(0, x - bleed);
+    y = Math.max(0, y - bleed);
+    w = Math.min(canvasWidth - x, w + bleed * 2);
+    h = Math.min(canvasHeight - y, h + bleed * 2);
+  }
+
+  return { x, y, w, h };
+}
 
 function clipRoundRect(ctx, x, y, w, h, radius) {
   const r = Math.min(radius, w / 2, h / 2);
@@ -296,10 +320,7 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
     if (!slot || !photos[i]) continue;
 
     const photo = await loadImage(photos[i]);
-    const x = (slot.left / 100) * canvasWidth;
-    const y = (slot.top / 100) * canvasHeight;
-    const w = (slot.width / 100) * canvasWidth;
-    const h = (slot.height / 100) * canvasHeight;
+    const { x, y, w, h } = slotToDrawRect(slot, canvasWidth, canvasHeight);
     const rotation = slot.rotation || 0;
     const fit = slot.fit || "cover";
 
@@ -549,10 +570,13 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     if (!slot || !photos[i]) continue;
 
     const photo = await loadImage(photos[i]);
-    const x = (slot.left / 100) * frameW;
-    const y = padTop + (slot.top / 100) * frameH - crop.top;
-    const w = (slot.width / 100) * frameW;
-    const h = (slot.height / 100) * frameH;
+    const { x, y, w, h } = slotToDrawRect(
+      slot,
+      frameW,
+      frameH,
+      0,
+      padTop - crop.top
+    );
     const rotation = slot.rotation || 0;
     const fit = slot.fit || "cover";
 
@@ -614,34 +638,45 @@ async function preparePrintReceipt() {
   }
 
   const downloadId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl } = await createDownloadQR(downloadId);
+  const printId = crypto.randomUUID();
+  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQR(downloadId);
 
   await drawCompositeForPrint(printCanvas, layout, data.photos, qrCodeUrl, { thermal: true });
 
   const downloadCanvas = document.createElement("canvas");
   await drawComposite(downloadCanvas, layout, data.photos);
   console.info(
-    `[print] upload size ${downloadCanvas.width}x${downloadCanvas.height} (preview, no QR)`
+    `[print] download upload ${downloadCanvas.width}x${downloadCanvas.height} (preview, no QR)`
   );
-  const colorJpegBase64 = downloadCanvas.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
-  const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
+  const downloadJpegBase64 = downloadCanvas.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
 
-  if (!uploadResult.success) {
-    throw new Error(uploadResult.message || "Upload failed");
+  if (!downloadUpload.success) {
+    throw new Error(downloadUpload.message || "Upload failed");
   }
 
-  const imageUrl = uploadResult.downloadUrl || uploadResult.printUrl;
+  const printScaled = scaleCanvasForThermal(printCanvas, RAWBT_TARGET_WIDTH_PX);
+  console.info(`[print] print upload ${printScaled.width}x${printScaled.height} (with QR)`);
+  const printJpegBase64 = printScaled.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
+
+  if (!printUpload.success) {
+    throw new Error(printUpload.message || "Print upload failed");
+  }
+
+  const downloadUrl = downloadUpload.downloadUrl || qrDownloadPath;
+  const printUrl = printUpload.printUrl || printUpload.downloadUrl;
 
   sessionStorage.setItem(
     "downloadQR",
     JSON.stringify({
       qrCodeUrl,
-      downloadUrl: imageUrl,
-      printUrl: imageUrl,
+      downloadUrl,
+      printUrl,
     })
   );
 
-  return { qrCodeUrl, downloadUrl: imageUrl, printUrl: imageUrl };
+  return { qrCodeUrl, downloadUrl, printUrl };
 }
 
 function clearPrintCopies() {
@@ -744,10 +779,10 @@ function getPrintDriver() {
 
 function resolveRawBtHttpUrl(urls = {}) {
   const { downloadUrl, printUrl } = urls;
-  const candidates = [downloadUrl, printUrl];
+  const candidates = [printUrl, downloadUrl];
   try {
     const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
-    candidates.push(cached.downloadUrl, cached.printUrl);
+    candidates.push(cached.printUrl, cached.downloadUrl);
   } catch {
     /* ignore */
   }
