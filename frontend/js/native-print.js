@@ -208,6 +208,32 @@ function withNativeLaunchParams(httpUrl, copies = 1, callbackUrl = null, returnP
   }
 }
 
+function buildNativeBareIntentUrl(
+  httpUrl,
+  copies = 1,
+  callbackUrl = null,
+  returnPackage = null
+) {
+  const launchUrl = withNativeLaunchParams(httpUrl, copies, callbackUrl, returnPackage);
+  const encoded = encodeURIComponent(launchUrl);
+  let suffix =
+    `#Intent;action=${NATIVE_PRINT_ACTION_VIEW};` +
+    `component=${NATIVE_PRINT_COMPONENT};` +
+    `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
+    `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
+
+  if (callbackUrl) {
+    suffix += `S.${NATIVE_PRINT_CALLBACK_EXTRA}=${encodeURIComponent(callbackUrl)};`;
+  }
+
+  if (returnPackage) {
+    suffix += `S.${NATIVE_RETURN_PACKAGE_EXTRA}=${encodeURIComponent(returnPackage)};`;
+  }
+
+  suffix += `package=${NATIVE_PRINT_PACKAGE};end;`;
+  return `intent:${suffix}`;
+}
+
 function buildNativeIntentUrl(
   httpUrl,
   copies = 1,
@@ -216,7 +242,7 @@ function buildNativeIntentUrl(
   { withComponent = true } = {}
 ) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
-  const targetUrl = withNativeCopiesInUrl(httpUrl, count);
+  const targetUrl = withNativeLaunchParams(httpUrl, count, callbackUrl, returnPackage);
   const encoded = encodeURIComponent(targetUrl);
 
   let suffix =
@@ -250,18 +276,10 @@ function buildNativeIntentUrl(
 function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, returnPackage = null) {
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const launchUrl = withNativeLaunchParams(httpUrl, count, callbackUrl, returnPackage);
-
-  // startApplication — same path as RawBT; startIntent is blocked by Fully URL whitelist on Supabase
-  if (typeof api.startApplication === "function") {
-    try {
-      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
-      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
-    } catch (err) {
-      console.warn("[print] fully.startApplication native view failed", err);
-    }
-  }
+  const bareIntentUrl = buildNativeBareIntentUrl(httpUrl, count, callbackUrl, returnPackage);
 
   const intentCandidates = [
+    { id: "startIntent-bare", url: bareIntentUrl },
     {
       id: "startIntent-component",
       url: buildNativeIntentUrl(httpUrl, count, callbackUrl, returnPackage, {
@@ -276,11 +294,29 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
     },
   ];
 
+  // intent:#Intent (no https prefix) — bypasses Fully URL whitelist on Supabase
   if (typeof api.startIntent === "function") {
-    for (const { id, url } of intentCandidates) {
+    try {
+      api.startIntent(bareIntentUrl);
+      return count > 1 ? "fully-startIntent-bare-copies" : "fully-startIntent-bare";
+    } catch (err) {
+      console.warn("[print] fully.startIntent bare failed", err);
+    }
+  }
+
+  if (typeof api.startApplication === "function") {
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+      return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
+    } catch (err) {
+      console.warn("[print] fully.startApplication native view failed", err);
+    }
+  }
+
+  if (typeof api.startIntent === "function") {
+    for (const { id, url } of intentCandidates.slice(1)) {
       try {
         api.startIntent(url);
-        console.warn("[print] startIntent used — add Supabase to Fully URL whitelist if print fails");
         return count > 1 ? `fully-${id}-copies-${count}` : `fully-${id}`;
       } catch (err) {
         console.warn(`[print] fully.${id} native failed`, err);
@@ -290,8 +326,8 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
 
   if (typeof api.broadcastIntent === "function") {
     try {
-      api.broadcastIntent(intentCandidates[0].url);
-      return "fully-broadcastIntent-component";
+      api.broadcastIntent(bareIntentUrl);
+      return "fully-broadcastIntent-bare";
     } catch (err) {
       console.warn("[print] fully.broadcastIntent native failed", err);
     }
@@ -332,10 +368,8 @@ function launchNativePrint(httpUrl, copies = 1, callbackUrl = null, returnPackag
   }
 
   try {
-    window.location.href = buildNativeIntentUrl(httpUrl, copies, callbackUrl, returnPackage, {
-      withComponent: true,
-    });
-    return "location-intent-native";
+    window.location.href = buildNativeBareIntentUrl(httpUrl, copies, callbackUrl, returnPackage);
+    return "location-intent-bare";
   } catch {
     return null;
   }
@@ -390,8 +424,8 @@ async function printViaNative(source, copies = 1, urls = {}) {
 /** Console diagnostic — uses last uploaded receipt URL from sessionStorage */
 function testNativePrintLaunch() {
   const api = getFullyBridge();
-  if (!api || typeof api.startApplication !== "function") {
-    console.error("[print] TEST failed — fully.startApplication not available");
+  if (!api) {
+    console.error("[print] TEST failed — fully JS interface not found");
     return false;
   }
 
@@ -401,12 +435,34 @@ function testNativePrintLaunch() {
     return false;
   }
 
-  const launchUrl = withNativeLaunchParams(imageUrl, 1, null, getNativeReturnPackage());
-  console.info(`[print] TEST startApplication pkg=${NATIVE_PRINT_PACKAGE} url=${launchUrl}`);
-  api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+  const returnPackage = getNativeReturnPackage();
+  const bareUrl = buildNativeBareIntentUrl(imageUrl, 1, null, returnPackage);
+  console.info(`[print] TEST bare intent=${bareUrl}`);
+
+  if (typeof api.startIntent === "function") {
+    try {
+      api.startIntent(bareUrl);
+      console.info("[print] TEST sent via startIntent-bare");
+    } catch (err) {
+      console.warn("[print] TEST startIntent-bare failed", err);
+    }
+  }
+
+  if (typeof api.startApplication === "function") {
+    const launchUrl = withNativeLaunchParams(imageUrl, 1, null, returnPackage);
+    console.info(`[print] TEST startApplication url=${launchUrl}`);
+    try {
+      api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, launchUrl);
+      console.info("[print] TEST sent via startApplication");
+    } catch (err) {
+      console.warn("[print] TEST startApplication failed", err);
+    }
+  }
+
   console.info(
-    "[print] TEST sent — ถ้าไม่เห็น Toast \"Shoot Print กำลังปริ้น...\" = APK ไม่ถูกเปิด\n" +
-      "→ Fully → Kiosk Mode → App Whitelist → เพิ่ม com.shootreceipt.print"
+    "[print] TEST done — ถ้าไม่เห็น Toast \"Shoot Print กำลังปริ้น...\" = APK ไม่ถูกเปิด\n" +
+      "→ ตั้งค่า Fully → Kiosk Mode → App Whitelist → com.shootreceipt.print\n" +
+      "→ ตรวจว่าติดตั้ง APK แล้ว (Settings → Apps)"
   );
   return true;
 }

@@ -69,17 +69,24 @@ object PrintEngine {
     private const val TARGET_WIDTH_PX = 576
 
     fun resolvePrintUrl(intent: android.content.Intent?): String? {
+        val raw =
+            resolvePrintUrlRaw(intent)?.let { stripLaunchQueryParams(it) }
+        return raw
+    }
+
+    private fun resolvePrintUrlRaw(intent: android.content.Intent?): String? {
         intent?.data?.let { uri -> uriToHttp(uri)?.let { return it } }
         intent?.dataString?.takeIf { it.startsWith("http") }?.let { return it }
 
-        val directKeys = listOf(
-            PrintActivity.EXTRA_PRINT_URL,
-            android.content.Intent.EXTRA_TEXT,
-            "url",
-            "URL",
-            "printUrl",
-            "imageUrl",
-        )
+        val directKeys =
+            listOf(
+                PrintActivity.EXTRA_PRINT_URL,
+                android.content.Intent.EXTRA_TEXT,
+                "url",
+                "URL",
+                "printUrl",
+                "imageUrl",
+            )
         for (key in directKeys) {
             intent?.getStringExtra(key)?.takeIf { it.startsWith("http") }?.let { return it }
         }
@@ -94,6 +101,28 @@ object PrintEngine {
         }
 
         return null
+    }
+
+    private fun stripLaunchQueryParams(url: String): String {
+        return try {
+            val uri = Uri.parse(url)
+            if (
+                !uri.queryParameterNames.contains("shoot_callback") &&
+                !uri.queryParameterNames.contains("shoot_return_pkg")
+            ) {
+                return url
+            }
+            val builder = uri.buildUpon().clearQuery()
+            for (name in uri.queryParameterNames) {
+                if (name == "shoot_callback" || name == "shoot_return_pkg") continue
+                for (value in uri.getQueryParameters(name)) {
+                    builder.appendQueryParameter(name, value)
+                }
+            }
+            builder.build().toString()
+        } catch (_: Exception) {
+            url
+        }
     }
 
     fun resolveCopies(intent: android.content.Intent?): Int {
@@ -111,7 +140,7 @@ object PrintEngine {
             return intent.getIntExtra("copies", 1).coerceIn(1, 10)
         }
 
-        resolvePrintUrl(intent)?.let { url -> copiesFromUrl(url)?.let { return it } }
+        resolvePrintUrlRaw(intent)?.let { url -> copiesFromUrl(url)?.let { return it } }
 
         intent.extras?.let { bundle ->
             for (key in bundle.keySet()) {
