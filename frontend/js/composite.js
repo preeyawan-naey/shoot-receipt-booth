@@ -1,12 +1,11 @@
 const PRINT_QR_WIDTH_RATIO = 450 / 1152;
 const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 };
-const PRINT_QR_GAP_FROM_PHOTO = 24;
-const PRINT_QR_TEXT_GAP = 24;
-/** Extra vertical offset for QR + thank-you text (20% of QR size) */
-const PRINT_QR_EXTRA_DOWN_RATIO = 0.2;
-const PRINT_BOTTOM_PADDING = 12;
+const PRINT_QR_GAP_FROM_PHOTO = 16;
+const PRINT_QR_TEXT_GAP = 12;
+const PRINT_QR_EXTRA_DOWN_RATIO = 0;
+const PRINT_BOTTOM_PADDING = 4;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
-const PRINT_EXTRA_TOP_TRIM = 0;
+const PRINT_EXTRA_TOP_TRIM = 45;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
@@ -392,7 +391,8 @@ function getPrintCropRect(frameImg, frameConfig, frameH) {
   const bounds = measureFrameContentBounds(frameImg);
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
   const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
-  const bottom = Math.max(top, Math.ceil(photosBottom) - 1);
+  // Include frame footer (e.g. DATE/GATE on boarding pass) — not just photo bottom
+  const bottom = Math.max(Math.ceil(photosBottom) - 1, bounds.bottom);
 
   return {
     top,
@@ -401,16 +401,13 @@ function getPrintCropRect(frameImg, frameConfig, frameH) {
 }
 
 function getPrintQrPosition(frameConfig, frameW, frameH, crop, padTop) {
-  const photosBottomPx = getPhotosBottomPx(frameConfig, frameH);
   const qrSize = getPrintQrSize(frameW);
-  const photosBottomInCanvas = padTop + photosBottomPx - crop.top;
-  const cropBottomInCanvas = padTop + crop.height;
-  const contentBottomY = Math.max(photosBottomInCanvas, cropBottomInCanvas);
+  const frameBottomInCanvas = padTop + crop.height;
   const extraDown = qrSize * PRINT_QR_EXTRA_DOWN_RATIO;
 
   return {
     x: (frameW - qrSize) / 2,
-    y: contentBottomY + PRINT_QR_GAP_FROM_PHOTO + extraDown,
+    y: frameBottomInCanvas + PRINT_QR_GAP_FROM_PHOTO + extraDown,
     size: qrSize,
   };
 }
@@ -578,12 +575,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   return canvas;
 }
 
-async function exportCompositeForPrint(frameConfig, photos, qrDataUrl, options = {}) {
+async function exportCompositeForDownload(frameConfig, photos) {
   const canvas = document.createElement("canvas");
-  await drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, {
-    thermal: false,
-    ...options,
-  });
+  await drawComposite(canvas, frameConfig, photos);
   return canvas.toDataURL("image/png");
 }
 
@@ -625,13 +619,11 @@ async function preparePrintReceipt() {
   await drawCompositeForPrint(printCanvas, layout, data.photos, qrCodeUrl, { thermal: true });
 
   const downloadCanvas = document.createElement("canvas");
-  await drawCompositeForPrint(downloadCanvas, layout, data.photos, qrCodeUrl, {
-    thermal: false,
-    edgePadding: true,
-  });
-  const scaledColor = scaleCanvasForThermal(downloadCanvas, RAWBT_TARGET_WIDTH_PX);
-  console.info(`[print] upload size ${scaledColor.width}x${scaledColor.height}`);
-  const colorJpegBase64 = scaledColor.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  await drawComposite(downloadCanvas, layout, data.photos);
+  console.info(
+    `[print] upload size ${downloadCanvas.width}x${downloadCanvas.height} (preview, no QR)`
+  );
+  const colorJpegBase64 = downloadCanvas.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const uploadResult = await uploadCompositeAndGetQR(colorJpegBase64, downloadId);
 
   if (!uploadResult.success) {

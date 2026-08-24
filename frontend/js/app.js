@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth98";
+const BOOTH_BUILD = "booth100";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -423,7 +423,6 @@ async function exportReceiptAsBase64() {
   const layoutId = getSelectedLayoutId();
   const layout = getLayoutById(layoutId);
   const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
-  const qrData = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
   if (!layout || !data.photos) return null;
-  return exportCompositeForPrint(layout, data.photos, qrData.qrCodeUrl || null);
+  return exportCompositeForDownload(layout, data.photos);
 }

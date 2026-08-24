@@ -270,7 +270,7 @@ class UsbEscPosPrinter(private val context: Context) {
         private const val TIMEOUT_MS = 30_000
         private val INIT = byteArrayOf(0x1B, 0x40)
         private val FEED_AND_CUT = byteArrayOf(
-            0x0A, 0x0A, 0x0A,
+            0x0A,
             0x1D, 0x56, 0x42, 0x00,
         )
     }
