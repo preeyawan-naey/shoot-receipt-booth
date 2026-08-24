@@ -3,9 +3,10 @@ const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 }
 const PRINT_QR_GAP_FROM_PHOTO = 16;
 const PRINT_QR_TEXT_GAP = 12;
 const PRINT_QR_EXTRA_DOWN_RATIO = 0;
-const PRINT_BOTTOM_PADDING = 4;
+const PRINT_EDGE_PADDING = 24;
+const PRINT_BOTTOM_PADDING = PRINT_EDGE_PADDING;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
-const PRINT_EXTRA_TOP_TRIM = 24;
+const PRINT_EXTRA_TOP_TRIM = PRINT_EDGE_PADDING;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 29;
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
@@ -655,8 +656,13 @@ async function preparePrintReceipt() {
     throw new Error(downloadUpload.message || "Upload failed");
   }
 
-  const printScaled = scaleCanvasForThermal(printCanvas, RAWBT_TARGET_WIDTH_PX);
-  console.info(`[print] print upload ${printScaled.width}x${printScaled.height} (with QR)`);
+  // Color upload — APK Atkinson dithers once (thermal:true here causes double-dither fade)
+  const uploadPrintCanvas = document.createElement("canvas");
+  await drawCompositeForPrint(uploadPrintCanvas, layout, data.photos, qrCodeUrl, {
+    thermal: false,
+  });
+  const printScaled = scaleCanvasForThermal(uploadPrintCanvas, RAWBT_TARGET_WIDTH_PX);
+  console.info(`[print] print upload ${printScaled.width}x${printScaled.height} (color→APK dither)`);
   const printJpegBase64 = printScaled.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
 
