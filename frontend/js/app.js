@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth92";
+const BOOTH_BUILD = "booth98";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -139,6 +139,7 @@ function initFrameGrid(layoutId) {
 
   const options = getFramesForLayout(layoutId);
   grid.innerHTML = options.map((option) => buildFrameCard(option)).join("");
+  grid.classList.toggle("frame-grid--center-tail", options.length === 5);
   resetFrameGridScroll();
 
   grid.querySelectorAll(".frame-picker-card").forEach((card) => {

@@ -1,6 +1,7 @@
 /**
  * Decorative frame options — per layout
  * Assets: img/Layout/frame/frame-select/layout{N}/frame-{1-5}.jpg (662 × 1412)
+ * layout3 & layout4: frame-1,2,3,5 only (no frame-4)
  */
 const FRAME_ASSET_BASE = "img/Layout/frame/frame-select";
 
@@ -9,6 +10,14 @@ const LAYOUT_FRAME_DIR = {
   "Layout-2": "layout2",
   "Layout-3": "layout3",
   "Layout-4": "layout4",
+};
+
+/** layout3/layout4 have no frame-4.jpg in their folders */
+const LAYOUT_FRAME_NUMBERS = {
+  "Layout-1": [1, 2, 3, 4, 5],
+  "Layout-2": [1, 2, 3, 4, 5],
+  "Layout-3": [1, 2, 3, 5],
+  "Layout-4": [1, 2, 3, 5],
 };
 
 const DEFAULT_FRAME_SLOT_MAP = {
@@ -41,6 +50,54 @@ const LAYOUT_FRAME_SLOT_MAP = {
     "frame-5": [
       { left: 6.5, top: 15.79, width: 86.25, height: 31.52 },
       { left: 6.5, top: 50.07, width: 86.25, height: 31.52 },
+    ],
+  },
+  "Layout-3": {
+    "frame-1": [
+      { left: 6.34, top: 29.11, width: 86.71, height: 21.46 },
+      { left: 6.34, top: 51.77, width: 86.71, height: 21.46 },
+      { left: 6.34, top: 74.43, width: 86.71, height: 21.46 },
+    ],
+    "frame-2": [
+      { left: 6.34, top: 21.74, width: 86.71, height: 21.46 },
+      { left: 6.34, top: 44.41, width: 86.71, height: 21.46 },
+      { left: 6.34, top: 67.07, width: 86.71, height: 21.46 },
+    ],
+    "frame-3": [
+      { left: 6.65, top: 16.01, width: 86.71, height: 24.5 },
+      { left: 6.65, top: 41.64, width: 86.71, height: 24.36 },
+      { left: 6.65, top: 67.14, width: 86.71, height: 24.5 },
+    ],
+    "frame-5": [
+      { left: 6.34, top: 15.58, width: 86.71, height: 24.5 },
+      { left: 6.34, top: 41.22, width: 86.71, height: 24.36 },
+      { left: 6.34, top: 66.71, width: 86.71, height: 24.5 },
+    ],
+  },
+  "Layout-4": {
+    "frame-1": [
+      { left: 6.65, top: 29.11, width: 41.99, height: 31.23 },
+      { left: 51.06, top: 29.11, width: 41.99, height: 31.23 },
+      { left: 6.65, top: 61.54, width: 41.99, height: 31.23 },
+      { left: 51.06, top: 61.54, width: 41.99, height: 31.23 },
+    ],
+    "frame-2": [
+      { left: 6.65, top: 21.74, width: 41.99, height: 31.23 },
+      { left: 51.06, top: 21.74, width: 41.99, height: 31.23 },
+      { left: 6.65, top: 54.18, width: 41.99, height: 31.23 },
+      { left: 51.06, top: 54.18, width: 41.99, height: 31.23 },
+    ],
+    "frame-3": [
+      { left: 6.95, top: 16.15, width: 41.39, height: 31.02 },
+      { left: 51.36, top: 16.15, width: 41.39, height: 31.02 },
+      { left: 6.95, top: 48.58, width: 41.39, height: 31.02 },
+      { left: 51.36, top: 48.58, width: 41.39, height: 31.02 },
+    ],
+    "frame-5": [
+      { left: 6.95, top: 15.72, width: 41.39, height: 31.02 },
+      { left: 51.36, top: 15.72, width: 41.39, height: 31.02 },
+      { left: 6.95, top: 48.16, width: 41.39, height: 31.02 },
+      { left: 51.36, top: 48.16, width: 41.39, height: 31.02 },
     ],
   },
 };
@@ -104,7 +161,7 @@ function buildFramesForLayout(layoutId) {
       selectImagePath: null,
       previewImagePath: null,
     },
-    ...[1, 2, 3, 4, 5].map((n) => {
+    ...(LAYOUT_FRAME_NUMBERS[layoutId] || [1, 2, 3, 4, 5]).map((n) => {
       const id = `frame-${n}`;
       return {
         id,

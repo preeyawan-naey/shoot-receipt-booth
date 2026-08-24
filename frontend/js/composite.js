@@ -2,6 +2,8 @@ const PRINT_QR_WIDTH_RATIO = 450 / 1152;
 const PRINT_QR_SLOT = { left: 38, top: 72.8, width: PRINT_QR_WIDTH_RATIO * 100 };
 const PRINT_QR_GAP_FROM_PHOTO = 24;
 const PRINT_QR_TEXT_GAP = 24;
+/** Extra vertical offset for QR + thank-you text (20% of QR size) */
+const PRINT_QR_EXTRA_DOWN_RATIO = 0.2;
 const PRINT_BOTTOM_PADDING = 12;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
 const PRINT_EXTRA_TOP_TRIM = 0;
@@ -401,11 +403,14 @@ function getPrintCropRect(frameImg, frameConfig, frameH) {
 function getPrintQrPosition(frameConfig, frameW, frameH, crop, padTop) {
   const photosBottomPx = getPhotosBottomPx(frameConfig, frameH);
   const qrSize = getPrintQrSize(frameW);
-  const contentBottomY = padTop + photosBottomPx - crop.top;
+  const photosBottomInCanvas = padTop + photosBottomPx - crop.top;
+  const cropBottomInCanvas = padTop + crop.height;
+  const contentBottomY = Math.max(photosBottomInCanvas, cropBottomInCanvas);
+  const extraDown = qrSize * PRINT_QR_EXTRA_DOWN_RATIO;
 
   return {
     x: (frameW - qrSize) / 2,
-    y: contentBottomY + PRINT_QR_GAP_FROM_PHOTO,
+    y: contentBottomY + PRINT_QR_GAP_FROM_PHOTO + extraDown,
     size: qrSize,
   };
 }

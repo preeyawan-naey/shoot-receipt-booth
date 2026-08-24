@@ -33,7 +33,7 @@ const LAYOUTS = [
     selectAspectRatio: "662 / 1320",
     slots: [
       { left: 6.65, top: 15.65, width: 86.4, height: 24.93 },
-      { left: 6.65, top: 42.14, width: 86.4, height: 24.93 },
+      { left: 6.65, top: 42.07, width: 86.4, height: 25.0 },
       { left: 6.65, top: 68.56, width: 86.4, height: 24.93 },
     ],
   },
@@ -46,8 +46,8 @@ const LAYOUTS = [
     slots: [
       { left: 6.95, top: 15.65, width: 41.54, height: 33.99 },
       { left: 51.66, top: 15.65, width: 41.54, height: 33.99 },
-      { left: 6.95, top: 51.2, width: 41.54, height: 33.92 },
-      { left: 51.66, top: 51.2, width: 41.54, height: 33.99 },
+      { left: 6.95, top: 51.13, width: 41.54, height: 34.07 },
+      { left: 51.66, top: 51.13, width: 41.54, height: 34.07 },
     ],
   },
 ];
