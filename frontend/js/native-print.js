@@ -91,15 +91,14 @@ function consumeNativePrintCallbackFromUrl() {
 function waitForNativePrintCallback(jobId, options = {}) {
   const timeoutMs = options.timeoutMs ?? NATIVE_CALLBACK_TIMEOUT_MS;
   const foregroundOnly = options.foregroundOnly === true;
+  const launchedAt = options.launchedAt ?? Date.now();
+  const api = getFullyBridge();
 
   return new Promise((resolve) => {
     let wentHidden = false;
-    let assumeHidden = false;
+    let leftFullyForeground = false;
     let foregroundTimer = null;
-
-    const hiddenFallback = window.setTimeout(() => {
-      assumeHidden = true;
-    }, 1500);
+    let pollId = null;
 
     const timeout = window.setTimeout(() => {
       console.warn(`[print] native callback timeout job=${jobId}`);
@@ -110,23 +109,46 @@ function waitForNativePrintCallback(jobId, options = {}) {
       jobId,
       finish: (result) => {
         window.clearTimeout(timeout);
-        window.clearTimeout(hiddenFallback);
         if (foregroundTimer) window.clearTimeout(foregroundTimer);
+        if (pollId) window.clearInterval(pollId);
         resolve(result);
       },
       cleanup: () => {
         window.clearTimeout(timeout);
-        window.clearTimeout(hiddenFallback);
         if (foregroundTimer) window.clearTimeout(foregroundTimer);
+        if (pollId) window.clearInterval(pollId);
         document.removeEventListener("visibilitychange", onVisible);
         window.removeEventListener("focus", onVisible);
         window.removeEventListener("pageshow", onPageShow);
       },
     };
 
-    function resolveForegroundCallback() {
-      console.info(`[print] native foreground return job=${jobId}`);
+    function resolveForegroundCallback(source) {
+      const elapsed = Date.now() - launchedAt;
+      if (elapsed < 1500) {
+        window.setTimeout(() => resolveForegroundCallback(source), 1500 - elapsed);
+        return;
+      }
+      console.info(`[print] native foreground return job=${jobId} via=${source}`);
       finishNativePrintWaiter({ jobId, status: "ok" });
+    }
+
+    function scheduleForegroundResolve(source) {
+      if (foregroundTimer) window.clearTimeout(foregroundTimer);
+      foregroundTimer = window.setTimeout(() => resolveForegroundCallback(source), 250);
+    }
+
+    function onFullyForegroundPoll() {
+      if (!foregroundOnly || !api || typeof api.isInForeground !== "function") return;
+      try {
+        const inFg = api.isInForeground();
+        if (!inFg) leftFullyForeground = true;
+        if (leftFullyForeground && inFg) {
+          scheduleForegroundResolve("isInForeground");
+        }
+      } catch (err) {
+        console.warn("[print] isInForeground poll failed", err);
+      }
     }
 
     function onVisible() {
@@ -136,9 +158,8 @@ function waitForNativePrintCallback(jobId, options = {}) {
       }
       if (document.visibilityState && document.visibilityState !== "visible") return;
 
-      if (foregroundOnly && (wentHidden || assumeHidden)) {
-        if (foregroundTimer) window.clearTimeout(foregroundTimer);
-        foregroundTimer = window.setTimeout(resolveForegroundCallback, 300);
+      if (foregroundOnly && wentHidden) {
+        scheduleForegroundResolve("visibility");
         return;
       }
 
@@ -155,6 +176,11 @@ function waitForNativePrintCallback(jobId, options = {}) {
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     window.addEventListener("pageshow", onPageShow);
+
+    if (foregroundOnly && api && typeof api.isInForeground === "function") {
+      pollId = window.setInterval(onFullyForegroundPoll, 350);
+      onFullyForegroundPoll();
+    }
 
     if (!foregroundOnly) {
       const immediate = consumeNativePrintCallbackFromUrl();
@@ -217,7 +243,7 @@ function buildNativePrintIntentUrl(httpUrl, copies = 1, callbackUrl = null, retu
   const encoded = encodeURIComponent(targetUrl);
   let url =
     `intent:${encodeURI(targetUrl)}#Intent;` +
-    `action=${NATIVE_PRINT_ACTION_PRINT};` +
+    `action=${NATIVE_PRINT_ACTION_VIEW};` +
     `component=${NATIVE_PRINT_COMPONENT};` +
     `launchFlags=${NATIVE_LAUNCH_FLAGS};` +
     `S.${NATIVE_PRINT_URL_EXTRA}=${encoded};`;
@@ -265,21 +291,21 @@ function launchNativeViaFully(api, httpUrl, copies = 1, callbackUrl = null, retu
   const targetUrl = withNativeCopiesInUrl(httpUrl, count);
   const printIntentUrl = buildNativePrintIntentUrl(httpUrl, copies, callbackUrl, returnPackage);
 
-  if (typeof api.startIntent === "function") {
-    try {
-      api.startIntent(printIntentUrl);
-      return count > 1 ? `fully-startIntent-copies-${count}` : "fully-startIntent-print";
-    } catch (err) {
-      console.warn("[print] fully.startIntent native print failed", err);
-    }
-  }
-
   if (typeof api.startApplication === "function") {
     try {
       api.startApplication(NATIVE_PRINT_PACKAGE, NATIVE_PRINT_ACTION_VIEW, targetUrl);
       return count > 1 ? `fully-startApplication-copies-${count}` : "fully-startApplication-view";
     } catch (err) {
       console.warn("[print] fully.startApplication native view failed", err);
+    }
+  }
+
+  if (typeof api.startIntent === "function") {
+    try {
+      api.startIntent(printIntentUrl);
+      return count > 1 ? `fully-startIntent-copies-${count}` : "fully-startIntent-view";
+    } catch (err) {
+      console.warn("[print] fully.startIntent native view failed", err);
     }
   }
 
@@ -352,10 +378,11 @@ async function printViaNative(source, copies = 1, urls = {}) {
   const jobId = createNativePrintJobId();
   const returnPackage = getNativeReturnPackage();
   const foregroundOnly = !!returnPackage;
-  const callbackUrl = foregroundOnly ? null : buildNativeCallbackUrl(jobId);
+  const callbackUrl = buildNativeCallbackUrl(jobId);
   persistNativePrintFlow(jobId);
 
-  const callbackPromise = waitForNativePrintCallback(jobId, { foregroundOnly });
+  const launchedAt = Date.now();
+  const callbackPromise = waitForNativePrintCallback(jobId, { foregroundOnly, launchedAt });
   const method = launchNativePrint(imageUrl, count, callbackUrl, returnPackage);
   console.info(
     `[print] native job launch=${method || "failed"} copies=${count} job=${jobId} foreground=${foregroundOnly}`
