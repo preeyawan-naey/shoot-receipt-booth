@@ -52,6 +52,7 @@ class PrintActivity : android.app.Activity() {
         const val EXTRA_PRINT_URL = "com.shootreceipt.print.extra.PRINT_URL"
         const val EXTRA_COPIES = "com.shootreceipt.print.extra.COPIES"
         const val EXTRA_CALLBACK_URL = "com.shootreceipt.print.extra.CALLBACK_URL"
+        const val EXTRA_RETURN_PACKAGE = "com.shootreceipt.print.extra.RETURN_PACKAGE"
     }
 }
 
@@ -134,6 +135,18 @@ object PrintEngine {
         intent.data?.let { uri ->
             uri.getQueryParameter("shoot_callback")?.takeIf { it.startsWith("http") }?.let { return it }
         }
+
+        return null
+    }
+
+    fun resolveReturnPackage(intent: android.content.Intent?): String? {
+        if (intent == null) return null
+
+        intent.getStringExtra(PrintActivity.EXTRA_RETURN_PACKAGE)?.takeIf { it.isNotBlank() }?.let {
+            return it
+        }
+
+        intent.getStringExtra("returnPackage")?.takeIf { it.isNotBlank() }?.let { return it }
 
         return null
     }
