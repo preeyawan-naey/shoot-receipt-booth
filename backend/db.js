@@ -46,6 +46,17 @@ function runSqliteMigration() {
       .run("payment_amount", "59");
   }
 
+  const defaultOmise = sqlite
+    .prepare("SELECT 1 FROM booth_settings WHERE setting_key = ?")
+    .get("omise_enabled");
+  if (!defaultOmise) {
+    sqlite
+      .prepare(
+        "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
+      )
+      .run("omise_enabled", "true");
+  }
+
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS payment_sessions (
       id TEXT PRIMARY KEY,
@@ -67,6 +78,35 @@ function runSqliteMigration() {
   if (!paymentColumns.some((col) => col.name === "omise_charge_id")) {
     sqlite.exec("ALTER TABLE payment_sessions ADD COLUMN omise_charge_id TEXT");
   }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS photo_sessions (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      layout_id TEXT,
+      frame_id TEXT,
+      print_count INTEGER NOT NULL DEFAULT 1,
+      amount INTEGER NOT NULL,
+      payment_mode TEXT NOT NULL DEFAULT 'omise',
+      download_id TEXT,
+      payment_session_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);
+  `);
+
+  sqlite.exec(`
+    INSERT INTO photo_sessions (id, created_at, print_count, amount, payment_mode, payment_session_id)
+    SELECT
+      id,
+      COALESCE(paid_at, created_at),
+      1,
+      amount,
+      CASE WHEN omise_charge_id IS NOT NULL THEN 'omise' ELSE 'manual' END,
+      id
+    FROM payment_sessions
+    WHERE status = 'paid'
+      AND id NOT IN (SELECT payment_session_id FROM photo_sessions WHERE payment_session_id IS NOT NULL)
+  `);
 }
 
 async function runPostgresMigration() {
@@ -78,6 +118,37 @@ async function runPostgresMigration() {
     ALTER TABLE payment_sessions
       ADD COLUMN IF NOT EXISTS omise_source_id TEXT,
       ADD COLUMN IF NOT EXISTS omise_charge_id TEXT;
+  `);
+
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS photo_sessions (
+      id UUID PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      layout_id TEXT,
+      frame_id TEXT,
+      print_count INTEGER NOT NULL DEFAULT 1,
+      amount INTEGER NOT NULL,
+      payment_mode TEXT NOT NULL DEFAULT 'omise',
+      download_id TEXT,
+      payment_session_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);
+  `);
+
+  await pgPool.query(`
+    INSERT INTO photo_sessions (id, created_at, print_count, amount, payment_mode, payment_session_id)
+    SELECT
+      id,
+      COALESCE(paid_at, created_at),
+      1,
+      amount,
+      CASE WHEN omise_charge_id IS NOT NULL THEN 'omise' ELSE 'manual' END,
+      id
+    FROM payment_sessions
+    WHERE status = 'paid'
+      AND NOT EXISTS (
+        SELECT 1 FROM photo_sessions ps WHERE ps.payment_session_id = payment_sessions.id
+      )
   `);
 }
 

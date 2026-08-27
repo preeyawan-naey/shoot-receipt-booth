@@ -209,8 +209,9 @@ object PrintEngine {
     fun printImageUrl(context: android.content.Context, url: String, copies: Int = 1) {
         val count = copies.coerceIn(1, 10)
         Log.i(TAG, "print url=$url copies=$count")
-        val device = UsbEscPosPrinter(context).findPrinterDevice()
-            ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
+        val usb = UsbEscPosPrinter(context)
+        val device = usb.findPrinterDevice()
+            ?: throw IllegalStateException(usb.describePrinterLookupFailure())
         if (!UsbPermissionHelper.waitForPermission(context, device)) {
             throw IllegalStateException(
                 "USB permission not granted. Accept USB access on tablet.",

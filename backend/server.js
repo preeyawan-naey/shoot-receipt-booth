@@ -8,6 +8,7 @@ const fs = require("fs");
 const config = require("./config");
 const storage = require("./storage");
 const db = require("./db");
+const paymentSettings = require("./paymentSettings");
 const adminRoutes = require("./routes/admin");
 const boothRoutes = require("./routes/booth");
 const webhookRoutes = require("./routes/webhook");
@@ -49,13 +50,25 @@ function resolveRequestBaseUrl(req) {
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-app.get("/api/server-info", (_req, res) => {
-  res.json({
-    publicUrl: config.publicUrl,
-    storageMode: storage.getStorageMode(),
-    apiBase: config.publicUrl,
-    omiseConfigured: Boolean(config.omiseSecretKey),
-  });
+app.get("/api/server-info", async (_req, res) => {
+  try {
+    const omiseEnabled = await paymentSettings.isOmisePaymentEnabled();
+    return res.json({
+      publicUrl: config.publicUrl,
+      storageMode: storage.getStorageMode(),
+      apiBase: config.publicUrl,
+      omiseConfigured: Boolean(config.omiseSecretKey),
+      omiseEnabled,
+    });
+  } catch {
+    return res.json({
+      publicUrl: config.publicUrl,
+      storageMode: storage.getStorageMode(),
+      apiBase: config.publicUrl,
+      omiseConfigured: Boolean(config.omiseSecretKey),
+      omiseEnabled: true,
+    });
+  }
 });
 
 app.post("/api/qrcode", async (req, res) => {

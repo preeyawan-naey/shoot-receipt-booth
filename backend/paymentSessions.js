@@ -116,6 +116,10 @@ async function createSession() {
   await cancelPendingSessions();
 
   const payment = await paymentSettings.getPaymentSettings();
+  if (payment.omise_enabled === false) {
+    throw new Error("ระบบชำระเงิน Omise ถูกปิดจากหลังบ้าน");
+  }
+
   const amount = Math.round(Number(payment.payment_amount) || 59);
   const id = randomUUID();
   const createdAt = new Date();

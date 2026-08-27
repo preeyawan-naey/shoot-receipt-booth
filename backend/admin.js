@@ -41,13 +41,13 @@ function parsePeriod(period, from, to) {
   return { start: null, end: null, label: "All time" };
 }
 
-function buildPaidAtFilter(range, paramStartIndex = 1) {
+function buildCreatedAtFilter(range, paramStartIndex = 1) {
   if (!range?.start || !range?.end) {
-    return { clause: "status = 'paid'", params: [] };
+    return { clause: "1 = 1", params: [] };
   }
 
   return {
-    clause: `status = 'paid' AND paid_at >= $${paramStartIndex} AND paid_at <= $${paramStartIndex + 1}`,
+    clause: `created_at >= $${paramStartIndex} AND created_at <= $${paramStartIndex + 1}`,
     params: [range.start.toISOString(), range.end.toISOString()],
   };
 }
@@ -58,19 +58,21 @@ async function getDashboardMetrics(period, from, to) {
     return { ok: false, status: 400, message: "Invalid custom date range" };
   }
 
-  const { clause, params } = buildPaidAtFilter(range);
+  const { clause, params } = buildCreatedAtFilter(range);
 
   const aggregate = await db.queryOne(
     `SELECT
        COUNT(*) AS total_sessions,
-       COALESCE(SUM(amount), 0) AS total_revenue
-     FROM payment_sessions
+       COALESCE(SUM(amount), 0) AS total_revenue,
+       COALESCE(SUM(print_count), 0) AS total_prints
+     FROM photo_sessions
      WHERE ${clause}`,
     params
   );
 
   const totalSessions = Number(aggregate?.total_sessions || 0);
   const totalRevenue = Number(aggregate?.total_revenue || 0);
+  const totalPrints = Number(aggregate?.total_prints || 0);
   const ticketPrice = totalSessions > 0 ? Math.round(totalRevenue / totalSessions) : 59;
   const cafeShare = Math.round(totalRevenue * CAFE_SHARE_RATE);
   const noeyShare = Math.round(totalRevenue * NOEY_SHARE_RATE);
@@ -87,19 +89,18 @@ async function getDashboardMetrics(period, from, to) {
       cafeShareRate: CAFE_SHARE_RATE,
       noeyShareRate: NOEY_SHARE_RATE,
       totalSessions,
-      totalPrints: totalSessions,
+      totalPrints,
     },
   };
 }
 
-async function listPaymentHistory({
+async function listPhotoHistory({
   period,
   from,
   to,
   search = "",
   page = 1,
   limit = 10,
-  status = "",
 }) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
@@ -113,29 +114,26 @@ async function listPaymentHistory({
   const where = [];
   const params = [];
 
-  if (status === "paid" || status === "pending" || status === "expired" || status === "cancelled") {
-    where.push(`status = $${params.length + 1}`);
-    params.push(status);
-  }
-
   if (range?.start && range?.end) {
-    where.push(
-      `( (status = 'paid' AND paid_at >= $${params.length + 1} AND paid_at <= $${params.length + 2})
-         OR (status != 'paid' AND created_at >= $${params.length + 1} AND created_at <= $${params.length + 2}) )`
-    );
+    const startIdx = params.length + 1;
+    const endIdx = params.length + 2;
+    where.push(`created_at >= $${startIdx} AND created_at <= $${endIdx}`);
     params.push(range.start.toISOString(), range.end.toISOString());
   }
 
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch) {
-    where.push(`CAST(id AS TEXT) LIKE $${params.length + 1}`);
-    params.push(`%${trimmedSearch.replace(/[^0-9a-f-]/gi, "")}%`);
+    const idx = params.length + 1;
+    where.push(
+      `(CAST(id AS TEXT) LIKE $${idx} OR COALESCE(layout_id, '') LIKE $${idx} OR COALESCE(frame_id, '') LIKE $${idx})`
+    );
+    params.push(`%${trimmedSearch}%`);
   }
 
   const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const countRow = await db.queryOne(
-    `SELECT COUNT(*) AS total FROM payment_sessions ${whereClause}`,
+    `SELECT COUNT(*) AS total FROM photo_sessions ${whereClause}`,
     params
   );
   const total = Number(countRow?.total || 0);
@@ -145,17 +143,17 @@ async function listPaymentHistory({
   const offsetIdx = params.length + 2;
 
   const rows = await db.queryAll(
-    `SELECT id, amount, status, created_at, paid_at, omise_charge_id
-     FROM payment_sessions
+    `SELECT id, created_at, layout_id, frame_id, print_count, amount, payment_mode, download_id
+     FROM photo_sessions
      ${whereClause}
-     ORDER BY COALESCE(paid_at, created_at) DESC
+     ORDER BY created_at DESC
      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
     listParams
   );
 
   return {
     ok: true,
-    payments: rows.map(formatPaymentRow),
+    photos: rows.map(formatPhotoRow),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -165,19 +163,20 @@ async function listPaymentHistory({
   };
 }
 
-function formatPaymentRow(row) {
+function formatPhotoRow(row) {
   return {
     id: row.id,
-    amount: Number(row.amount || 0),
-    status: row.status,
     created_at: row.created_at,
-    paid_at: row.paid_at,
-    payment_provider: row.omise_charge_id ? "omise" : "manual",
+    layout_id: row.layout_id || "—",
+    frame_id: row.frame_id || "—",
+    print_count: Number(row.print_count || 0),
+    amount: Number(row.amount || 0),
+    payment_mode: row.payment_mode || "omise",
   };
 }
 
 module.exports = {
   getDashboardMetrics,
-  listPaymentHistory,
+  listPhotoHistory,
   parsePeriod,
 };

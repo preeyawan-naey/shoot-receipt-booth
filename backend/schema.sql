@@ -32,6 +32,10 @@ INSERT INTO booth_settings (setting_key, setting_value)
 VALUES ('payment_amount', '59')
 ON CONFLICT (setting_key) DO NOTHING;
 
+INSERT INTO booth_settings (setting_key, setting_value)
+VALUES ('omise_enabled', 'true')
+ON CONFLICT (setting_key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id UUID PRIMARY KEY,
   amount INTEGER NOT NULL,
@@ -46,3 +50,17 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions (status);
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_created_at ON payment_sessions (created_at);
+
+CREATE TABLE IF NOT EXISTS photo_sessions (
+  id UUID PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  layout_id TEXT,
+  frame_id TEXT,
+  print_count INTEGER NOT NULL DEFAULT 1,
+  amount INTEGER NOT NULL,
+  payment_mode TEXT NOT NULL DEFAULT 'omise',
+  download_id TEXT,
+  payment_session_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);

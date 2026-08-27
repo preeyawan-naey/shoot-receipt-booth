@@ -1502,28 +1502,15 @@ body {
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
   flex-shrink: 0;
+  background: var(--color-text);
+  color: var(--color-white);
 }
 
 .preview-prints__btn:active:not(:disabled) {
   transform: scale(0.92);
 }
 
-.preview-prints__btn--minus {
-  background: #e8e4de;
-  color: #888;
-}
-
-.preview-prints__btn--minus:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.preview-prints__btn--plus {
-  background: var(--color-text);
-  color: var(--color-white);
-}
-
-.preview-prints__btn--plus:disabled {
+.preview-prints__btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }

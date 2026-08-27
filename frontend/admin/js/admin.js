@@ -148,7 +148,10 @@
     const m = data.metrics || {};
 
     setText("kpi-revenue", formatMoney(m.totalRevenue));
-    setText("kpi-revenue-hint", `${m.totalSessions || 0} paid sessions`);
+    setText(
+      "kpi-revenue-hint",
+      `${m.totalSessions || 0} ครั้ง × ฿${m.ticketPrice || 59}`
+    );
     setText("kpi-cafe", formatMoney(m.cafeShare));
     setText("kpi-noey", formatMoney(m.noeyShare));
     setText("kpi-sessions", String(m.totalSessions ?? "—"));
@@ -158,25 +161,25 @@
 
   async function loadPayments() {
     const qs = buildQuery({ page: state.page, limit: state.limit });
-    const data = await apiFetch(`/payments?${qs}`);
+    const data = await apiFetch(`/photos?${qs}`);
     const tbody = $("#payments-tbody");
     if (!tbody) return;
 
-    const items = data.payments || [];
+    const items = data.photos || [];
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="admin-table__empty">No payments found</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="admin-table__empty">ยังไม่มีประวัติการถ่ายรูป</td></tr>`;
     } else {
       tbody.innerHTML = items
         .map(
           (row) => `
         <tr>
-          <td class="session-id">${escapeHtml(String(row.id).slice(0, 8))}…</td>
-          <td><span class="status-badge status-badge--${row.status}">${escapeHtml(row.status)}</span></td>
-          <td>${formatMoney(row.amount)}</td>
           <td>${formatDate(row.created_at)}</td>
-          <td>${formatDate(row.paid_at)}</td>
-          <td>${escapeHtml(row.payment_provider || "—")}</td>
+          <td>${escapeHtml(row.layout_id || "—")}</td>
+          <td>${escapeHtml(row.frame_id || "—")}</td>
+          <td>${escapeHtml(String(row.print_count ?? 0))}</td>
+          <td>${formatMoney(row.amount)}</td>
+          <td><span class="status-badge status-badge--${escapeHtml(row.payment_mode || "omise")}">${escapeHtml(paymentModeLabel(row.payment_mode))}</span></td>
         </tr>`
         )
         .join("");
@@ -188,6 +191,12 @@
       limit: pagination.limit,
       total: pagination.total,
     });
+  }
+
+  function paymentModeLabel(mode) {
+    if (mode === "free") return "ปิด Omise";
+    if (mode === "manual") return "manual";
+    return "Omise";
   }
 
   function renderPagination(data) {
@@ -292,14 +301,26 @@
     setText("payment-kpi-amount", formatMoney(amount));
     setText(
       "payment-kpi-omise",
-      payment.omise_configured ? "Connected" : "Not set"
+      payment.omise_enabled === false
+        ? "Off"
+        : payment.omise_configured
+          ? "On"
+          : "Not set"
     );
     setText(
       "payment-kpi-omise-hint",
-      payment.omise_configured
-        ? "QR สร้างจาก Omise ต่อรอบ"
-        : "ตั้ง SECRET_KEY บน server"
+      payment.omise_enabled === false
+        ? "Booth ข้ามหน้าชำระเงิน"
+        : payment.omise_configured
+          ? "QR สร้างจาก Omise ต่อรอบ"
+          : "ตั้ง SECRET_KEY บน server"
     );
+
+    const omiseToggle = $("#toggle-omise-payment");
+    if (omiseToggle) {
+      omiseToggle.checked = payment.omise_enabled !== false;
+    }
+    updateOmiseToggleHint(payment);
 
     const amountInput = $("#payment-amount-input");
     if (amountInput) amountInput.value = String(amount);
@@ -322,9 +343,62 @@
       }
     }
     if (providerHint) {
-      providerHint.textContent = payment.payment_provider === "omise"
-        ? "Booth ใช้ Omise PromptPay QR ต่อรอบ — webhook charge.complete + poll อัตโนมัติ"
-        : "Omise ยังไม่ได้ตั้งค่า — ตั้ง SECRET_KEY บน server";
+      if (payment.omise_enabled === false) {
+        providerHint.textContent =
+          "Omise ถูกปิด — Booth ข้ามหน้าชำระเงิน ไปเลือก layout ได้เลย";
+      } else if (payment.payment_provider === "omise" && payment.omise_configured) {
+        providerHint.textContent =
+          "Booth ใช้ Omise PromptPay QR ต่อรอบ — webhook charge.complete + poll อัตโนมัติ";
+      } else {
+        providerHint.textContent = "Omise ยังไม่ได้ตั้งค่า — ตั้ง SECRET_KEY บน server";
+      }
+    }
+  }
+
+  function updateOmiseToggleHint(payment) {
+    const hint = $("#toggle-omise-payment-hint");
+    if (!hint) return;
+
+    if (payment.omise_enabled === false) {
+      hint.textContent = "ปิดอยู่ — ไม่เรียกเก็บเงินผ่าน Omise";
+      return;
+    }
+    if (!payment.omise_configured) {
+      hint.textContent = "เปิดอยู่ แต่ยังไม่ได้ตั้ง SECRET_KEY บน server";
+      return;
+    }
+    hint.textContent = "เปิดอยู่ — ลูกค้าต้องสแกน QR PromptPay ก่อนถ่าย";
+  }
+
+  async function saveOmiseEnabled(enabled) {
+    const err = $("#payment-admin-error");
+    const success = $("#payment-admin-success");
+    const toggle = $("#toggle-omise-payment");
+
+    if (err) err.hidden = true;
+    if (success) success.hidden = true;
+    if (toggle) toggle.disabled = true;
+
+    try {
+      await apiFetch("/payment", {
+        method: "PATCH",
+        body: JSON.stringify({ omise_enabled: enabled }),
+      });
+      if (success) {
+        success.textContent = enabled
+          ? "เปิด Omise แล้ว — booth จะซิงก์ภายใน ~15 วินาที"
+          : "ปิด Omise แล้ว — booth จะข้ามหน้าชำระเงินภายใน ~15 วินาที";
+        success.hidden = false;
+      }
+      await loadPaymentAdmin();
+    } catch (saveErr) {
+      if (toggle) toggle.checked = !enabled;
+      if (err) {
+        err.textContent = saveErr.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (toggle) toggle.disabled = false;
     }
   }
 
@@ -480,6 +554,10 @@
 
     $("#btn-save-payment-amount")?.addEventListener("click", () => {
       savePaymentAmount().catch(console.error);
+    });
+
+    $("#toggle-omise-payment")?.addEventListener("change", (e) => {
+      saveOmiseEnabled(e.target.checked).catch(console.error);
     });
   }
 

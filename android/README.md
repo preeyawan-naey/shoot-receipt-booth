@@ -140,11 +140,38 @@ fully.startApplication(
 
 | Problem | Fix |
 |---------|-----|
-| “No USB printer found” | Re-plug USB; open Shoot Print launcher app |
+| “No USB printer found” | Re-plug USB; printer only on hub (no charger on downstream port) |
+| Printer works until charger plugged into hub | See **Hub + charging** below — use OTG+charge adapter, not charger on hub port |
 | USB permission denied | Unplug/replug; accept permission dialog |
 | Nothing prints | Check `adb logcat -s ShootPrint` |
 | Falls back needed | `localStorage.shoot_print_driver = 'rawbt'` |
 | Build fails `VerifyException` mergeDebugJavaResource | Mac ใช้ปี พ.ศ. → แก้แล้วใน `gradle.properties` (`user.country=US`). Sync Gradle แล้ว Clean + Rebuild |
+
+### Hub + charging (ชาร์จ tablet ไปด้วย)
+
+Android tablet มี USB port เดียว — โหมด **Host (OTG)** กับ **Device (ชาร์จ)** มักใช้พร้อมกันไม่ได้
+
+**ทำไมเสียบสายชาร์จเข้า hub แล้วปริ้นไม่ได้**
+
+```
+❌ ผิด:  Tablet → OTG → Hub → Printer + สายชาร์จเข้า port ของ hub
+         (tablet ออกจาก host mode หรือ hub enumerate device ผิด)
+```
+
+```
+✅ ถูก:   [Adapter ไฟ] → Hub (ช่อง power input / PD in)
+              ↑                    ↓
+           Tablet ← OTG ───────── Printer เท่านั้น
+```
+
+หรือใช้ **OTG Y-cable / USB OTG HUB with pass-through charge** — ชาร์จเข้าที่ adapter แยก ไม่ใช่ port downstream ของ hub
+
+**Checklist**
+
+1. Hub ต้องเป็น **powered hub** — adapter ไฟเข้า hub ไม่ใช่เข้า port ว่างแล้วคาดว่าชาร์จ tablet
+2. ชาร์จ tablet ผ่าน **OTG+charge adapter** หรือ hub ที่รองรับ charge pass-through ไป tablet
+3. Port ของ hub ที่ต่อ tablet → **มีแค่ printer** ไม่เสียบสายชาร์จเป็น device
+4. ถ้า `adb logcat -s ShootPrint` เห็น `No USB devices attached` = tablet ไม่อยู่ใน host mode → แก้ที่สาย/adapter ไม่ใช่ APK
 
 ## Library
 

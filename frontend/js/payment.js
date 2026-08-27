@@ -72,6 +72,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 }
 
 async function verifyPaymentBackend() {
+  if (boothSettingsState?.omise_enabled === false) {
+    throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
+  }
+
   if (boothSettingsState?.omise_configured === false) {
     throw new Error(
       `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — เปิด Fully ด้วย http://<IP-เครื่อง-Mac>:3000`
@@ -84,13 +88,16 @@ async function verifyPaymentBackend() {
       headers: { Accept: "application/json" },
     });
     const info = await readJsonResponse(response);
+    if (info.omiseEnabled === false) {
+      throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
+    }
     if (!info.omiseConfigured) {
       throw new Error(
         `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — ใส่ OMISE_SECRET_KEY ใน backend/.env`
       );
     }
   } catch (error) {
-    if (error.message.includes("Omise") || error.message.includes("เชื่อมต่อ")) {
+    if (error.message.includes("Omise") || error.message.includes("เชื่อมต่อ") || error.message.includes("หลังบ้าน")) {
       throw error;
     }
     console.warn("[payment] server-info check skipped:", error.message);
@@ -325,15 +332,23 @@ async function startAutoPaymentSession(flowId) {
 }
 
 function goToPayment() {
-  paymentFlowGeneration += 1;
-  const flowId = paymentFlowGeneration;
+  void (async () => {
+    await fetchBoothSettings();
+    if (!isBoothPaymentRequired()) {
+      goToLayoutSelect();
+      return;
+    }
 
-  clearPaymentFlow();
-  renderPaymentPage();
-  navigateTo("payment");
-  setPaymentStatus("idle", "", false);
-  startPaymentCountdown(PAYMENT_TIMEOUT_SEC);
-  void startAutoPaymentSession(flowId);
+    paymentFlowGeneration += 1;
+    const flowId = paymentFlowGeneration;
+
+    clearPaymentFlow();
+    renderPaymentPage();
+    navigateTo("payment");
+    setPaymentStatus("idle", "", false);
+    startPaymentCountdown(PAYMENT_TIMEOUT_SEC);
+    void startAutoPaymentSession(flowId);
+  })();
 }
 
 function initPaymentModule() {

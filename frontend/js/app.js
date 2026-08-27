@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth107";
+const BOOTH_BUILD = "booth118";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -11,9 +11,10 @@ const appState = {
 };
 
 const MIN_PRINT_COPIES = 1;
-const MAX_PRINT_COPIES = 10;
+const MAX_PRINT_COPIES = 2;
+const DEFAULT_PRINT_COPIES = 2;
 const QR_HOME_COUNTDOWN_SEC = 40;
-let printCopies = MIN_PRINT_COPIES;
+let printCopies = DEFAULT_PRINT_COPIES;
 let qrCountdownTimer = null;
 
 function getPrintCopies() {
@@ -21,7 +22,7 @@ function getPrintCopies() {
 }
 
 function resetPrintCopiesUI() {
-  printCopies = MIN_PRINT_COPIES;
+  printCopies = DEFAULT_PRINT_COPIES;
   updatePrintCopiesUI();
 }
 
@@ -249,17 +250,17 @@ function bindEvents() {
 
   btnStartOverlay?.addEventListener("click", (event) => {
     event.stopPropagation();
-    goToBoothStart();
+    void goToBoothStart();
   });
   btnStart?.addEventListener("click", (event) => {
     event.stopPropagation();
-    goToBoothStart();
+    void goToBoothStart();
   });
 
   btnLayoutBack?.addEventListener("click", () => {
     appState.selectedLayout = null;
     clearBoothSelection();
-    goToPayment();
+    void goToBoothLayoutBack();
   });
 
   btnFrameBack?.addEventListener("click", () => {
@@ -321,6 +322,7 @@ function bindEvents() {
       }
 
       showPrintOverlay("ปริ้นเสร็จแล้ว!");
+      void recordBoothPhotoSession();
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       hidePrintOverlay();
       showQrDownloadPage();

@@ -55,7 +55,7 @@ router.get("/dashboard", async (req, res) => {
   }
 });
 
-router.get("/payments", async (req, res) => {
+router.get("/photos", async (req, res) => {
   try {
     const {
       period = "today",
@@ -64,17 +64,15 @@ router.get("/payments", async (req, res) => {
       search = "",
       page = "1",
       limit = "10",
-      status = "",
     } = req.query;
 
-    const result = await admin.listPaymentHistory({
+    const result = await admin.listPhotoHistory({
       period,
       from,
       to,
       search,
       page,
       limit,
-      status,
     });
 
     if (!result.ok) {
@@ -86,7 +84,7 @@ router.get("/payments", async (req, res) => {
 
     return res.json({ success: true, ...result });
   } catch (error) {
-    console.error("[admin/payments]", error);
+    console.error("[admin/photos]", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -107,25 +105,35 @@ router.get("/settings", async (_req, res) => {
   }
 });
 
+async function buildAdminPaymentPayload() {
+  const payment = await paymentSettings.getPaymentSettings();
+  const omiseConfigured = omise.isConfigured();
+  const omiseEnabled = payment.omise_enabled !== false;
+  const omiseActive = omiseConfigured && omiseEnabled;
+
+  return {
+    ...payment,
+    omise_enabled: omiseEnabled,
+    omise_configured: omiseConfigured,
+    omise_payment_active: omiseActive,
+    payment_provider: omiseActive ? "omise" : omiseEnabled ? "omise" : "disabled",
+    omise_public_key_configured: Boolean(config.omisePublicKey),
+    webhook_url: omiseConfigured
+      ? `${config.publicUrl}/api/webhook/omise`
+      : `${config.publicUrl}/api/webhook/bank-notify`,
+    webhook_secret_configured: omiseConfigured
+      ? true
+      : Boolean(config.bankWebhookSecret),
+    payment_session_ttl_sec: Math.round(paymentSessions.SESSION_TTL_MS / 1000),
+  };
+}
+
 router.get("/payment", async (_req, res) => {
   try {
-    const payment = await paymentSettings.getPaymentSettings();
-    const omiseEnabled = omise.isConfigured();
+    const payment = await buildAdminPaymentPayload();
     return res.json({
       success: true,
-      payment: {
-        ...payment,
-        payment_provider: omiseEnabled ? "omise" : "manual",
-        omise_configured: omiseEnabled,
-        omise_public_key_configured: Boolean(config.omisePublicKey),
-        webhook_url: omiseEnabled
-          ? `${config.publicUrl}/api/webhook/omise`
-          : `${config.publicUrl}/api/webhook/bank-notify`,
-        webhook_secret_configured: omiseEnabled
-          ? true
-          : Boolean(config.bankWebhookSecret),
-        payment_session_ttl_sec: Math.round(paymentSessions.SESSION_TTL_MS / 1000),
-      },
+      payment,
     });
   } catch (error) {
     console.error("[admin/payment]", error);
@@ -139,23 +147,33 @@ router.get("/payment", async (_req, res) => {
 router.patch("/payment", async (req, res) => {
   try {
     const amount = req.body?.payment_amount;
-    if (amount === undefined || amount === null) {
+    const omiseEnabledRaw = req.body?.omise_enabled;
+    const hasAmount = amount !== undefined && amount !== null && amount !== "";
+    const hasOmiseToggle = omiseEnabledRaw !== undefined && omiseEnabledRaw !== null;
+
+    if (!hasAmount && !hasOmiseToggle) {
       return res.status(400).json({
         success: false,
-        message: "payment_amount is required",
+        message: "payment_amount or omise_enabled is required",
       });
     }
 
-    const rounded = Math.round(Number(amount));
-    if (!Number.isFinite(rounded) || rounded < 20) {
-      return res.status(400).json({
-        success: false,
-        message: "payment_amount must be at least 20 baht (Omise PromptPay)",
-      });
+    if (hasAmount) {
+      const rounded = Math.round(Number(amount));
+      if (!Number.isFinite(rounded) || rounded < 20) {
+        return res.status(400).json({
+          success: false,
+          message: "payment_amount must be at least 20 baht (Omise PromptPay)",
+        });
+      }
+      await paymentSettings.setPaymentAmount(rounded);
     }
 
-    await paymentSettings.setPaymentAmount(rounded);
-    const payment = await paymentSettings.getPaymentSettings();
+    if (hasOmiseToggle) {
+      await paymentSettings.setOmisePaymentEnabled(Boolean(omiseEnabledRaw));
+    }
+
+    const payment = await buildAdminPaymentPayload();
     return res.json({ success: true, payment });
   } catch (error) {
     console.error("[admin/payment]", error);

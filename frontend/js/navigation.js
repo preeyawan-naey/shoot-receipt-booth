@@ -17,7 +17,7 @@ function initNavigation() {
     pages.home.style.cursor = "pointer";
     pages.home.addEventListener("click", (event) => {
       if (event.target.closest("button")) return;
-      goToBoothStart();
+      void goToBoothStart();
     });
   }
 }

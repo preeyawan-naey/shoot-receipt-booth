@@ -23,8 +23,9 @@ object PrintJobRunner {
         try {
             when (intent?.action) {
                 PrintActivity.ACTION_CUT -> {
-                    val device = UsbEscPosPrinter(appContext).findPrinterDevice()
-                        ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
+                    val usb = UsbEscPosPrinter(appContext)
+                    val device = usb.findPrinterDevice()
+                        ?: throw IllegalStateException(usb.describePrinterLookupFailure())
                     if (!UsbPermissionHelper.waitForPermission(appContext, device)) {
                         throw IllegalStateException(
                             "USB permission not granted. Accept USB access on tablet.",

@@ -68,24 +68,59 @@ class UsbEscPosPrinter(private val context: Context) {
     fun findPrinterDevice(): UsbDevice? {
         findStrictPrinterDevice()?.let { return it }
 
-        for (device in usbManager.deviceList.values) {
-            if (hasBulkOutEndpoint(device)) {
-                Log.i(
-                    TAG,
-                    "USB fallback printer vid=0x${device.vendorId.toString(16)} " +
-                        "pid=0x${device.productId.toString(16)} name=${device.deviceName}",
-                )
-                return device
-            }
+        // Only fall back to bulk-OUT devices when exactly one non-hub candidate is attached.
+        // With a hub + charger, Android may expose extra interfaces — picking the wrong
+        // device causes silent print failure or bulkTransfer errors.
+        val bulkCandidates = usbManager.deviceList.values.filter { isBulkOutCandidate(it) }
+        if (bulkCandidates.size == 1) {
+            val device = bulkCandidates[0]
+            Log.i(
+                TAG,
+                "USB fallback printer vid=0x${device.vendorId.toString(16)} " +
+                    "pid=0x${device.productId.toString(16)} name=${device.deviceName}",
+            )
+            return device
+        }
+
+        if (bulkCandidates.size > 1) {
+            Log.w(
+                TAG,
+                "Multiple USB bulk-OUT devices (${bulkCandidates.size}) — " +
+                    "connect printer alone or use a powered OTG hub; do not plug " +
+                    "tablet charger into a downstream hub port.",
+            )
         }
 
         logAttachedUsbDevices()
         return null
     }
 
+    /** Human-readable hint when print fails — surfaced in PrintActivity error toast/log. */
+    fun describePrinterLookupFailure(): String {
+        val attached = usbManager.deviceList.values.toList()
+        if (attached.isEmpty()) {
+            return "No USB devices detected. If tablet is charging through the same hub, " +
+                "USB host mode may be disabled — use an OTG+charge adapter or hub power input " +
+                "(not a charger on a downstream hub port)."
+        }
+
+        val strict = attached.filter { isLikelyPrinter(it) }
+        if (strict.isNotEmpty()) {
+            return "USB printer detected but could not be opened — unplug/replug and allow USB access."
+        }
+
+        val bulkCandidates = attached.filter { isBulkOutCandidate(it) }
+        if (bulkCandidates.size > 1) {
+            return "Multiple USB devices on hub — connect only the printer, or use a powered " +
+                "OTG hub. Do not plug the tablet charger into a hub downstream port."
+        }
+
+        return "No USB printer found. Connect XP-T80A via USB (printer only on hub)."
+    }
+
     private fun openConnection(): UsbConnection {
         val device = findPrinterDevice()
-            ?: throw IllegalStateException("No USB printer found. Connect XP-T80A via USB.")
+            ?: throw IllegalStateException(describePrinterLookupFailure())
         if (!usbManager.hasPermission(device)) {
             if (!UsbPermissionHelper.waitForPermission(context, device)) {
                 throw IllegalStateException(
@@ -105,6 +140,29 @@ class UsbEscPosPrinter(private val context: Context) {
         return null
     }
 
+    private fun isBulkOutCandidate(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_HUB) return false
+        if (isLikelyPrinter(device)) return true
+        if (!hasBulkOutEndpoint(device)) return false
+        if (isObviousNonPrinter(device)) return false
+        return isKnownPrinterVendor(device.vendorId)
+    }
+
+    private fun isObviousNonPrinter(device: UsbDevice): Boolean {
+        if (device.interfaceCount == 0) return true
+        return (0 until device.interfaceCount).all { index ->
+            when (device.getInterface(index).interfaceClass) {
+                UsbConstants.USB_CLASS_HID,
+                UsbConstants.USB_CLASS_MASS_STORAGE,
+                UsbConstants.USB_CLASS_COMM,
+                UsbConstants.USB_CLASS_AUDIO,
+                UsbConstants.USB_CLASS_VIDEO,
+                -> true
+                else -> false
+            }
+        }
+    }
+
     private fun hasBulkOutEndpoint(device: UsbDevice): Boolean {
         for (i in 0 until device.interfaceCount) {
             val iface = device.getInterface(i)
@@ -118,6 +176,12 @@ class UsbEscPosPrinter(private val context: Context) {
             }
         }
         return false
+    }
+
+    private fun isKnownPrinterVendor(vendorId: Int): Boolean {
+        return vendorId == 0x0483 || vendorId == 0x1FC9 || vendorId == 0x0416 ||
+            vendorId == 0x154F || vendorId == 0x0471 || vendorId == 0x1659 ||
+            vendorId == 0x6868 || vendorId == 0x4B43
     }
 
     private fun logAttachedUsbDevices() {
@@ -148,10 +212,7 @@ class UsbEscPosPrinter(private val context: Context) {
                 return true
             }
         }
-        // XPrinter / common thermal vendor IDs
-        val vendor = device.vendorId
-        return vendor == 0x0483 || vendor == 0x1FC9 || vendor == 0x0416 || vendor == 0x154F ||
-            vendor == 0x0471 || vendor == 0x1659 || vendor == 0x6868 || vendor == 0x4B43
+        return isKnownPrinterVendor(device.vendorId)
     }
 
     private fun splitIntoBands(bitmap: Bitmap, bandHeight: Int): List<Bitmap> {

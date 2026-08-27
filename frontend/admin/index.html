@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/css/admin.css?v=7" />
+    <link rel="stylesheet" href="/admin/css/admin.css?v=9" />
   </head>
   <body>
     <div class="admin-login" id="admin-login">
@@ -83,7 +83,7 @@
           <article class="kpi-card kpi-card--primary">
             <p class="kpi-card__label">Total Revenue</p>
             <p class="kpi-card__value" id="kpi-revenue">—</p>
-            <p class="kpi-card__hint" id="kpi-revenue-hint">paid sessions</p>
+            <p class="kpi-card__hint" id="kpi-revenue-hint">sessions × price</p>
           </article>
           <article class="kpi-card">
             <p class="kpi-card__label">Cafe Share (30%)</p>
@@ -96,19 +96,19 @@
           <article class="kpi-card">
             <p class="kpi-card__label">Total Sessions</p>
             <p class="kpi-card__value" id="kpi-sessions">—</p>
-            <p class="kpi-card__hint">paid sessions</p>
+            <p class="kpi-card__hint">จำนวนครั้งที่ถ่าย</p>
           </article>
           <article class="kpi-card">
             <p class="kpi-card__label">Total Prints</p>
             <p class="kpi-card__value" id="kpi-prints">—</p>
-            <p class="kpi-card__hint">estimated 1 print / session</p>
+            <p class="kpi-card__hint">จำนวนใบที่พิมพ์</p>
           </article>
         </section>
 
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2 class="admin-panel__title">Payment History</h2>
+              <h2 class="admin-panel__title">ประวัติการถ่ายรูป</h2>
               <p class="admin-panel__subtitle" id="table-period-label">—</p>
             </div>
             <div class="admin-panel__tools">
@@ -116,7 +116,7 @@
                 class="admin-search"
                 id="payment-search"
                 type="search"
-                placeholder="Search session id..."
+                placeholder="ค้นหา layout / session..."
               />
             </div>
           </div>
@@ -125,12 +125,12 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Session</th>
-                  <th>Status</th>
-                  <th>Amount</th>
-                  <th>Created</th>
-                  <th>Paid At</th>
-                  <th>Provider</th>
+                  <th>เวลา</th>
+                  <th>Layout</th>
+                  <th>Frame</th>
+                  <th>พิมพ์</th>
+                  <th>ราคา</th>
+                  <th>ชำระ</th>
                 </tr>
               </thead>
               <tbody id="payments-tbody">
@@ -147,6 +147,23 @@
         </div>
 
         <div id="view-payment" hidden>
+          <section class="admin-settings">
+            <div>
+              <h2 class="admin-settings__title">ระบบ Omise Payment</h2>
+              <p class="admin-settings__desc">
+                เมื่อปิด Booth จะข้ามหน้าชำระเงิน ไปเลือก layout ได้เลย
+              </p>
+            </div>
+            <label class="admin-toggle">
+              <input type="checkbox" id="toggle-omise-payment" />
+              <span class="admin-toggle__track" aria-hidden="true"></span>
+              <span class="admin-toggle__text">
+                <span class="admin-toggle__label">เปิดชำระเงิน Omise</span>
+                <span class="admin-toggle__hint" id="toggle-omise-payment-hint">—</span>
+              </span>
+            </label>
+          </section>
+
           <section class="admin-kpis admin-kpis--payment">
             <article class="kpi-card kpi-card--primary">
               <p class="kpi-card__label">Payment Amount</p>
@@ -227,6 +244,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=9"></script>
+    <script src="/admin/js/admin.js?v=11"></script>
   </body>
 </html>

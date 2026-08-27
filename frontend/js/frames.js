@@ -24,7 +24,7 @@ const DEFAULT_FRAME_SLOT_MAP = {
   "frame-1": [{ left: 6.65, top: 29.25, width: 86.1, height: 64.94 }],
   "frame-2": [{ left: 6.65, top: 21.88, width: 86.1, height: 64.94 }],
   "frame-3": [{ left: 6.95, top: 16.15, width: 86.1, height: 65.01 }],
-  "frame-4": [{ left: 6.35, top: 2.85, width: 86.5, height: 45.5, rotation: 90, fit: "cover", noCaptureCrop: true }],
+  "frame-4": [{ left: 6.51, top: 2.62, width: 86.84, height: 45.46, rotation: 90, fit: "cover", noCaptureCrop: true }],
   "frame-5": [{ left: 6.65, top: 15.72, width: 86.1, height: 65.01 }],
 };
 
@@ -44,8 +44,8 @@ const LAYOUT_FRAME_SLOT_MAP = {
       { left: 6.8, top: 55.03, width: 86.25, height: 36.05 },
     ],
     "frame-4": [
-      { left: 6.5, top: 2.76, width: 72.81, height: 22.31, rotation: 90, fit: "cover", noCaptureCrop: true },
-      { left: 6.5, top: 25.42, width: 72.81, height: 22.45, rotation: 90, fit: "cover", noCaptureCrop: true },
+      { left: 6.51, top: 2.70, width: 86.84, height: 22.48, rotation: 90, fit: "cover", noCaptureCrop: true },
+      { left: 6.51, top: 25.39, width: 86.84, height: 22.62, rotation: 90, fit: "cover", noCaptureCrop: true },
     ],
     "frame-5": [
       { left: 6.5, top: 15.79, width: 86.25, height: 31.52 },

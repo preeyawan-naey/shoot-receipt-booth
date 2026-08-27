@@ -8,7 +8,14 @@ const PRINT_BOTTOM_PADDING = 24;
 const PRINT_DOWNLOAD_EDGE_PADDING = 52;
 const PRINT_EXTRA_TOP_TRIM = 0;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
-const PRINT_THANK_YOU_FONT_SIZE = 29;
+const PRINT_THANK_YOU_FONT_SIZE = 20;
+/** Crop leftover paper below footer so QR sits closer (percent of frame height). */
+const PRINT_CROP_BOTTOM_PCT = {
+  "Layout-1:frame-3": 86.9,
+  "Layout-4:frame-3": 85.34,
+};
+/** Stripe/star frames extend to the canvas bottom — crop at photos so QR sits closer. */
+const PRINT_CROP_TO_PHOTOS_FRAMES = new Set(["frame-5"]);
 const PRINT_JOB_DISPATCH_DELAY_MS = 700;
 const PRINT_COMPLETE_FALLBACK_MS = 10000;
 const PRINT_PHOTO_RENDER_SCALE = 3;
@@ -59,7 +66,7 @@ function slotToDrawRect(slot, canvasWidth, canvasHeight, offsetX = 0, offsetY = 
   let w = (slot.width / 100) * canvasWidth;
   let h = (slot.height / 100) * canvasHeight;
 
-  const canBleed = !slot.rotation && slot.fit !== "contain";
+  const canBleed = slot.fit !== "contain";
   if (canBleed) {
     const bleed = getPhotoSlotBleed(canvasWidth);
     x = Math.max(0, x - bleed);
@@ -409,12 +416,34 @@ function getPhotosBottomPx(frameConfig, canvasHeight) {
   return getPhotosBoundsPx(frameConfig, 0, canvasHeight).bottom;
 }
 
+function getPrintCropOverrideBottom(frameConfig, frameH) {
+  const layoutId = frameConfig?.id;
+  const frameId =
+    typeof resolveDecorativeFrameId === "function"
+      ? resolveDecorativeFrameId()
+      : typeof getSelectedFrameId === "function"
+        ? getSelectedFrameId()
+        : "none";
+  const pct = PRINT_CROP_BOTTOM_PCT[`${layoutId}:${frameId}`];
+  if (pct != null) {
+    return Math.round((pct / 100) * frameH);
+  }
+  if (PRINT_CROP_TO_PHOTOS_FRAMES.has(frameId)) {
+    return Math.ceil(getPhotosBottomPx(frameConfig, frameH));
+  }
+  return null;
+}
+
 function getPrintCropRect(frameImg, frameConfig, frameH) {
   const bounds = measureFrameContentBounds(frameImg);
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
   const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
+  const overrideBottom = getPrintCropOverrideBottom(frameConfig, frameH);
   // Include frame footer (e.g. DATE/GATE on boarding pass) — not just photo bottom
-  const bottom = Math.max(Math.ceil(photosBottom) - 1, bounds.bottom);
+  const bottom =
+    overrideBottom != null
+      ? overrideBottom
+      : Math.max(Math.ceil(photosBottom) - 1, bounds.bottom);
 
   return {
     top,

@@ -5,7 +5,9 @@ const db = require("./db");
 const PAYMENT_AMOUNT_KEY = "payment_amount";
 const PAYMENT_QR_UPDATED_KEY = "payment_qr_updated_at";
 const PAYMENT_QR_BASE64_KEY = "payment_qr_base64";
+const OMISE_ENABLED_KEY = "omise_enabled";
 const DEFAULT_AMOUNT = 59;
+const DEFAULT_OMISE_ENABLED = true;
 const PAYMENT_QR_PATH = path.join(__dirname, "uploads", "payment-qr.png");
 
 function ensureUploadDir() {
@@ -61,16 +63,36 @@ async function getPaymentQrBuffer() {
   return null;
 }
 
+function parseBooleanSetting(value, fallback = DEFAULT_OMISE_ENABLED) {
+  if (value == null) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+async function isOmisePaymentEnabled() {
+  const raw = await getSettingValue(OMISE_ENABLED_KEY, String(DEFAULT_OMISE_ENABLED));
+  return parseBooleanSetting(raw, DEFAULT_OMISE_ENABLED);
+}
+
+async function setOmisePaymentEnabled(enabled) {
+  await setSettingValue(OMISE_ENABLED_KEY, enabled ? "true" : "false");
+  return Boolean(enabled);
+}
+
 async function getPaymentSettings() {
   const amountRaw = await getSettingValue(PAYMENT_AMOUNT_KEY, String(DEFAULT_AMOUNT));
   const amount = Number(amountRaw) || DEFAULT_AMOUNT;
   const updatedAt = await getSettingValue(PAYMENT_QR_UPDATED_KEY, null);
   const buffer = await getPaymentQrBuffer();
+  const omiseEnabled = await isOmisePaymentEnabled();
 
   return {
     payment_amount: amount,
     payment_qr_url: buffer ? "/api/booth/payment-qr" : null,
     payment_qr_updated_at: updatedAt,
+    omise_enabled: omiseEnabled,
   };
 }
 
@@ -102,6 +124,8 @@ function getPaymentQrPath() {
 module.exports = {
   getPaymentSettings,
   setPaymentAmount,
+  setOmisePaymentEnabled,
+  isOmisePaymentEnabled,
   savePaymentQr,
   getPaymentQrBuffer,
   getPaymentQrPath,

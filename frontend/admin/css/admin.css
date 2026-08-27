@@ -297,6 +297,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  flex-wrap: wrap;
 }
 
 .admin-settings__title {
@@ -312,6 +313,7 @@ body {
 }
 
 .admin-toggle {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -525,12 +527,15 @@ body {
   text-transform: uppercase;
 }
 
-.status-badge--used {
+.status-badge--used,
+.status-badge--omise {
   background: rgba(34, 197, 94, 0.15);
   color: #15803d;
 }
 
-.status-badge--unused {
+.status-badge--unused,
+.status-badge--free,
+.status-badge--manual {
   background: rgba(107, 114, 128, 0.15);
   color: #4b5563;
 }

@@ -2,6 +2,7 @@ const express = require("express");
 const boothSettings = require("../boothSettings");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
+const photoSessions = require("../photoSessions");
 const omise = require("../omise");
 const db = require("../db");
 
@@ -80,7 +81,8 @@ router.post("/payment-sessions", async (_req, res) => {
     return res.status(201).json({ success: true, session });
   } catch (error) {
     console.error("[booth/payment-sessions/create]", error);
-    return res.status(500).json({
+    const disabled = String(error.message || "").includes("ถูกปิดจากหลังบ้าน");
+    return res.status(disabled ? 403 : 500).json({
       success: false,
       message: error.message,
     });
@@ -120,6 +122,24 @@ router.post("/payment-sessions/:id/cancel", async (req, res) => {
     return res.json({ success: true, session });
   } catch (error) {
     console.error("[booth/payment-sessions/cancel]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.post("/photo-sessions", async (req, res) => {
+  try {
+    const session = await photoSessions.recordSession({
+      layoutId: typeof req.body?.layout_id === "string" ? req.body.layout_id : null,
+      frameId: typeof req.body?.frame_id === "string" ? req.body.frame_id : null,
+      printCount: req.body?.print_count,
+      downloadId: typeof req.body?.download_id === "string" ? req.body.download_id : null,
+    });
+    return res.status(201).json({ success: true, session });
+  } catch (error) {
+    console.error("[booth/photo-sessions/create]", error);
     return res.status(500).json({
       success: false,
       message: error.message,
