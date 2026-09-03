@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth120";
+const BOOTH_BUILD = "booth124";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -37,6 +37,9 @@ function updatePrintCopiesUI() {
 }
 
 function handleNativePrintResumeOnInit() {
+  if (typeof isReceiptClubApp === "function" && isReceiptClubApp()) {
+    return;
+  }
   if (typeof resumeNativePrintCallbackOnLoad !== "function") return;
 
   const payload = resumeNativePrintCallbackOnLoad();
@@ -62,7 +65,12 @@ function initApp() {
   initLayoutGrid();
   bindEvents();
   void initBoothSettings();
-  if (/Android/i.test(navigator.userAgent) || typeof fully !== "undefined") {
+  if (typeof isReceiptClubApp === "function" && isReceiptClubApp()) {
+    const bridge = typeof getReceiptClubBridge === "function" ? getReceiptClubBridge() : null;
+    console.info(
+      `[booth] receipt-club app v=${bridge?.getAppVersion?.() || "?"} url=${bridge?.getBoothUrl?.() || "?"}`
+    );
+  } else if (/Android/i.test(navigator.userAgent) || typeof fully !== "undefined") {
     if (typeof logFullyPrintDiagnostics === "function") {
       logFullyPrintDiagnostics();
     }

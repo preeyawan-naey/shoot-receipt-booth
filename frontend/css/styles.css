@@ -1119,6 +1119,17 @@ body {
   filter: brightness(1.08) contrast(1.02);
   opacity: 0;
   transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.camera-video::-webkit-media-controls,
+.camera-video::-webkit-media-controls-enclosure,
+.camera-video::-webkit-media-controls-panel,
+.camera-video::-webkit-media-controls-play-button,
+.camera-video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .camera-viewport--ready .camera-video {
@@ -1797,4 +1808,306 @@ body {
 
 .qr-download__btn:active {
   transform: scale(0.97);
+}
+
+/* ============================================================
+   NAME ENTRY PAGE
+   ============================================================ */
+
+#page-name-entry.page {
+  padding-top: var(--page-padding-y-balanced);
+  padding-bottom: var(--page-padding-y-balanced);
+}
+
+.name-entry-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 36px);
+  padding: 0 clamp(24px, 8vw, 64px);
+}
+
+.name-entry__title {
+  margin: 0;
+  font-size: clamp(28px, 5.5vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--color-black, #1a1a1a);
+}
+
+.name-entry-form {
+  width: min(100%, 520px);
+}
+
+.name-entry__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: clamp(14px, 2.4vh, 20px) clamp(18px, 3vw, 24px);
+  border: none;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  font-family: var(--font-sans);
+  font-size: clamp(18px, 3.2vw, 24px);
+  font-weight: 500;
+  text-align: center;
+  color: var(--color-black, #1a1a1a);
+  outline: none;
+}
+
+.name-entry__input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08), 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   ADMIN DRAWER / KIOSK
+   ============================================================ */
+
+.admin-edge-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9998;
+  width: 28px;
+  height: 100%;
+  touch-action: none;
+}
+
+.kiosk-mode-badge {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 9997;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+
+.admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.admin-drawer-backdrop[hidden] {
+  display: none !important;
+}
+
+.admin-drawer {
+  width: min(78vw, 320px);
+  height: 100%;
+  background: #f3f0eb;
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  animation: admin-drawer-in 0.22s ease;
+}
+
+@keyframes admin-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.admin-drawer__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px;
+  background: #2f3438;
+  color: #fff;
+}
+
+.admin-drawer__logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.admin-drawer__brand {
+  min-width: 0;
+}
+
+.admin-drawer__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.admin-drawer__version {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.admin-drawer__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.admin-drawer__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  color: #1a1a1a;
+}
+
+.admin-drawer__item:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.admin-drawer__icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+}
+
+.admin-drawer__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.admin-drawer__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-drawer__label {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.admin-drawer__desc {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #666;
+}
+
+.admin-drawer__item--danger .admin-drawer__label,
+.admin-drawer__item--danger .admin-drawer__icon {
+  color: var(--color-red, #c0392b);
+}
+
+.admin-drawer__item--danger .admin-drawer__desc {
+  color: #b07070;
+}
+
+body.admin-drawer-open {
+  overflow: hidden;
+}
+
+.kiosk-pin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.kiosk-pin-modal[hidden] {
+  display: none !important;
+}
+
+.kiosk-pin-modal__panel {
+  width: min(100%, 360px);
+  padding: clamp(24px, 4vh, 32px);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.kiosk-pin-modal__title {
+  margin: 0 0 8px;
+  font-size: clamp(20px, 4vw, 24px);
+  font-weight: 700;
+  text-align: center;
+}
+
+.kiosk-pin-modal__hint {
+  margin: 0 0 18px;
+  font-size: 14px;
+  text-align: center;
+  color: #666;
+}
+
+.kiosk-pin-form__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 24px;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+.kiosk-pin-form__error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-red, #c0392b);
+  text-align: center;
+}
+
+.kiosk-pin-form__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.kiosk-pin-form__btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kiosk-pin-form__btn--ghost {
+  background: #eee;
+  color: #333;
+}
+
+.kiosk-pin-form__btn--primary {
+  background: var(--color-red, #c0392b);
+  color: #fff;
+}
+
+body.kiosk-active .booth-screen {
+  overscroll-behavior: none;
 }

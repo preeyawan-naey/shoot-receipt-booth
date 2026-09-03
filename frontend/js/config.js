@@ -3,7 +3,7 @@
  * Fully Kiosk: เปิดผ่าน http://<LAN-IP>:3000 (ไม่ใช้ localhost บน tablet)
  * ตั้ง URL เอง: ?api=http://192.168.x.x:3000 (บันทึกใน localStorage)
  */
-const PRODUCTION_API_URL = "https://shoot-receipt-backend.onrender.com";
+const PRODUCTION_API_URL = "https://shoot-receipt-boot.onrender.com";
 const API_OVERRIDE_KEY = "SHOOT_API_URL";
 
 function normalizeApiUrl(value) {

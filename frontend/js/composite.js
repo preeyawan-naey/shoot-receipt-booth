@@ -9,6 +9,8 @@ const PRINT_DOWNLOAD_EDGE_PADDING = 52;
 const PRINT_EXTRA_TOP_TRIM = 0;
 const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 20;
+const PRINT_GUEST_NAME_FONT_SIZE = 18;
+const PRINT_GUEST_NAME_GAP = 10;
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -499,6 +501,10 @@ function measureFrameContentBounds(frameImg) {
 }
 
 async function measureThankYouTextHeight() {
+  return measureThankYouBlockHeight();
+}
+
+async function measureThankYouBlockHeight() {
   const fontSize = PRINT_THANK_YOU_FONT_SIZE;
   const fontSpec = `${fontSize}px "Roboto Mono", monospace`;
 
@@ -511,10 +517,27 @@ async function measureThankYouTextHeight() {
   measureCtx.font = fontSpec;
   const metrics = measureCtx.measureText(PRINT_THANK_YOU_TEXT);
 
-  return (
+  let height =
     (metrics.actualBoundingBoxAscent || fontSize * 0.8) +
-    (metrics.actualBoundingBoxDescent || fontSize * 0.2)
-  );
+    (metrics.actualBoundingBoxDescent || fontSize * 0.2);
+
+  const guestName =
+    typeof getBoothGuestName === "function" ? getBoothGuestName() : "";
+  if (guestName) {
+    const guestFontSize = PRINT_GUEST_NAME_FONT_SIZE;
+    const guestFontSpec = `${guestFontSize}px "Roboto Mono", monospace`;
+    if (document.fonts?.load) {
+      await document.fonts.load(guestFontSpec);
+    }
+    measureCtx.font = guestFontSpec;
+    const guestMetrics = measureCtx.measureText(guestName);
+    height +=
+      PRINT_GUEST_NAME_GAP +
+      (guestMetrics.actualBoundingBoxAscent || guestFontSize * 0.8) +
+      (guestMetrics.actualBoundingBoxDescent || guestFontSize * 0.2);
+  }
+
+  return height;
 }
 
 async function drawThankYouText(ctx, centerX, y) {
@@ -526,6 +549,20 @@ async function drawThankYouText(ctx, centerX, y) {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillText(PRINT_THANK_YOU_TEXT, centerX, y);
+
+  const guestName =
+    typeof getBoothGuestName === "function" ? getBoothGuestName() : "";
+  if (!guestName) return;
+
+  const metrics = ctx.measureText(PRINT_THANK_YOU_TEXT);
+  const thankHeight =
+    (metrics.actualBoundingBoxAscent || fontSize * 0.8) +
+    (metrics.actualBoundingBoxDescent || fontSize * 0.2);
+  const guestFontSize = PRINT_GUEST_NAME_FONT_SIZE;
+  const guestY = y + thankHeight + PRINT_GUEST_NAME_GAP;
+
+  ctx.font = `${guestFontSize}px "Roboto Mono", monospace`;
+  ctx.fillText(guestName, centerX, guestY);
 }
 
 async function drawComposite(canvas, frameConfig, photos) {
@@ -800,7 +837,12 @@ function getPrintDriver() {
     /* private mode */
   }
 
-  // Native Shoot Print APK (default on kiosk)
+  // The Receipt Club Android app (in-process USB print)
+  if (typeof isReceiptClubApp === "function" && isReceiptClubApp()) {
+    return "native";
+  }
+
+  // Native Shoot Print APK via Fully (legacy kiosk)
   if (getFullyBridge()) {
     return "native";
   }

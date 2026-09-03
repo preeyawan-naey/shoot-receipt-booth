@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth120" />
+    <link rel="stylesheet" href="css/styles.css?v=booth124" />
   </head>
   <body>
     <div class="viewport">
@@ -44,6 +44,32 @@
               <span class="start-btn__highlight">TAP</span> to START
             </button>
           </footer>
+        </section>
+
+        <!-- ==================== NAME ENTRY PAGE ==================== -->
+        <section class="page" id="page-name-entry" data-page="name-entry">
+          <header class="frame-header">
+            <button class="back-btn back-btn--icon" id="btn-name-back" type="button" aria-label="กลับ">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div class="frame-title" aria-hidden="true"></div>
+          </header>
+
+          <div class="name-entry-body">
+            <h1 class="name-entry__title">ENTER YOUR NAME</h1>
+            <form id="name-entry-form" class="name-entry-form" autocomplete="off">
+              <input
+                type="text"
+                id="name-entry-input"
+                class="name-entry__input"
+                maxlength="24"
+                enterkeyhint="done"
+                autocapitalize="words"
+                autocomplete="off"
+                aria-label="Enter your name"
+              />
+            </form>
+          </div>
         </section>
 
         <!-- ==================== PAYMENT PAGE ==================== -->
@@ -149,6 +175,8 @@
                 autoplay
                 playsinline
                 muted
+                disablepictureinpicture
+                disableremoteplayback
               ></video>
               <canvas id="camera-canvas" class="camera-canvas" hidden></canvas>
               <div class="countdown-overlay" id="countdown-overlay" hidden>
@@ -257,6 +285,79 @@
             <p class="print-overlay__text" id="print-overlay-text">กำลังพิมพ์...</p>
           </div>
         </div>
+
+        <div id="admin-edge-zone" class="admin-edge-zone" aria-hidden="true"></div>
+        <div id="kiosk-mode-badge" class="kiosk-mode-badge" hidden aria-live="polite">KIOSK</div>
+
+        <div class="admin-drawer-backdrop" id="admin-drawer-backdrop" hidden aria-hidden="true">
+          <aside class="admin-drawer" id="admin-drawer" role="dialog" aria-label="Admin menu">
+            <header class="admin-drawer__header">
+              <img src="img/logo2.png" alt="" class="admin-drawer__logo" />
+              <div class="admin-drawer__brand">
+                <h2 class="admin-drawer__title">The Receipt Club</h2>
+                <p class="admin-drawer__version" id="admin-drawer-version">Booth</p>
+              </div>
+            </header>
+
+            <nav class="admin-drawer__nav" aria-label="Admin actions">
+              <button type="button" class="admin-drawer__item" id="admin-menu-kiosk">
+                <span class="admin-drawer__icon" aria-hidden="true">
+                  <i data-lucide="lock"></i>
+                </span>
+                <span class="admin-drawer__text">
+                  <span class="admin-drawer__label" id="admin-menu-kiosk-title">เปิด mode kiosk</span>
+                  <span class="admin-drawer__desc" id="admin-menu-kiosk-desc">ล็อกหน้าจอ ไม่ให้ออกจากแอpp</span>
+                </span>
+              </button>
+
+              <button type="button" class="admin-drawer__item" id="admin-menu-reload">
+                <span class="admin-drawer__icon" aria-hidden="true">
+                  <i data-lucide="refresh-cw"></i>
+                </span>
+                <span class="admin-drawer__text">
+                  <span class="admin-drawer__label">Reload</span>
+                  <span class="admin-drawer__desc">โหลดหน้า booth ใหม่</span>
+                </span>
+              </button>
+
+              <button type="button" class="admin-drawer__item admin-drawer__item--danger" id="admin-menu-exit">
+                <span class="admin-drawer__icon" aria-hidden="true">
+                  <i data-lucide="log-out"></i>
+                </span>
+                <span class="admin-drawer__text">
+                  <span class="admin-drawer__label">Exit</span>
+                  <span class="admin-drawer__desc">ออกจากแอpp</span>
+                </span>
+              </button>
+            </nav>
+          </aside>
+        </div>
+
+        <div class="kiosk-pin-modal" id="kiosk-pin-modal" hidden aria-hidden="true">
+          <div class="kiosk-pin-modal__panel" role="dialog" aria-labelledby="kiosk-pin-title">
+            <h2 class="kiosk-pin-modal__title" id="kiosk-pin-title">ออกจากโหมด Kiosk</h2>
+            <p class="kiosk-pin-modal__hint" id="kiosk-pin-hint">กรอกรหัส PIN</p>
+            <form id="kiosk-pin-form" class="kiosk-pin-form">
+              <input
+                type="password"
+                id="kiosk-pin-input"
+                class="kiosk-pin-form__input"
+                inputmode="numeric"
+                maxlength="4"
+                pattern="[0-9]*"
+                autocomplete="off"
+                aria-label="PIN"
+              />
+              <p class="kiosk-pin-form__error" id="kiosk-pin-error" hidden></p>
+              <div class="kiosk-pin-form__actions">
+                <button type="button" class="kiosk-pin-form__btn kiosk-pin-form__btn--ghost" id="kiosk-pin-cancel">
+                  ยกเลิก
+                </button>
+                <button type="submit" class="kiosk-pin-form__btn kiosk-pin-form__btn--primary">ยืนยัน</button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -272,17 +373,19 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-settings.js?v=booth120"></script>
-    <script src="js/booth-storage.js?v=booth120"></script>
-    <script src="js/layouts.js?v=booth120"></script>
-    <script src="js/frames.js?v=booth120"></script>
-    <script src="js/navigation.js?v=booth120"></script>
-    <script src="js/payment.js?v=booth120"></script>
+    <script src="js/booth-settings.js?v=booth124"></script>
+    <script src="js/booth-storage.js?v=booth124"></script>
+    <script src="js/layouts.js?v=booth124"></script>
+    <script src="js/frames.js?v=booth124"></script>
+    <script src="js/navigation.js?v=booth124"></script>
+    <script src="js/kiosk.js?v=booth124"></script>
+    <script src="js/payment.js?v=booth124"></script>
+    <script src="js/booth-name.js?v=booth124"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
-    <script src="js/native-print.js?v=booth120"></script>
-    <script src="js/composite.js?v=booth120"></script>
-    <script src="js/camera.js?v=booth120"></script>
-    <script src="js/app.js?v=booth120"></script>
+    <script src="js/native-print.js?v=booth124"></script>
+    <script src="js/composite.js?v=booth124"></script>
+    <script src="js/camera.js?v=booth124"></script>
+    <script src="js/app.js?v=booth124"></script>
   </body>
 </html>

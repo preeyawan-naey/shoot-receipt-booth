@@ -296,33 +296,40 @@ function finishCaptureSession() {
 
   sessionStorage.setItem("capturedPhotos", JSON.stringify(payload));
 
+  hideCameraVideoInstantly();
+  navigateTo("process");
   stopCameraSession();
-  navigateToProcess(payload);
+
+  showPreviewPage(payload.photos, payload.frameId).catch((error) => {
+    console.error("[preview]", error);
+    alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
+    sessionStorage.removeItem("capturedPhotos");
+    const layoutId = getSelectedLayoutId();
+    if (layoutId && layoutHasFrames(layoutId)) {
+      if (typeof initFrameGrid === "function") {
+        initFrameGrid(layoutId);
+      }
+      navigateTo("frame-select");
+    } else {
+      navigateTo("layout-select");
+    }
+  });
 }
 
-/**
- * นำทางไปหน้า Preview พร้อมข้อมูลรูปที่ถ่าย
- * @param {object} payload
- */
-function navigateToProcess(payload) {
-  showPreviewPage(payload.photos, payload.frameId)
-    .then(() => {
-      navigateTo("process");
-    })
-    .catch((error) => {
-      console.error("[preview]", error);
-      alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
-      sessionStorage.removeItem("capturedPhotos");
-      const layoutId = getSelectedLayoutId();
-      if (layoutId && layoutHasFrames(layoutId)) {
-        if (typeof initFrameGrid === "function") {
-          initFrameGrid(layoutId);
-        }
-        navigateTo("frame-select");
-      } else {
-        navigateTo("layout-select");
-      }
-    });
+function hideCameraVideoInstantly() {
+  const video = document.getElementById("camera-video");
+  const viewport = document.getElementById("camera-viewport");
+
+  if (video) {
+    video.pause();
+    video.srcObject = null;
+    video.removeAttribute("src");
+    video.load();
+  }
+
+  viewport?.classList.remove("camera-viewport--ready", "camera-viewport--error");
+  viewport?.classList.add("camera-viewport--loading");
+  hideCountdown();
 }
 
 document.addEventListener("DOMContentLoaded", initCameraModule);

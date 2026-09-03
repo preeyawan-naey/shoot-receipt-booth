@@ -38,24 +38,15 @@ async function initBoothSettings() {
 
 async function goToBoothStart() {
   await fetchBoothSettings();
-  if (isBoothPaymentRequired()) {
-    goToPayment();
-    return;
-  }
-  goToLayoutSelect();
+  goToNameEntry();
 }
 
 function goToBoothBack() {
-  goToHome();
+  goToNameEntry();
 }
 
 async function goToBoothLayoutBack() {
-  await fetchBoothSettings();
-  if (isBoothPaymentRequired()) {
-    goToPayment();
-    return;
-  }
-  goToHome();
+  goToNameEntry();
 }
 
 async function recordBoothPhotoSession({ downloadId = null } = {}) {

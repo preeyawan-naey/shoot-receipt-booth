@@ -12,12 +12,13 @@ const NATIVE_PRINT_COPIES_EXTRA = "com.shootreceipt.print.extra.COPIES";
 const NATIVE_PRINT_CALLBACK_EXTRA = "com.shootreceipt.print.extra.CALLBACK_URL";
 const NATIVE_RETURN_PACKAGE_EXTRA = "com.shootreceipt.print.extra.RETURN_PACKAGE";
 const FULLY_KIOSK_PACKAGE = "de.ozerov.fully";
+const RECEIPT_CLUB_BRIDGE_NAME = "ReceiptClubBridge";
 /** FLAG_ACTIVITY_NEW_TASK — same as RawBT on this kiosk */
 const NATIVE_LAUNCH_FLAGS = "0x10000000";
 const NATIVE_CALLBACK_DONE_PARAM = "shoot_print_done";
 const NATIVE_CALLBACK_JOB_PARAM = "job";
 const NATIVE_CALLBACK_STATUS_PARAM = "status";
-const NATIVE_CALLBACK_TIMEOUT_MS = 45000;
+const NATIVE_CALLBACK_TIMEOUT_MS = 120000;
 const NATIVE_PRINT_FLOW_KEY = "shoot_print_flow";
 
 let nativePrintWaiter = null;
@@ -29,7 +30,23 @@ function createNativePrintJobId() {
   return `print-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function getReceiptClubBridge() {
+  const bridge = window[RECEIPT_CLUB_BRIDGE_NAME];
+  if (!bridge || typeof bridge.printImage !== "function") return null;
+  return bridge;
+}
+
+function isReceiptClubApp() {
+  try {
+    const bridge = getReceiptClubBridge();
+    return bridge?.isBoothApp?.() === true || !!bridge;
+  } catch {
+    return !!getReceiptClubBridge();
+  }
+}
+
 function getNativeReturnPackage() {
+  if (isReceiptClubApp()) return null;
   if (!getFullyBridge()) return null;
   return FULLY_KIOSK_PACKAGE;
 }
@@ -375,7 +392,72 @@ function launchNativePrint(httpUrl, copies = 1, callbackUrl = null, returnPackag
   }
 }
 
+async function printViaReceiptClubApp(copies = 1, urls = {}) {
+  const bridge = getReceiptClubBridge();
+  if (!bridge) {
+    throw new Error("Receipt Club app bridge not found");
+  }
+
+  const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const imageUrl = resolveNativePrintUrl(urls);
+  if (!imageUrl) {
+    throw new Error("ไม่พบ URL รูปสำหรับปริ้น");
+  }
+
+  const jobId = createNativePrintJobId();
+  console.info(`[print] receipt-club in-app job=${jobId} copies=${count}`);
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("ปริ้นใช้เวลานานเกินไป — ตรวจสอบ USB และเครื่องพิมพ์"));
+    }, NATIVE_CALLBACK_TIMEOUT_MS);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      if (window.__receiptClubOnPrintDone === onDone) {
+        delete window.__receiptClubOnPrintDone;
+      }
+    }
+
+    function onDone(payload) {
+      const result =
+        typeof payload === "string"
+          ? (() => {
+              try {
+                return JSON.parse(payload);
+              } catch {
+                return null;
+              }
+            })()
+          : payload;
+
+      if (!result || result.jobId !== jobId) return;
+
+      cleanup();
+      if (result.status === "ok") {
+        resolve({ jobId, status: "ok" });
+        return;
+      }
+      reject(new Error(result.message || "ปริ้นไม่สำเร็จ — ตรวจสอบเครื่องพิมพ์ USB"));
+    }
+
+    window.__receiptClubOnPrintDone = onDone;
+
+    try {
+      bridge.printImage(imageUrl, count, jobId);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
 async function printViaNative(source, copies = 1, urls = {}) {
+  if (isReceiptClubApp()) {
+    return printViaReceiptClubApp(copies, urls);
+  }
+
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
   const imageUrl = resolveNativePrintUrl(urls);
 
@@ -418,6 +500,23 @@ async function printViaNative(source, copies = 1, urls = {}) {
 
 /** Console diagnostic — uses last uploaded receipt URL from sessionStorage */
 function testNativePrintLaunch() {
+  if (isReceiptClubApp()) {
+    const bridge = getReceiptClubBridge();
+    console.info(
+      `[print] TEST receipt-club app v=${bridge?.getAppVersion?.() || "?"} url=${bridge?.getBoothUrl?.() || "?"}`
+    );
+    const imageUrl = resolveNativePrintUrl({});
+    if (!imageUrl) {
+      console.error("[print] TEST failed — no print URL (ถ่ายรูปและกดปริ้นก่อน)");
+      return false;
+    }
+    void printViaReceiptClubApp(1, {}).then(
+      () => console.info("[print] TEST receipt-club print ok"),
+      (err) => console.error("[print] TEST receipt-club print failed", err)
+    );
+    return true;
+  }
+
   const api = getFullyBridge();
   if (!api) {
     console.error("[print] TEST failed — fully JS interface not found");
@@ -463,3 +562,5 @@ function testNativePrintLaunch() {
 }
 
 window.testNativePrintLaunch = testNativePrintLaunch;
+window.isReceiptClubApp = isReceiptClubApp;
+window.getReceiptClubBridge = getReceiptClubBridge;

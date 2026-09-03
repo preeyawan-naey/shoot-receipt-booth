@@ -7,6 +7,7 @@ const pages = {};
 
 function initNavigation() {
   pages.home = document.getElementById("page-home");
+  pages["name-entry"] = document.getElementById("page-name-entry");
   pages.payment = document.getElementById("page-payment");
   pages["layout-select"] = document.getElementById("page-layout-select");
   pages["frame-select"] = document.getElementById("page-frame-select");
@@ -64,6 +65,9 @@ function goToHome() {
   }
   if (typeof clearPaymentCountdown === "function") {
     clearPaymentCountdown();
+  }
+  if (typeof clearBoothGuestName === "function") {
+    clearBoothGuestName();
   }
   navigateTo("home");
 }

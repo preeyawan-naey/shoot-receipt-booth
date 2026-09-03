@@ -109,5 +109,10 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
 
   await drawComposite(canvas, layoutConfig, capturedPhotosArray);
   resetPrintCopiesUI();
-  playReceiptPrintAnimation();
+
+  const receiptEl = document.getElementById("receipt-composite");
+  if (receiptEl) {
+    receiptEl.classList.remove("preview-dispenser__receipt--printing");
+    receiptEl.classList.add("preview-dispenser__receipt--done");
+  }
 }
