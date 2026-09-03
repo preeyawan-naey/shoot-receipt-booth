@@ -7,7 +7,7 @@ const BOOTH_SETTINGS_POLL_MS = 15000;
 let boothSettingsState = {
   payment_amount: 59,
   payment_qr_url: null,
-  omise_enabled: true,
+  omise_enabled: false,
 };
 
 function isBoothPaymentRequired() {

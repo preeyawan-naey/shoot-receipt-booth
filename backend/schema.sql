@@ -33,7 +33,7 @@ VALUES ('payment_amount', '59')
 ON CONFLICT (setting_key) DO NOTHING;
 
 INSERT INTO booth_settings (setting_key, setting_value)
-VALUES ('omise_enabled', 'true')
+VALUES ('omise_enabled', 'false')
 ON CONFLICT (setting_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS payment_sessions (

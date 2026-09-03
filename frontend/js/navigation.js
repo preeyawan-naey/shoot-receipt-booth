@@ -30,8 +30,13 @@ function resetFramePickerScroll() {
   grid.scrollTop = 0;
 }
 
-function navigateTo(pageName) {
+function navigateTo(pageName, options = {}) {
   if (!pages[pageName]) return;
+
+  const instant = options.instant === true;
+  if (instant) {
+    Object.values(pages).forEach((el) => el?.classList.add("page--no-transition"));
+  }
 
   Object.entries(pages).forEach(([name, el]) => {
     if (el) {
@@ -44,6 +49,12 @@ function navigateTo(pageName) {
   }
 
   currentPage = pageName;
+
+  if (instant) {
+    window.requestAnimationFrame(() => {
+      Object.values(pages).forEach((el) => el?.classList.remove("page--no-transition"));
+    });
+  }
 }
 
 function getCurrentPage() {

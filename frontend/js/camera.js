@@ -18,12 +18,57 @@ const BETWEEN_SHOTS_MS = 1400;
 const CAMERA_BRIGHTNESS_FILTER = "Graysclae(100%) brightness(0.8) contrast(1.2)";
 
 function initCameraModule() {
+  prepareCameraVideoElement();
+
   const btnShutter = document.getElementById("btn-shutter");
   btnShutter?.addEventListener("click", () => {
     if (cameraState.isSessionActive && !cameraState.isCountingDown) {
       startCountdown();
     }
   });
+}
+
+function prepareCameraVideoElement() {
+  const video = document.getElementById("camera-video");
+  if (!video) return;
+
+  video.controls = false;
+  video.playsInline = true;
+  video.muted = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("x-webkit-airplay", "deny");
+}
+
+function setCameraVideoVisible(visible) {
+  const video = document.getElementById("camera-video");
+  const idle = document.getElementById("camera-viewport-idle");
+  if (video) {
+    video.hidden = !visible;
+  }
+  if (idle) {
+    idle.hidden = visible;
+    idle.setAttribute("aria-hidden", visible ? "true" : "false");
+  }
+}
+
+function showCameraBusyOverlay(message = "กำลังเตรียม preview...") {
+  const overlay = document.getElementById("camera-busy-overlay");
+  const textEl = overlay?.querySelector(".camera-viewport__busy-text");
+  if (textEl && message) textEl.textContent = message;
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+  }
+  setCameraVideoVisible(false);
+}
+
+function hideCameraBusyOverlay() {
+  const overlay = document.getElementById("camera-busy-overlay");
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+  }
 }
 
 /**
@@ -40,12 +85,14 @@ async function startCameraSession(frame) {
   cameraState.isSessionActive = true;
 
   updatePhotoCounter();
+  hideCameraBusyOverlay();
 
   const video = document.getElementById("camera-video");
   const viewport = document.getElementById("camera-viewport");
 
   viewport?.classList.remove("camera-viewport--error", "camera-viewport--ready");
   viewport?.classList.add("camera-viewport--loading");
+  setCameraVideoVisible(false);
 
   try {
     cameraState.stream = await navigator.mediaDevices.getUserMedia({
@@ -60,6 +107,7 @@ async function startCameraSession(frame) {
     });
 
     if (video) {
+      prepareCameraVideoElement();
       video.srcObject = cameraState.stream;
       await video.play();
       applyCameraBrightness();
@@ -67,9 +115,11 @@ async function startCameraSession(frame) {
 
     viewport?.classList.remove("camera-viewport--loading", "camera-viewport--error");
     viewport?.classList.add("camera-viewport--ready");
+    setCameraVideoVisible(true);
   } catch (err) {
     viewport?.classList.remove("camera-viewport--loading", "camera-viewport--ready");
     viewport?.classList.add("camera-viewport--error");
+    setCameraVideoVisible(false);
     console.error("Camera access failed:", err);
     return;
   }
@@ -106,16 +156,14 @@ function stopCameraSession() {
     cameraState.stream = null;
   }
 
-  const video = document.getElementById("camera-video");
-  if (video) {
-    video.srcObject = null;
-  }
+  hideCameraVideoInstantly();
 
   const viewport = document.getElementById("camera-viewport");
   viewport?.classList.remove("camera-viewport--ready", "camera-viewport--error");
   viewport?.classList.add("camera-viewport--loading");
 
   hideCountdown();
+  hideCameraBusyOverlay();
 }
 
 function updatePhotoCounter() {
@@ -296,24 +344,37 @@ function finishCaptureSession() {
 
   sessionStorage.setItem("capturedPhotos", JSON.stringify(payload));
 
+  showCameraBusyOverlay();
   hideCameraVideoInstantly();
-  navigateTo("process");
-  stopCameraSession();
 
-  showPreviewPage(payload.photos, payload.frameId).catch((error) => {
-    console.error("[preview]", error);
-    alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
-    sessionStorage.removeItem("capturedPhotos");
-    const layoutId = getSelectedLayoutId();
-    if (layoutId && layoutHasFrames(layoutId)) {
-      if (typeof initFrameGrid === "function") {
-        initFrameGrid(layoutId);
+  if (cameraState.stream) {
+    cameraState.stream.getTracks().forEach((track) => track.stop());
+    cameraState.stream = null;
+  }
+
+  navigateTo("process", { instant: true });
+
+  showPreviewPage(payload.photos, payload.frameId)
+    .then(() => {
+      hideCameraBusyOverlay();
+      stopCameraSession();
+    })
+    .catch((error) => {
+      hideCameraBusyOverlay();
+      stopCameraSession();
+      console.error("[preview]", error);
+      alert("โหลดเฟรมไม่สำเร็จ กรุณาเลือกเฟรมใหม่");
+      sessionStorage.removeItem("capturedPhotos");
+      const layoutId = getSelectedLayoutId();
+      if (layoutId && layoutHasFrames(layoutId)) {
+        if (typeof initFrameGrid === "function") {
+          initFrameGrid(layoutId);
+        }
+        navigateTo("frame-select");
+      } else {
+        navigateTo("layout-select");
       }
-      navigateTo("frame-select");
-    } else {
-      navigateTo("layout-select");
-    }
-  });
+    });
 }
 
 function hideCameraVideoInstantly() {
@@ -324,9 +385,11 @@ function hideCameraVideoInstantly() {
     video.pause();
     video.srcObject = null;
     video.removeAttribute("src");
-    video.load();
+    video.controls = false;
+    video.hidden = true;
   }
 
+  setCameraVideoVisible(false);
   viewport?.classList.remove("camera-viewport--ready", "camera-viewport--error");
   viewport?.classList.add("camera-viewport--loading");
   hideCountdown();

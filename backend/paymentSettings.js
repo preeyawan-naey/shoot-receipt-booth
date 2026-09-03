@@ -7,7 +7,7 @@ const PAYMENT_QR_UPDATED_KEY = "payment_qr_updated_at";
 const PAYMENT_QR_BASE64_KEY = "payment_qr_base64";
 const OMISE_ENABLED_KEY = "omise_enabled";
 const DEFAULT_AMOUNT = 59;
-const DEFAULT_OMISE_ENABLED = true;
+const DEFAULT_OMISE_ENABLED = false;
 const PAYMENT_QR_PATH = path.join(__dirname, "uploads", "payment-qr.png");
 
 function ensureUploadDir() {

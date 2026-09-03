@@ -24,12 +24,20 @@ function clearBoothGuestName() {
   sessionStorage.removeItem(BOOTH_GUEST_NAME_KEY);
 }
 
+function updateNameEntrySubmitState() {
+  const input = document.getElementById("name-entry-input");
+  const submitBtn = document.getElementById("name-entry-submit");
+  if (!input || !submitBtn) return;
+  submitBtn.disabled = !input.value.trim();
+}
+
 function goToNameEntry() {
   navigateTo("name-entry");
 
   const input = document.getElementById("name-entry-input");
   if (input) {
     input.value = getBoothGuestName();
+    updateNameEntrySubmitState();
     window.setTimeout(() => {
       input.focus();
       if (typeof input.select === "function") input.select();
@@ -46,6 +54,7 @@ async function submitNameAndContinue() {
     return;
   }
 
+  input?.blur();
   setBoothGuestName(name);
 
   await fetchBoothSettings();
@@ -63,10 +72,23 @@ function goToBoothNameBack() {
 
 function initBoothNameModule() {
   const form = document.getElementById("name-entry-form");
+  const input = document.getElementById("name-entry-input");
+  const submitBtn = document.getElementById("name-entry-submit");
   const btnBack = document.getElementById("btn-name-back");
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
+  });
+
+  input?.addEventListener("input", updateNameEntrySubmitState);
+
+  input?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    input.blur();
+  });
+
+  submitBtn?.addEventListener("click", () => {
     void submitNameAndContinue();
   });
 

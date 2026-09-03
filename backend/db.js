@@ -54,7 +54,7 @@ function runSqliteMigration() {
       .prepare(
         "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
       )
-      .run("omise_enabled", "true");
+      .run("omise_enabled", "false");
   }
 
   sqlite.exec(`
