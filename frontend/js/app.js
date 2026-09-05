@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth174";
+const BOOTH_BUILD = "booth175";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -328,6 +328,7 @@ function bindEvents() {
       const printTask = printReceiptDirect(copies, {
         printUrl: receipt.printUrl,
         downloadUrl: receipt.downloadUrl,
+        localPrintDataUrl: receipt.localPrintDataUrl,
       });
 
       if (driver === "native") {

@@ -1043,6 +1043,22 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
   return data;
 }
 
+async function createDownloadQRLocally(downloadId) {
+  const downloadUrl = `${API_URL}/api/download/${downloadId}`;
+
+  if (typeof QRCode !== "undefined" && typeof QRCode.toDataURL === "function") {
+    const qrCodeUrl = await QRCode.toDataURL(downloadUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 450,
+    });
+    console.info("[print] qr generated locally");
+    return { qrCodeUrl, downloadUrl };
+  }
+
+  return createDownloadQR(downloadId);
+}
+
 async function createDownloadQR(downloadId) {
   const data = await fetchJsonWithRetry(`${API_URL}/api/qrcode`, {
     method: "POST",
@@ -1067,40 +1083,41 @@ async function preparePrintReceipt() {
   }
 
   const downloadId = crypto.randomUUID();
-  const printId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQR(downloadId);
+  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQRLocally(downloadId);
 
   const photos = getPreviewSessionPhotos().length ? getPreviewSessionPhotos() : data.photos;
 
   await drawCompositeForPrint(printCanvas, layout, photos, qrCodeUrl, { thermal: true });
 
-  const downloadCanvas = document.createElement("canvas");
-  if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
-    const { layer } = await renderTheBlumoReceiptLayer(layout, photos, { thermal: false });
-    downloadCanvas.width = layer.width;
-    downloadCanvas.height = layer.height;
-    downloadCanvas.getContext("2d").drawImage(layer, 0, 0);
-  } else {
-    await drawComposite(downloadCanvas, layout, photos, { preview: false });
-  }
-  console.info(
-    `[print] download upload ${downloadCanvas.width}x${downloadCanvas.height} (theblumo receipt, no QR)`
-  );
-  const downloadJpegBase64 = canvasToUploadJpeg(downloadCanvas);
-  const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
-
-  // Color upload — APK Atkinson dithers once (thermal:true here causes double-dither fade)
   const uploadPrintCanvas = document.createElement("canvas");
   await drawCompositeForPrint(uploadPrintCanvas, layout, photos, qrCodeUrl, {
     thermal: false,
   });
   const printScaled = scaleCanvasForThermal(uploadPrintCanvas, RAWBT_TARGET_WIDTH_PX);
-  console.info(`[print] print upload ${printScaled.width}x${printScaled.height} (color→APK dither)`);
-  const printJpegBase64 = canvasToUploadJpeg(printScaled);
-  const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
+  const localPrintDataUrl = printScaled.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
+  console.info(
+    `[print] local print canvas ${printScaled.width}x${printScaled.height} b64len=${localPrintDataUrl.length}`
+  );
 
-  const downloadUrl = downloadUpload.downloadUrl || qrDownloadPath;
-  const printUrl = printUpload.printUrl || printUpload.downloadUrl;
+  const canPrintOffline =
+    typeof isReceiptClubApp === "function" &&
+    isReceiptClubApp() &&
+    typeof getReceiptClubBridge()?.printImageBase64 === "function";
+
+  let downloadUrl = qrDownloadPath;
+  let printUrl = null;
+
+  try {
+    const printJpegBase64 = canvasToUploadJpeg(printScaled);
+    const printUpload = await uploadCompositeAndGetQR(printJpegBase64, downloadId);
+    downloadUrl = printUpload.downloadUrl || qrDownloadPath;
+    printUrl = printUpload.printUrl || printUpload.downloadUrl;
+  } catch (uploadError) {
+    console.warn("[print] upload failed", uploadError);
+    if (!canPrintOffline) {
+      throw uploadError;
+    }
+  }
 
   sessionStorage.setItem(
     "downloadQR",
@@ -1108,10 +1125,12 @@ async function preparePrintReceipt() {
       qrCodeUrl,
       downloadUrl,
       printUrl,
+      localPrintDataUrl,
+      uploadPending: !printUrl,
     })
   );
 
-  return { qrCodeUrl, downloadUrl, printUrl };
+  return { qrCodeUrl, downloadUrl, printUrl, localPrintDataUrl };
 }
 
 function clearPrintCopies() {
@@ -1772,6 +1791,7 @@ function printReceiptDirect(copies = 1, options = {}) {
   })();
   const downloadUrl = options.downloadUrl || cached.downloadUrl;
   const printUrl = options.printUrl || cached.printUrl;
+  const localPrintDataUrl = options.localPrintDataUrl || cached.localPrintDataUrl;
 
   console.info(
     `[print] driver=${driver} copies=${copies} downloadUrl=${downloadUrl || "(none)"}`
@@ -1790,7 +1810,7 @@ function printReceiptDirect(copies = 1, options = {}) {
   }
 
   if (driver === "native") {
-    return printViaNative(source, copies, { downloadUrl, printUrl });
+    return printViaNative(source, copies, { downloadUrl, printUrl, localPrintDataUrl });
   }
 
   return printViaBrowser(source, copies);

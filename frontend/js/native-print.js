@@ -399,14 +399,37 @@ async function printViaReceiptClubApp(copies = 1, urls = {}) {
   }
 
   const count = Math.max(1, Math.min(10, Number(copies) || 1));
+  const cached = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const localPrintDataUrl = urls.localPrintDataUrl || cached.localPrintDataUrl;
+
+  if (
+    typeof bridge.printImageBase64 === "function" &&
+    typeof localPrintDataUrl === "string" &&
+    localPrintDataUrl.startsWith("data:image/")
+  ) {
+    return printViaReceiptClubBase64(bridge, localPrintDataUrl, count);
+  }
+
   const imageUrl = resolveNativePrintUrl(urls);
   if (!imageUrl) {
     throw new Error("ไม่พบ URL รูปสำหรับปริ้น");
   }
 
   const jobId = createNativePrintJobId();
-  console.info(`[print] receipt-club in-app job=${jobId} copies=${count}`);
+  console.info(`[print] receipt-club url job=${jobId} copies=${count}`);
 
+  return waitForReceiptClubPrint(jobId, () => {
+    bridge.printImage(imageUrl, count, jobId);
+  });
+}
+
+function waitForReceiptClubPrint(jobId, launchPrint) {
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       cleanup();
@@ -445,11 +468,20 @@ async function printViaReceiptClubApp(copies = 1, urls = {}) {
     window.__receiptClubOnPrintDone = onDone;
 
     try {
-      bridge.printImage(imageUrl, count, jobId);
+      launchPrint();
     } catch (error) {
       cleanup();
       reject(error);
     }
+  });
+}
+
+async function printViaReceiptClubBase64(bridge, dataUrl, copies) {
+  const jobId = createNativePrintJobId();
+  console.info(`[print] receipt-club base64 job=${jobId} copies=${copies} len=${dataUrl.length}`);
+
+  return waitForReceiptClubPrint(jobId, () => {
+    bridge.printImageBase64(dataUrl, copies, jobId);
   });
 }
 
