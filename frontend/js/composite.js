@@ -1099,10 +1099,17 @@ async function preparePrintReceipt() {
     `[print] local print canvas ${printScaled.width}x${printScaled.height} b64len=${localPrintDataUrl.length}`
   );
 
+  const inReceiptClubApp =
+    !!window.ReceiptClubBridge ||
+    (typeof isReceiptClubApp === "function" && isReceiptClubApp());
   const canPrintOffline =
-    typeof isReceiptClubApp === "function" &&
-    isReceiptClubApp() &&
-    typeof getReceiptClubBridge()?.printImageBase64 === "function";
+    inReceiptClubApp &&
+    typeof receiptClubSupportsOfflinePrint === "function" &&
+    receiptClubSupportsOfflinePrint();
+
+  console.info(
+    `[print] offline=${canPrintOffline} inApp=${inReceiptClubApp} b64len=${localPrintDataUrl.length}`
+  );
 
   let downloadUrl = qrDownloadPath;
   let printUrl = null;
@@ -1115,7 +1122,10 @@ async function preparePrintReceipt() {
   } catch (uploadError) {
     console.warn("[print] upload failed", uploadError);
     if (!canPrintOffline) {
-      throw uploadError;
+      const hint = inReceiptClubApp
+        ? " (APK เก่า — ติดตั้ง APK ที่มี printImageBase64)"
+        : " (เปิดผ่าน The Receipt Club app)";
+      throw new Error(`${uploadError?.message || "upload failed"}${hint}`);
     }
   }
 

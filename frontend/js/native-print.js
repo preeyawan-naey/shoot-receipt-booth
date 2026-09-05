@@ -32,8 +32,27 @@ function createNativePrintJobId() {
 
 function getReceiptClubBridge() {
   const bridge = window[RECEIPT_CLUB_BRIDGE_NAME];
-  if (!bridge || typeof bridge.printImage !== "function") return null;
-  return bridge;
+  if (!bridge) return null;
+  if (
+    typeof bridge.printImage === "function" ||
+    typeof bridge.printImageBase64 === "function"
+  ) {
+    return bridge;
+  }
+  return null;
+}
+
+function receiptClubSupportsOfflinePrint() {
+  const bridge = getReceiptClubBridge() || window[RECEIPT_CLUB_BRIDGE_NAME];
+  if (!bridge) return false;
+  try {
+    return (
+      typeof bridge.printImageBase64 === "function" ||
+      "printImageBase64" in bridge
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isReceiptClubApp() {
