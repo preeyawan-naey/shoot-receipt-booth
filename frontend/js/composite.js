@@ -735,11 +735,7 @@ async function drawThankYouText(ctx, centerX, y) {
 
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
-  const useTheBlumoFrameSelect =
-    typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
-
   const useLayoutMock =
-    !useTheBlumoFrameSelect &&
     isPreview &&
     typeof isTheBlumoBoothActive === "function" &&
     isTheBlumoBoothActive() &&
@@ -749,11 +745,9 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useTheBlumoFrameSelect
-    ? resolveTheBlumoFrameSelectPath(frameConfig)
-    : useLayoutMock
-      ? frameConfig.selectImagePath
-      : previewPath || frameConfig.imagePath;
+  const frameSrc = useLayoutMock
+    ? frameConfig.selectImagePath
+    : previewPath || frameConfig.imagePath;
   const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
@@ -762,15 +756,12 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
-    usePreviewSlots: useLayoutMock || useTheBlumoFrameSelect,
+    usePreviewSlots: useLayoutMock,
     frameSrc,
-    eraseGuestNameBackground: !useLayoutMock && !useTheBlumoFrameSelect,
+    eraseGuestNameBackground: !useLayoutMock,
   });
 
-  const shouldCropTheBlumo =
-    useTheBlumoFrameSelect ||
-    (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock);
-  if (isPreview && shouldCropTheBlumo) {
+  if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
     const cropPct =
       typeof getTheBlumoPreviewBottomPct === "function"
         ? getTheBlumoPreviewBottomPct(frameConfig.id)
@@ -1280,7 +1271,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth185";
+const PRINT_BUILD = "booth186";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
