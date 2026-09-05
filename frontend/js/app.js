@@ -2,7 +2,7 @@
  * SHOOT Receipt BOOTH — Main Application
  */
 
-const BOOTH_BUILD = "booth126";
+const BOOTH_BUILD = "booth173";
 console.info(`[booth] build=${BOOTH_BUILD}`);
 
 const appState = {
@@ -11,8 +11,8 @@ const appState = {
 };
 
 const MIN_PRINT_COPIES = 1;
-const MAX_PRINT_COPIES = 2;
-const DEFAULT_PRINT_COPIES = 2;
+const MAX_PRINT_COPIES = 1;
+const DEFAULT_PRINT_COPIES = 1;
 const QR_HOME_COUNTDOWN_SEC = 40;
 let printCopies = DEFAULT_PRINT_COPIES;
 let qrCountdownTimer = null;
@@ -32,8 +32,8 @@ function updatePrintCopiesUI() {
   const btnPlus = document.getElementById("btn-print-plus");
 
   if (valueEl) valueEl.textContent = String(printCopies);
-  if (btnMinus) btnMinus.disabled = printCopies <= MIN_PRINT_COPIES;
-  if (btnPlus) btnPlus.disabled = printCopies >= MAX_PRINT_COPIES;
+  if (btnMinus) btnMinus.disabled = true;
+  if (btnPlus) btnPlus.disabled = true;
 }
 
 function handleNativePrintResumeOnInit() {
@@ -91,7 +91,6 @@ function initLayoutGrid() {
 }
 
 function buildLayoutCard(layout) {
-  const aspect = layout.selectAspectRatio || "662 / 1412";
   return `
     <button
       class="layout-card"
@@ -99,13 +98,11 @@ function buildLayoutCard(layout) {
       data-layout-id="${layout.id}"
       aria-label="เลือก layout ${layout.id}"
     >
-      <div class="layout-card__frame" style="aspect-ratio: ${aspect}">
-        <img
-          class="layout-card__preview"
-          src="${layout.selectImagePath || layout.imagePath}"
-          alt="Layout ${layout.id}"
-        />
-      </div>
+      <img
+        class="layout-card__preview"
+        src="${layout.selectImagePath || layout.imagePath}"
+        alt="Layout ${layout.id}"
+      />
     </button>
   `;
 }
@@ -128,12 +125,22 @@ function selectLayout(layoutId) {
   sessionStorage.removeItem("capturedPhotos");
 
   if (layoutHasFrames(layoutId)) {
+    const frames = getFramesForLayout(layoutId);
+    if (frames.length === 1) {
+      selectFrame(layoutId, frames[0].id);
+      return;
+    }
+
     initFrameGrid(layoutId);
     goToFrameSelect();
     return;
   }
 
-  setSelectedFrameId("none");
+  if (typeof applyDefaultBoothFrame === "function") {
+    applyDefaultBoothFrame(layoutId);
+  } else {
+    setSelectedFrameId("none");
+  }
   navigateToCamera(layoutId);
 }
 
@@ -340,11 +347,13 @@ function bindEvents() {
       const msg =
         error?.message && /ปริ้น|Shoot Print|APK|USB/i.test(error.message)
           ? error.message
-          : "ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่";
+          : error?.message
+            ? `เตรียมใบพิมพ์ไม่สำเร็จ: ${error.message}`
+            : "ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่";
       alert(msg);
     } finally {
       btn.disabled = false;
-      btn.textContent = "ปริ้น";
+      btn.textContent = "Print";
     }
   });
 }
@@ -394,6 +403,10 @@ function startQrCountdown(seconds = QR_HOME_COUNTDOWN_SEC) {
 
 function showQrDownloadPage() {
   hidePrintOverlay();
+
+  if (typeof clearBoothGuestName === "function") {
+    clearBoothGuestName();
+  }
 
   const cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
   const qrImage = document.getElementById("qr-download-image");

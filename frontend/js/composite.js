@@ -62,13 +62,24 @@ function getPhotoSlotBleed(canvasWidth) {
   return PHOTO_SLOT_BORDER_BLEED * (canvasWidth / LAYOUT_NATURAL_WIDTH);
 }
 
+function resolveSlotForDraw(slot, previewMode = false) {
+  if (!previewMode) return slot;
+  return {
+    ...slot,
+    left: slot.previewLeft ?? slot.left,
+    top: slot.previewTop ?? slot.top,
+    width: slot.previewWidth ?? slot.width,
+    height: slot.previewHeight ?? slot.height,
+  };
+}
+
 function slotToDrawRect(slot, canvasWidth, canvasHeight, offsetX = 0, offsetY = 0) {
   let x = (slot.left / 100) * canvasWidth + offsetX;
   let y = (slot.top / 100) * canvasHeight + offsetY;
   let w = (slot.width / 100) * canvasWidth;
   let h = (slot.height / 100) * canvasHeight;
 
-  const canBleed = slot.fit !== "contain";
+  const canBleed = slot.fit !== "contain" && !slot.noBleed;
   if (canBleed) {
     const bleed = getPhotoSlotBleed(canvasWidth);
     x = Math.max(0, x - bleed);
@@ -156,8 +167,30 @@ function drawImageContain(ctx, img, dx, dy, dw, dh) {
   ctx.drawImage(img, 0, 0, sw, sh, destX, destY, destW, destH);
 }
 
+function drawImageWidthFill(ctx, img, dx, dy, dw, dh) {
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+  const scale = dw / sw;
+  const scaledH = sh * scale;
+
+  if (scaledH >= dh) {
+    const srcH = dh / scale;
+    const sy = (sh - srcH) / 2;
+    ctx.drawImage(img, 0, sy, sw, srcH, dx, dy, dw, dh);
+    return;
+  }
+
+  ctx.drawImage(img, 0, 0, sw, sh, dx, dy, dw, dh);
+}
+
+function resolveSlotDrawFn(fit = "cover") {
+  if (fit === "contain") return drawImageContain;
+  if (fit === "width-fill") return drawImageWidthFill;
+  return drawImageCover;
+}
+
 function drawImageInSlot(ctx, img, dx, dy, dw, dh, rotationDeg = 0, fit = "cover") {
-  const drawFn = fit === "contain" ? drawImageContain : drawImageCover;
+  const drawFn = resolveSlotDrawFn(fit);
 
   if (rotationDeg) {
     const rad = (rotationDeg * Math.PI) / 180;
@@ -262,7 +295,7 @@ function drawImageCoverForPrint(
   scratch.height = h;
 
   const scratchCtx = scratch.getContext("2d", { willReadFrequently: true });
-  const drawFn = fit === "contain" ? drawImageContain : drawImageCover;
+  const drawFn = resolveSlotDrawFn(fit);
   if (rotationDeg) {
     const rad = (rotationDeg * Math.PI) / 180;
     scratchCtx.translate(w / 2, h / 2);
@@ -310,7 +343,15 @@ async function drawDecorativeOverlay(ctx, canvasWidth, canvasHeight) {
   ctx.drawImage(overlayImg, 0, 0, canvasWidth, canvasHeight);
 }
 
-async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawPhotoFn = drawImageCover) {
+async function drawPhotosInSlots(
+  ctx,
+  frameConfig,
+  photos,
+  canvasWidth,
+  canvasHeight,
+  drawPhotoFn = drawImageCover,
+  options = {}
+) {
   const slots =
     typeof getActivePhotoSlots === "function"
       ? getActivePhotoSlots(frameConfig)
@@ -330,9 +371,17 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
     if (!slot || !photos[i]) continue;
 
     const photo = await loadImage(photos[i]);
-    const { x, y, w, h } = slotToDrawRect(slot, canvasWidth, canvasHeight);
+    const drawSlot = resolveSlotForDraw(slot, options.previewMode);
+    const slotOffsetY = options.slotOffsetY || 0;
+    const { x, y, w, h } = slotToDrawRect(
+      drawSlot,
+      canvasWidth,
+      canvasHeight,
+      0,
+      slotOffsetY
+    );
     const rotation = slot.rotation || 0;
-    const fit = slot.fit || "cover";
+    const fit = drawSlot.fit || "cover";
 
     if (drawPhotoFn === drawImageCover) {
       drawImageInSlotRounded(ctx, photo, x, y, w, h, radius, rotation, fit);
@@ -342,21 +391,113 @@ async function drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHe
   }
 }
 
-async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight) {
+async function ensureOcrBFontLoaded(fontSizePx) {
+  if (!document.fonts?.load) return;
+  try {
+    await document.fonts.load(`${Math.max(12, Math.round(fontSizePx))}px "OCR-B"`);
+  } catch {
+    /* fallback to monospace if OCR-B unavailable */
+  }
+}
+
+function getTheBlumoGuestNameFontSize(canvasWidth, slot) {
+  const designW =
+    typeof LAYOUT_NATURAL_WIDTH !== "undefined" ? LAYOUT_NATURAL_WIDTH : 662;
+  if (slot?.fontSizePx) {
+    return slot.fontSizePx * (canvasWidth / designW);
+  }
+  if (slot?.fontSizePct) {
+    return (slot.fontSizePct / 100) * canvasWidth;
+  }
+  return 36 * (canvasWidth / designW);
+}
+
+async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0, options = {}) {
+  if (typeof isTheBlumoBoothActive !== "function" || !isTheBlumoBoothActive()) return;
+
+  const guestName =
+    typeof getBoothGuestName === "function" ? getBoothGuestName() : "";
+  if (!guestName) return;
+
+  const slot =
+    typeof getTheBlumoGuestNameSlot === "function"
+      ? getTheBlumoGuestNameSlot()
+      : null;
+  if (!slot) return;
+
+  const topPct =
+    options.previewMode && slot.previewTop != null ? slot.previewTop : slot.top;
+  const x = (slot.left / 100) * canvasWidth;
+  const y = (topPct / 100) * canvasHeight + offsetY;
+  const w = (slot.width / 100) * canvasWidth;
+  const h = (slot.height / 100) * canvasHeight;
+
+  ctx.save();
+
+  if (options.eraseBackground !== false) {
+    const erase = slot.erase || slot;
+    const ex = (erase.left / 100) * canvasWidth;
+    const ey = (erase.top / 100) * canvasHeight + offsetY;
+    const ew = (erase.width / 100) * canvasWidth;
+    const eh = (erase.height / 100) * canvasHeight;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(ex, ey, ew, eh);
+  }
+
+  let fontSize = getTheBlumoGuestNameFontSize(canvasWidth, slot);
+  await ensureOcrBFontLoaded(fontSize);
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+
+  const padX = ((slot.padLeftPct || 0) / 100) * canvasWidth;
+  const maxTextW = w - padX * 2;
+  const minFontSize = Math.max(12, fontSize * 0.55);
+
+  ctx.font = `${fontSize}px "OCR-B", monospace`;
+
+  if (options.previewMode) {
+    while (ctx.measureText(guestName).width > maxTextW && fontSize > minFontSize) {
+      fontSize *= 0.92;
+      ctx.font = `${fontSize}px "OCR-B", monospace`;
+    }
+  }
+
+  const metrics = ctx.measureText(guestName);
+  const textHeight =
+    (metrics.actualBoundingBoxAscent || fontSize * 0.78) +
+    (metrics.actualBoundingBoxDescent || fontSize * 0.12);
+  const textY = y + (h - textHeight) / 2 + (metrics.actualBoundingBoxAscent || fontSize * 0.78);
+
+  ctx.fillText(guestName, x + padX, textY);
+  ctx.restore();
+}
+
+async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight, options = {}) {
+  const useLayoutMock =
+    options.useLayoutMock &&
+    frameConfig?.selectImagePath &&
+    typeof isTheBlumoBoothActive === "function" &&
+    isTheBlumoBoothActive();
+
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
+  const frameSrc = useLayoutMock
+    ? frameConfig.selectImagePath
+    : options.frameSrc || previewPath || frameConfig.imagePath;
 
-  if (previewPath) {
-    const previewImg = await loadImage(previewPath);
-    ctx.drawImage(previewImg, 0, 0, canvasWidth, canvasHeight);
-  } else {
-    const frameImg = await loadImage(frameConfig.imagePath);
-    ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
-  }
+  const frameImg = await loadImage(frameSrc);
+  ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
 
-  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight);
+  await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
+    eraseBackground: options.eraseGuestNameBackground !== false,
+    previewMode: useLayoutMock,
+  });
+  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawImageCover, {
+    previewMode: useLayoutMock,
+  });
 }
 
 function getPrintQrSize(frameW) {
@@ -437,6 +578,22 @@ function getPrintCropOverrideBottom(frameConfig, frameH) {
 }
 
 function getPrintCropRect(frameImg, frameConfig, frameH) {
+  const frameId =
+    typeof resolveDecorativeFrameId === "function"
+      ? resolveDecorativeFrameId()
+      : typeof getSelectedFrameId === "function"
+        ? getSelectedFrameId()
+        : "none";
+
+  if (frameId === "theblumo") {
+    const layoutId = frameConfig?.id;
+    const pct =
+      typeof getTheBlumoPrintCropBottomPct === "function"
+        ? getTheBlumoPrintCropBottomPct(layoutId)
+        : 61.3;
+    return { top: 0, height: Math.max(1, Math.round((pct / 100) * frameH)) };
+  }
+
   const bounds = measureFrameContentBounds(frameImg);
   const photosBottom = getPhotosBottomPx(frameConfig, frameH);
   const top = Math.min(bounds.bottom, bounds.top + PRINT_EXTRA_TOP_TRIM);
@@ -506,7 +663,7 @@ async function measureThankYouTextHeight() {
 
 async function measureThankYouBlockHeight() {
   const fontSize = PRINT_THANK_YOU_FONT_SIZE;
-  const fontSpec = `${fontSize}px "Roboto Mono", monospace`;
+  const fontSpec = `${fontSize}px "OCR-B", monospace`;
 
   if (document.fonts?.load) {
     await document.fonts.load(fontSpec);
@@ -525,7 +682,7 @@ async function measureThankYouBlockHeight() {
     typeof getBoothGuestName === "function" ? getBoothGuestName() : "";
   if (guestName) {
     const guestFontSize = PRINT_GUEST_NAME_FONT_SIZE;
-    const guestFontSpec = `${guestFontSize}px "Roboto Mono", monospace`;
+    const guestFontSpec = `${guestFontSize}px "OCR-B", monospace`;
     if (document.fonts?.load) {
       await document.fonts.load(guestFontSpec);
     }
@@ -542,7 +699,7 @@ async function measureThankYouBlockHeight() {
 
 async function drawThankYouText(ctx, centerX, y) {
   const fontSize = PRINT_THANK_YOU_FONT_SIZE;
-  const fontSpec = `${fontSize}px "Roboto Mono", monospace`;
+  const fontSpec = `${fontSize}px "OCR-B", monospace`;
 
   ctx.font = fontSpec;
   ctx.fillStyle = "#1a1a1a";
@@ -561,29 +718,152 @@ async function drawThankYouText(ctx, centerX, y) {
   const guestFontSize = PRINT_GUEST_NAME_FONT_SIZE;
   const guestY = y + thankHeight + PRINT_GUEST_NAME_GAP;
 
-  ctx.font = `${guestFontSize}px "Roboto Mono", monospace`;
+  ctx.font = `${guestFontSize}px "OCR-B", monospace`;
   ctx.fillText(guestName, centerX, guestY);
 }
 
-async function drawComposite(canvas, frameConfig, photos) {
+async function drawComposite(canvas, frameConfig, photos, options = {}) {
+  const isPreview = options.preview !== false;
+  const useLayoutMock =
+    isPreview &&
+    typeof isTheBlumoBoothActive === "function" &&
+    isTheBlumoBoothActive() &&
+    frameConfig?.selectImagePath;
+
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const sizeImg = await loadImage(previewPath || frameConfig.imagePath);
+  const frameSrc = useLayoutMock
+    ? frameConfig.selectImagePath
+    : previewPath || frameConfig.imagePath;
+  const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
   canvas.height = sizeImg.naturalHeight;
 
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height);
+  await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
+    useLayoutMock,
+    eraseGuestNameBackground: !useLayoutMock,
+  });
+
+  if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
+    const cropPct =
+      typeof getTheBlumoPreviewBottomPct === "function"
+        ? getTheBlumoPreviewBottomPct(frameConfig.id)
+        : 70;
+    const cropH = Math.max(1, Math.round((cropPct / 100) * canvas.height));
+    if (cropH < canvas.height) {
+      const cropped = ctx.getImageData(0, 0, canvas.width, cropH);
+      canvas.height = cropH;
+      ctx.putImageData(cropped, 0, 0);
+    }
+  }
 
   return canvas;
 }
 
+function getPreviewSessionPhotos() {
+  try {
+    const data = JSON.parse(sessionStorage.getItem("capturedPhotos") || "{}");
+    return Array.isArray(data.photos) ? data.photos : [];
+  } catch {
+    return [];
+  }
+}
+
+function resolveTheBlumoFrameSelectPath(frameConfig) {
+  const layoutId = frameConfig?.id;
+  if (typeof getTheBlumoAssetPath === "function") {
+    const path = getTheBlumoAssetPath(layoutId);
+    if (path) return path;
+  }
+  return frameConfig?.imagePath || null;
+}
+
+async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
+  const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
+  if (!frameSrc) {
+    throw new Error("Missing TheBlumo frame-select artwork");
+  }
+
+  const frameImg = await loadImage(frameSrc);
+  const frameW = frameImg.naturalWidth;
+  const frameH = frameImg.naturalHeight;
+  const crop = getPrintCropRect(frameImg, frameConfig, frameH);
+  const drawPhotoFn = options.thermal ? drawImageCoverForPrint : drawImageCover;
+  const layerOffsetY = -crop.top;
+
+  const layer = document.createElement("canvas");
+  layer.width = frameW;
+  layer.height = crop.height;
+  const layerCtx = layer.getContext("2d");
+
+  layerCtx.drawImage(frameImg, 0, crop.top, frameW, crop.height, 0, 0, frameW, crop.height);
+
+  await drawTheBlumoGuestName(layerCtx, frameW, frameH, layerOffsetY, {
+    eraseBackground: true,
+    previewMode: false,
+  });
+  await drawPhotosInSlots(layerCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
+    previewMode: false,
+    slotOffsetY: layerOffsetY,
+  });
+
+  console.info(
+    `[print] theblumo layer ${frameW}x${crop.height} frame=${frameSrc} photos=${photos.length}`
+  );
+
+  return { layer, frameW, frameH, crop, frameSrc };
+}
+
 async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, options = {}) {
   const { thermal = true, edgePadding = false } = options;
+  const printPhotos = getPreviewSessionPhotos();
+  const resolvedPhotos = printPhotos.length ? printPhotos : photos;
+
+  const useTheBlumo =
+    typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
+
+  if (useTheBlumo) {
+    const { layer, frameW, frameH, crop, frameSrc } = await renderTheBlumoReceiptLayer(
+      frameConfig,
+      resolvedPhotos,
+      { thermal }
+    );
+    const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
+    const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
+    const { x: qrX, y: qrY, size: qrSize } = getPrintQrPosition(
+      frameConfig,
+      frameW,
+      frameH,
+      crop,
+      padTop
+    );
+    const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
+    const textHeight = await measureThankYouTextHeight();
+    const totalH = textY + textHeight + padBottom;
+
+    canvas.width = frameW;
+    canvas.height = totalH;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(layer, 0, padTop);
+
+    await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+    await drawThankYouText(ctx, frameW / 2, textY);
+
+    console.info(
+      `[print] canvas ${frameW}x${totalH} theblumo cropH=${crop.height} frame=${frameSrc}`
+    );
+    return canvas;
+  }
+
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
@@ -625,22 +905,31 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     crop.height
   );
 
+  await drawTheBlumoGuestName(ctx, frameW, frameH, padTop - crop.top, {
+    eraseBackground: true,
+  });
+
   const slots =
     typeof getActivePhotoSlots === "function"
       ? getActivePhotoSlots(frameConfig)
       : frameConfig.slots;
-  const count = Math.min(frameConfig.photoCount, photos.length, slots.length);
+  const count = Math.min(frameConfig.photoCount, resolvedPhotos.length, slots.length);
   const radius = getPhotoSlotRadius(frameW);
+  const frameId =
+    typeof resolveDecorativeFrameId === "function"
+      ? resolveDecorativeFrameId()
+      : "none";
+  const slotCanvasH = frameH;
 
   for (let i = 0; i < count; i += 1) {
     const slot = slots[i];
-    if (!slot || !photos[i]) continue;
+    if (!slot || !resolvedPhotos[i]) continue;
 
-    const photo = await loadImage(photos[i]);
+    const photo = await loadImage(resolvedPhotos[i]);
     const { x, y, w, h } = slotToDrawRect(
       slot,
       frameW,
-      frameH,
+      slotCanvasH,
       0,
       padTop - crop.top
     );
@@ -708,12 +997,21 @@ async function preparePrintReceipt() {
   const printId = crypto.randomUUID();
   const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQR(downloadId);
 
-  await drawCompositeForPrint(printCanvas, layout, data.photos, qrCodeUrl, { thermal: true });
+  const photos = getPreviewSessionPhotos().length ? getPreviewSessionPhotos() : data.photos;
+
+  await drawCompositeForPrint(printCanvas, layout, photos, qrCodeUrl, { thermal: true });
 
   const downloadCanvas = document.createElement("canvas");
-  await drawComposite(downloadCanvas, layout, data.photos);
+  if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
+    const { layer } = await renderTheBlumoReceiptLayer(layout, photos, { thermal: false });
+    downloadCanvas.width = layer.width;
+    downloadCanvas.height = layer.height;
+    downloadCanvas.getContext("2d").drawImage(layer, 0, 0);
+  } else {
+    await drawComposite(downloadCanvas, layout, photos, { preview: false });
+  }
   console.info(
-    `[print] download upload ${downloadCanvas.width}x${downloadCanvas.height} (preview, no QR)`
+    `[print] download upload ${downloadCanvas.width}x${downloadCanvas.height} (theblumo receipt, no QR)`
   );
   const downloadJpegBase64 = downloadCanvas.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
@@ -724,7 +1022,7 @@ async function preparePrintReceipt() {
 
   // Color upload — APK Atkinson dithers once (thermal:true here causes double-dither fade)
   const uploadPrintCanvas = document.createElement("canvas");
-  await drawCompositeForPrint(uploadPrintCanvas, layout, data.photos, qrCodeUrl, {
+  await drawCompositeForPrint(uploadPrintCanvas, layout, photos, qrCodeUrl, {
     thermal: false,
   });
   const printScaled = scaleCanvasForThermal(uploadPrintCanvas, RAWBT_TARGET_WIDTH_PX);

@@ -1,6 +1,11 @@
-/* ============================================================
-   SHOOT Receipt BOOTH — Tablet UI (712 × 1138)
-   ============================================================ */
+@font-face {
+  font-family: "OCR-B";
+  src: url("https://cdn.jsdelivr.net/gh/raisty/OCR-B@1/dist/OCR-B.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 
 *,
 *::before,
@@ -19,9 +24,9 @@
   --color-brown: #8a7355;
   --color-red: #d62828;
   --color-white: #ffffff;
-  --font-sans: "IBM Plex Sans Thai", sans-serif;
-  --font-script: "IBM Plex Sans Thai", sans-serif;
-  --font-serif: "IBM Plex Sans Thai", sans-serif;
+  --font-sans: "OCR-B", monospace;
+  --font-script: "OCR-B", monospace;
+  --font-serif: "OCR-B", monospace;
   --section-padding-x: 16%;
   --page-padding-y: 132px;
   --page-padding-y-balanced: clamp(48px, 8vh, 80px);
@@ -374,9 +379,7 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  /*font-family: 'Jomolhari', serif;*/
-  /*font-size: clamp(18px, 3.8vw, 38px);*/
-  /*font-weight: 100;*/
+  font-family: var(--font-sans);
   color: var(--color-text);
   padding: 16px 32px;
   transition: transform 0.15s ease;
@@ -391,6 +394,7 @@ body {
 }
 
 .start-btn__highlight {
+  font-family: var(--font-sans);
   font-weight: 700;
   color: var(--color-red);
 }
@@ -795,7 +799,6 @@ body {
 #page-frame-select .frame-title__heading {
   font-size: clamp(28px, 5vw, 36px);
   font-weight: 500;
-  letter-spacing: 0.05em;
 }
 
 .frame-picker-card {
@@ -887,7 +890,7 @@ body {
 #page-camera .frame-title__heading {
   font-size: clamp(28px, 5vw, 36px);
   font-weight: 500;
-  letter-spacing: 0.05em;
+  text-transform: none;
 }
 
 #page-layout-select .frame-header {
@@ -898,7 +901,7 @@ body {
 #page-layout-select .frame-title__heading {
   font-size: clamp(28px, 5vw, 36px);
   font-weight: 500;
-  letter-spacing: 0.05em;
+  text-transform: none;
 }
 
 #page-layout-select .layout-grid {
@@ -907,9 +910,10 @@ body {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: clamp(18px, 3.2vw, 26px);
-  padding: clamp(4px, 1vh, 10px) clamp(44px, 12.5vw, 90px);
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: clamp(54px, 9.35vw, 82px);
+  row-gap: clamp(17px, 2.98vw, 26px);
+  padding: clamp(4px, 1vh, 10px) clamp(28px, 6.5vw, 52px);
   align-items: center;
   justify-items: center;
 }
@@ -920,35 +924,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-#page-layout-select .layout-card__frame {
-  height: 100%;
-  max-height: 100%;
-  width: auto;
-  max-width: 100%;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.09);
+  overflow: visible;
 }
 
 #page-layout-select .layout-card__preview {
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  aspect-ratio: auto;
-  object-fit: cover;
-  object-position: top center;
   display: block;
-  box-shadow: none;
+  width: auto;
+  height: auto;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+  border: none;
   border-radius: 0;
+  box-shadow: none;
 }
 
-#page-layout-select .layout-card--selected .layout-card__frame {
-  outline: 3px solid var(--color-red);
-  outline-offset: 3px;
-  box-shadow: 0 8px 24px rgba(214, 40, 40, 0.14);
+#page-layout-select .layout-card:active .layout-card__preview,
+#page-layout-select .layout-card--selected .layout-card__preview {
+  box-shadow: none;
 }
 
 /*.frame-card__label {
@@ -1386,7 +1381,7 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: contain;
 }
 
 
@@ -1588,6 +1583,9 @@ body {
   font-size: clamp(14px, 2.5vw, 22px);
   font-weight: 600;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
   transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
 }
 
@@ -1596,8 +1594,8 @@ body {
 }
 
 .preview-btn--retake {
-  background: #f9f6f2;
-  border: 1px solid var #8D8D8D;
+  background: var(--color-bg);
+  border: 1px solid #8d8d8d;
   color: var(--color-text);
 }
 
@@ -1861,28 +1859,43 @@ body {
    ============================================================ */
 
 #page-name-entry.page {
-  padding-top: clamp(32px, 6vh, 56px);
+  justify-content: flex-start;
+  padding-top: var(--page-padding-y-balanced);
   padding-bottom: var(--page-padding-y-balanced);
+}
+
+#page-name-entry .frame-header {
+  flex-shrink: 0;
+  margin-bottom: clamp(6px, 1.2vh, 14px);
+}
+
+#page-name-entry .frame-title {
+  min-height: calc(clamp(28px, 5vw, 36px) * 1.1);
+}
+
+#page-name-entry.page.name-entry--keyboard-open .name-entry-body {
   justify-content: flex-start;
 }
 
 .name-entry-body {
-  flex: 0 0 auto;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: clamp(18px, 3vh, 28px);
-  margin-top: clamp(48px, 14vh, 120px);
+  margin-top: 0;
   padding: 0 clamp(24px, 8vw, 64px);
   width: 100%;
+  transform: translateY(calc(-1 * var(--name-entry-shift, 0px)));
+  transition: transform 0.22s ease;
 }
 
 .name-entry__title {
   margin: 0;
-  font-size: clamp(28px, 5.5vw, 42px);
+  font-size: clamp(17.85px, 3.51vw, 26.78px);
   font-weight: 700;
-  letter-spacing: 0.04em;
   text-align: center;
   color: var(--color-black, #1a1a1a);
 }

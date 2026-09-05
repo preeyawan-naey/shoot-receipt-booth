@@ -1,110 +1,119 @@
 /**
- * Decorative frame options — per layout
- * Assets: img/Layout/frame/frame-select/layout{N}/frame-{1-5}.jpg (662 × 1412)
- * layout3 & layout4: frame-1,2,3,5 only (no frame-4)
+ * Decorative frame options — The Blumo booth (Layout-1 / Layout-2 only)
+ * Assets: img/Layout/frame/frame-select/layout{N}/TheBlumo.jpg
  */
 const FRAME_ASSET_BASE = "img/Layout/frame/frame-select";
+const THE_BLUMO_FRAME_ID = "theblumo";
+/** Set true to show frame picker again */
+const BOOTH_SHOW_FRAME_SELECT = false;
 
 const LAYOUT_FRAME_DIR = {
   "Layout-1": "layout1",
   "Layout-2": "layout2",
-  "Layout-3": "layout3",
-  "Layout-4": "layout4",
 };
 
-/** layout3/layout4 have no frame-4.jpg in their folders */
-const LAYOUT_FRAME_NUMBERS = {
-  "Layout-1": [1, 2, 3, 4, 5],
-  "Layout-2": [1, 2, 3, 4, 5],
-  "Layout-3": [1, 2, 3, 5],
-  "Layout-4": [1, 2, 3, 5],
+/** Crop full TheBlumo artwork to mockup height (layoutN-theblumo.jpg) */
+const THE_BLUMO_PRINT_CROP_BOTTOM_PCT = {
+  "Layout-1": 61.3,
+  "Layout-2": 61.3,
 };
 
-const DEFAULT_FRAME_SLOT_MAP = {
-  "frame-1": [{ left: 6.65, top: 29.25, width: 86.1, height: 64.94 }],
-  "frame-2": [{ left: 6.65, top: 21.88, width: 86.1, height: 64.94 }],
-  "frame-3": [{ left: 6.95, top: 16.15, width: 86.1, height: 65.01 }],
-  "frame-4": [{ left: 6.51, top: 2.62, width: 86.84, height: 45.46, rotation: 90, fit: "cover", noCaptureCrop: true }],
-  "frame-5": [{ left: 6.65, top: 15.72, width: 86.1, height: 65.01 }],
+/** Guest name overlay — replaces baked-in "Mun" on TheBlumo artwork */
+const THE_BLUMO_GUEST_NAME_SLOT = {
+  left: 4,
+  top: 3.2,
+  previewTop: 8,
+  width: 88.5,
+  height: 8.5,
+  padLeftPct: 0.4,
+  /** Illustrator type size at 662px design width (TheBlumo exports at 2×) */
+  fontSizePx: 72,
+  /** Print only — tight patch over "Mun" (preview mock has no large white wipe) */
+  erase: { left: 5.5, top: 2.5, width: 88.5, height: 6.8 },
 };
 
-/** Photo slots measured per layout frame artwork */
-const LAYOUT_FRAME_SLOT_MAP = {
+/** Photo slots on TheBlumo artwork (1325 × 3970) — inner gray boxes */
+const THE_BLUMO_FRAME_SLOTS = {
+  "Layout-1": {
+    theblumo: [
+      {
+        left: 5.962,
+        top: 50,
+        width: 87.321,
+        height: 43.979,
+        previewLeft: 6.787,
+        previewTop: 21.30,
+        previewWidth: 86.425,
+        previewHeight: 57,
+        fit: "cover",
+        noBleed: true,
+      },
+    ],
+  },
   "Layout-2": {
-    "frame-1": [
-      { left: 6.5, top: 29.25, width: 86.25, height: 31.59 },
-      { left: 6.5, top: 63.53, width: 86.25, height: 31.59 },
-    ],
-    "frame-2": [
-      { left: 6.5, top: 21.88, width: 86.25, height: 31.59 },
-      { left: 6.5, top: 56.16, width: 86.25, height: 31.59 },
-    ],
-    "frame-3": [
-      { left: 6.8, top: 16.22, width: 86.25, height: 36.05 },
-      { left: 6.8, top: 55.03, width: 86.25, height: 36.05 },
-    ],
-    "frame-4": [
-      { left: 6.51, top: 2.70, width: 86.84, height: 22.48, rotation: 90, fit: "cover", noCaptureCrop: true },
-      { left: 6.51, top: 25.39, width: 86.84, height: 22.62, rotation: 90, fit: "cover", noCaptureCrop: true },
-    ],
-    "frame-5": [
-      { left: 6.5, top: 15.79, width: 86.25, height: 31.52 },
-      { left: 6.5, top: 50.07, width: 86.25, height: 31.52 },
-    ],
-  },
-  "Layout-3": {
-    "frame-1": [
-      { left: 6.34, top: 29.11, width: 86.71, height: 21.46 },
-      { left: 6.34, top: 51.77, width: 86.71, height: 21.46 },
-      { left: 6.34, top: 74.43, width: 86.71, height: 21.46 },
-    ],
-    "frame-2": [
-      { left: 6.34, top: 21.74, width: 86.71, height: 21.46 },
-      { left: 6.34, top: 44.41, width: 86.71, height: 21.46 },
-      { left: 6.34, top: 67.07, width: 86.71, height: 21.46 },
-    ],
-    "frame-3": [
-      { left: 6.65, top: 16.01, width: 86.71, height: 24.5 },
-      { left: 6.65, top: 41.64, width: 86.71, height: 24.36 },
-      { left: 6.65, top: 67.14, width: 86.71, height: 24.5 },
-    ],
-    "frame-5": [
-      { left: 6.34, top: 15.58, width: 86.71, height: 24.5 },
-      { left: 6.34, top: 41.22, width: 86.71, height: 24.36 },
-      { left: 6.34, top: 66.71, width: 86.71, height: 24.5 },
-    ],
-  },
-  "Layout-4": {
-    "frame-1": [
-      { left: 6.65, top: 29.11, width: 41.99, height: 31.23 },
-      { left: 51.06, top: 29.11, width: 41.99, height: 31.23 },
-      { left: 6.65, top: 61.54, width: 41.99, height: 31.23 },
-      { left: 51.06, top: 61.54, width: 41.99, height: 31.23 },
-    ],
-    "frame-2": [
-      { left: 6.65, top: 21.74, width: 41.99, height: 31.23 },
-      { left: 51.06, top: 21.74, width: 41.99, height: 31.23 },
-      { left: 6.65, top: 54.18, width: 41.99, height: 31.23 },
-      { left: 51.06, top: 54.18, width: 41.99, height: 31.23 },
-    ],
-    "frame-3": [
-      { left: 6.95, top: 16.15, width: 41.39, height: 31.02 },
-      { left: 51.36, top: 16.15, width: 41.39, height: 31.02 },
-      { left: 6.95, top: 48.58, width: 41.39, height: 31.02 },
-      { left: 51.36, top: 48.58, width: 41.39, height: 31.02 },
-    ],
-    "frame-5": [
-      { left: 6.95, top: 15.72, width: 41.39, height: 31.02 },
-      { left: 51.36, top: 15.72, width: 41.39, height: 31.02 },
-      { left: 6.95, top: 48.16, width: 41.39, height: 31.02 },
-      { left: 51.36, top: 48.16, width: 41.39, height: 31.02 },
+    theblumo: [
+      {
+        left: 6.34,
+        top: 21.21,
+        width: 86.94,
+        height: 27.99,
+        previewLeft: 6.18,
+        previewTop: 21.04,
+        previewWidth: 87.18,
+        previewHeight: 28.18,
+        fit: "cover",
+        noBleed: true,
+      },
+      {
+        left: 6.34,
+        top: 51.05,
+        width: 86.94,
+        height: 27.95,
+        previewLeft: 6.18,
+        previewTop: 50.86,
+        previewWidth: 87.18,
+        previewHeight: 28.18,
+        fit: "cover",
+        noBleed: true,
+      },
     ],
   },
 };
+
+function getTheBlumoAssetPath(layoutId) {
+  const dir = LAYOUT_FRAME_DIR[layoutId];
+  return dir ? `${FRAME_ASSET_BASE}/${dir}/TheBlumo.jpg` : null;
+}
+
+function isTheBlumoFrameId(frameId) {
+  return frameId === THE_BLUMO_FRAME_ID;
+}
+
+function isTheBlumoLayout(layoutId) {
+  return layoutId === "Layout-1" || layoutId === "Layout-2";
+}
+
+function isTheBlumoBoothActive() {
+  const frameId =
+    typeof resolveDecorativeFrameId === "function" ? resolveDecorativeFrameId() : "none";
+  if (isTheBlumoFrameId(frameId)) return true;
+
+  const layoutId =
+    typeof getSelectedLayoutId === "function" ? getSelectedLayoutId() : null;
+  return isTheBlumoLayout(layoutId);
+}
+
+function getTheBlumoPreviewBottomPct(layoutId) {
+  return THE_BLUMO_PRINT_CROP_BOTTOM_PCT[layoutId] ?? 61.3;
+}
+
+function getTheBlumoPrintCropBottomPct(layoutId) {
+  return getTheBlumoPreviewBottomPct(layoutId);
+}
 
 function getCaptureSizeForSlot(slot) {
   const fallback = { width: 960, height: 720, ratio: 960 / 720 };
-  if (!slot || slot.fit === "contain" || slot.noCaptureCrop) return fallback;
+  if (!slot || slot.noCaptureCrop) return fallback;
 
   let slotW = slot.width;
   let slotH = slot.height;
@@ -145,9 +154,7 @@ function getFrameAssetDir(layoutId) {
 }
 
 function getFrameSlots(layoutId, frameId) {
-  const layoutSlots = LAYOUT_FRAME_SLOT_MAP[layoutId]?.[frameId];
-  if (layoutSlots?.length) return layoutSlots;
-  return DEFAULT_FRAME_SLOT_MAP[frameId] || [];
+  return THE_BLUMO_FRAME_SLOTS[layoutId]?.[frameId] || [];
 }
 
 function buildFramesForLayout(layoutId) {
@@ -156,31 +163,43 @@ function buildFramesForLayout(layoutId) {
 
   return [
     {
-      id: "none",
-      label: "ไม่เลือก Frame",
-      selectImagePath: null,
-      previewImagePath: null,
+      id: THE_BLUMO_FRAME_ID,
+      label: "The Blumo",
+      selectImagePath: `${assetDir}/TheBlumo.jpg`,
+      previewImagePath: `${assetDir}/TheBlumo.jpg`,
+      selectAspectRatio: "662 / 1412",
+      slots: getFrameSlots(layoutId, THE_BLUMO_FRAME_ID),
     },
-    ...(LAYOUT_FRAME_NUMBERS[layoutId] || [1, 2, 3, 4, 5]).map((n) => {
-      const id = `frame-${n}`;
-      return {
-        id,
-        label: `Frame ${n}`,
-        selectImagePath: `${assetDir}/frame-${n}.jpg`,
-        previewImagePath: `${assetDir}/frame-${n}.jpg`,
-        selectAspectRatio: "662 / 1412",
-        slots: getFrameSlots(layoutId, id),
-      };
-    }),
   ];
 }
 
-function layoutHasFrames(layoutId) {
+function layoutHasDecorativeFrames(layoutId) {
   return getFramesForLayout(layoutId).length > 0;
+}
+
+function layoutHasFrames(layoutId) {
+  if (!BOOTH_SHOW_FRAME_SELECT) return false;
+  return layoutHasDecorativeFrames(layoutId);
+}
+
+function applyDefaultBoothFrame(layoutId) {
+  const frameId = getDefaultFrameId(layoutId);
+  if (!frameId || frameId === "none") {
+    clearSelectedFrame();
+    return;
+  }
+
+  setSelectedFrameId(frameId);
+  appState.selectedFrame = frameId;
+  persistFrameSelection(layoutId, frameId);
 }
 
 function getFramesForLayout(layoutId) {
   return buildFramesForLayout(layoutId);
+}
+
+function getDefaultFrameId(layoutId) {
+  return layoutHasDecorativeFrames(layoutId) ? THE_BLUMO_FRAME_ID : "none";
 }
 
 function getFrameById(layoutId, frameId) {
@@ -209,7 +228,8 @@ function resolveDecorativeFrameId() {
     /* ignore */
   }
 
-  return "none";
+  const layoutId = getSelectedLayoutId();
+  return layoutId ? getDefaultFrameId(layoutId) : "none";
 }
 
 function getActivePhotoSlots(layoutConfig) {
@@ -256,3 +276,11 @@ function persistFrameSelection(layoutId, frameId) {
 function layoutSupportsFrameSelection(layoutId) {
   return layoutHasFrames(layoutId);
 }
+
+window.getDefaultFrameId = getDefaultFrameId;
+window.getTheBlumoAssetPath = getTheBlumoAssetPath;
+window.isTheBlumoLayout = isTheBlumoLayout;
+window.isTheBlumoBoothActive = isTheBlumoBoothActive;
+window.getTheBlumoPreviewBottomPct = getTheBlumoPreviewBottomPct;
+window.getTheBlumoPrintCropBottomPct = getTheBlumoPrintCropBottomPct;
+window.getTheBlumoGuestNameSlot = () => THE_BLUMO_GUEST_NAME_SLOT;

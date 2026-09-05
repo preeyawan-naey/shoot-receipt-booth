@@ -5,15 +5,9 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=overlays-content" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>SHOOT Receipt BOOTH</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="css/styles.css?v=booth126" />
+    <link rel="stylesheet" href="css/styles.css?v=booth173" />
   </head>
   <body>
     <div class="viewport">
@@ -56,15 +50,17 @@
           </header>
 
           <div class="name-entry-body">
-            <h1 class="name-entry__title">ENTER YOUR NAME</h1>
+            <h1 class="name-entry__title">Enter your name</h1>
             <form id="name-entry-form" class="name-entry-form" autocomplete="off">
               <input
                 type="text"
                 id="name-entry-input"
                 class="name-entry__input"
-                maxlength="24"
+                lang="en"
                 enterkeyhint="done"
-                autocapitalize="words"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
                 autocomplete="off"
                 aria-label="Enter your name"
               />
@@ -124,7 +120,7 @@
               <i data-lucide="chevron-left"></i>
             </button>
             <div class="frame-title">
-              <h1 class="frame-title__heading">LAYOUT</h1>
+              <h1 class="frame-title__heading">Layout</h1>
             </div>
           </header>
 
@@ -161,13 +157,13 @@
               <i data-lucide="chevron-left"></i>
             </button>
             <div class="frame-title">
-              <h1 class="frame-title__heading">CAMERA</h1>
+              <h1 class="frame-title__heading">Camera</h1>
             </div>
           </header>
 
           <div class="camera-body">
             <div class="camera-status">
-              <span class="camera-status__label">จำนวนรูปภาพ</span>
+              <span class="camera-status__label">Photo</span>
               <span class="camera-status__counter" id="camera-photo-counter">00/01</span>
             </div>
 
@@ -228,22 +224,24 @@
             </div>
 
             <div class="preview-prints">
-              <p class="preview-prints__label">จำนวนรูปภาพ</p>
+              <p class="preview-prints__label">Copies</p>
               <div class="preview-prints__counter">
                 <button
                   type="button"
                   class="preview-prints__btn preview-prints__btn--minus"
                   id="btn-print-minus"
-                  aria-label="ลดจำนวนสำเนา"
+                  aria-label="Decrease copies"
+                  disabled
                 >
                   <span aria-hidden="true">&minus;</span>
                 </button>
-                <span class="preview-prints__value" id="print-copies-value">2</span>
+                <span class="preview-prints__value" id="print-copies-value">1</span>
                 <button
                   type="button"
                   class="preview-prints__btn preview-prints__btn--plus"
                   id="btn-print-plus"
-                  aria-label="เพิ่มจำนวนสำเนา"
+                  aria-label="Increase copies"
+                  disabled
                 >
                   <span aria-hidden="true">+</span>
                 </button>
@@ -251,8 +249,8 @@
             </div>
 
             <div class="preview-actions">
-              <button class="preview-btn preview-btn--retake" type="button" id="btn-retake">ถ่ายใหม่</button>
-              <button class="preview-btn preview-btn--print" type="button" id="btn-print">ปริ้น</button>
+              <button class="preview-btn preview-btn--retake" type="button" id="btn-retake">Retake</button>
+              <button class="preview-btn preview-btn--print" type="button" id="btn-print">Print</button>
             </div>
           </div>
         </section>
@@ -381,19 +379,19 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-settings.js?v=booth126"></script>
-    <script src="js/booth-storage.js?v=booth126"></script>
-    <script src="js/layouts.js?v=booth126"></script>
-    <script src="js/frames.js?v=booth126"></script>
-    <script src="js/navigation.js?v=booth126"></script>
-    <script src="js/kiosk.js?v=booth126"></script>
-    <script src="js/payment.js?v=booth126"></script>
-    <script src="js/booth-name.js?v=booth126"></script>
+    <script src="js/booth-settings.js?v=booth173"></script>
+    <script src="js/booth-storage.js?v=booth173"></script>
+    <script src="js/layouts.js?v=booth173"></script>
+    <script src="js/frames.js?v=booth173"></script>
+    <script src="js/navigation.js?v=booth173"></script>
+    <script src="js/kiosk.js?v=booth173"></script>
+    <script src="js/payment.js?v=booth173"></script>
+    <script src="js/booth-name.js?v=booth173"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
-    <script src="js/native-print.js?v=booth126"></script>
-    <script src="js/composite.js?v=booth126"></script>
-    <script src="js/camera.js?v=booth126"></script>
-    <script src="js/app.js?v=booth126"></script>
+    <script src="js/native-print.js?v=booth173"></script>
+    <script src="js/composite.js?v=booth173"></script>
+    <script src="js/camera.js?v=booth173"></script>
+    <script src="js/app.js?v=booth173"></script>
   </body>
 </html>
