@@ -317,11 +317,11 @@ function bindEvents() {
     btn.textContent = "กำลังเตรียม...";
 
     try {
-      showPrintOverlay("กำลังเตรียมใบเสร็จ...");
+      showPrintOverlay("Preparing your receipt...");
       const receipt = await preparePrintReceipt();
       sessionStorage.setItem("printCopies", String(copies));
 
-      showPrintOverlay(copies > 1 ? `กำลังพิมพ์ ${copies} ใบ...` : "กำลังพิมพ์...");
+      showPrintOverlay(copies > 1 ? `Printing ${copies} copies...` : "Printing...");
       playReceiptPrintAnimation();
 
       const driver = typeof getPrintDriver === "function" ? getPrintDriver() : "browser";
@@ -337,7 +337,7 @@ function bindEvents() {
         await Promise.all([printTask, waitForReceiptPrintAnimation()]);
       }
 
-      showPrintOverlay("ปริ้นเสร็จแล้ว!");
+      showPrintOverlay("Done!");
       void recordBoothPhotoSession();
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       hidePrintOverlay();
@@ -423,7 +423,7 @@ function showQrDownloadPage() {
   if (statusEl) {
     statusEl.textContent = cached.qrCodeUrl
       ? "Scan to download your photo"
-      : "❌ ไม่พบ QR Code";
+      : "QR Code Not Found";
   }
 
   goToQrDownload();

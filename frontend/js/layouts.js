@@ -49,7 +49,7 @@ function playReceiptPrintAnimation() {
   receiptEl.addEventListener("animationend", onDone);
 }
 
-function waitForReceiptPrintAnimation(timeoutMs = 4000) {
+function waitForReceiptPrintAnimation(timeoutMs = 4200) {
   return new Promise((resolve) => {
     const receiptEl = document.getElementById("receipt-composite");
     if (!receiptEl) {
@@ -77,8 +77,11 @@ function waitForReceiptPrintAnimation(timeoutMs = 4000) {
 async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
   const layoutConfig = getLayoutById(selectedLayoutId);
   const canvas = document.getElementById("receipt-canvas");
+  const dispenser = document.querySelector(".preview-dispenser");
 
   if (!layoutConfig || !canvas) return;
+
+  dispenser?.classList.add("preview-dispenser--preparing");
 
   await drawComposite(canvas, layoutConfig, capturedPhotosArray);
   const receiptEl = document.getElementById("receipt-composite");
@@ -89,5 +92,7 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
     );
   }
   resetPrintCopiesUI();
+
+  dispenser?.classList.remove("preview-dispenser--preparing");
   playReceiptPrintAnimation();
 }

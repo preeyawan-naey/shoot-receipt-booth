@@ -1289,11 +1289,16 @@ body {
   flex-shrink: 0;
   width: min(100%, clamp(260px, 60vw, 480px));
   margin-inline: auto;
+  margin-top: clamp(96px, 14vh, 240px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   overflow: visible;
+}
+
+.preview-dispenser--preparing {
+  visibility: hidden;
 }
 
 .preview-dispenser__printer {
@@ -1338,7 +1343,7 @@ body {
 
 .preview-dispenser__receipt {
   width: clamp(140px, 36vw, 280px);
-  aspect-ratio: var(--receipt-aspect-ratio);
+  aspect-ratio: var(--receipt-aspect-ratio, 663 / 1217);
   transform: translate3d(0, -100%, 0);
   transform-origin: top center;
   will-change: transform;
@@ -1347,7 +1352,7 @@ body {
 }
 
 .preview-dispenser__receipt--printing {
-  animation: home-receipt-out 3.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s forwards;
+  animation: home-receipt-out 3.36s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.315s forwards;
 }
 
 .preview-dispenser__receipt--done {
@@ -1778,7 +1783,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: var(--page-padding-y) var(--section-padding-x);
-  gap: clamp(20px, 4vh, 36px);
+  gap: clamp(15px, 3vh, 27px);
 }
 
 .qr-download__title {
@@ -1808,10 +1813,10 @@ body {
   align-items: center;
   justify-content: center;
   min-height: clamp(180px, 32vw, 240px);
-  padding: clamp(12px, 2vw, 20px);
+  padding: clamp(9px, 1.5vw, 15px);
   border-radius: 16px;
   background: var(--color-bg-card);
-  margin-top: 20%;
+  margin-top: 15%;
 }
 
 .qr-download__image {
@@ -1829,7 +1834,7 @@ body {
   font-size: clamp(12px, 2.2vw, 15px);
   color: #666;
   text-align: center;
-  margin-top: 20%;
+  margin-top: 15%;
 }
 
 .qr-download__countdown span {
@@ -1877,6 +1882,7 @@ body {
 
 #page-name-entry.page.name-entry--keyboard-open .name-entry-body {
   justify-content: flex-start;
+  --name-entry-keyboard-nudge: 10vh;
 }
 
 .name-entry-body {
@@ -1890,7 +1896,7 @@ body {
   margin-top: 0;
   padding: 0 clamp(24px, 8vw, 64px);
   width: 100%;
-  transform: translateY(calc(-1 * var(--name-entry-shift, 0px)));
+  transform: translateY(calc(var(--name-entry-keyboard-nudge, 0px) - var(--name-entry-shift, 0px)));
   transition: transform 0.22s ease;
 }
 
