@@ -31,28 +31,7 @@ function createNativePrintJobId() {
 }
 
 function getReceiptClubBridge() {
-  const bridge = window[RECEIPT_CLUB_BRIDGE_NAME];
-  if (!bridge) return null;
-  if (
-    typeof bridge.printImage === "function" ||
-    typeof bridge.printImageBase64 === "function"
-  ) {
-    return bridge;
-  }
-  return null;
-}
-
-function receiptClubSupportsOfflinePrint() {
-  const bridge = getReceiptClubBridge() || window[RECEIPT_CLUB_BRIDGE_NAME];
-  if (!bridge) return false;
-  try {
-    return (
-      typeof bridge.printImageBase64 === "function" ||
-      "printImageBase64" in bridge
-    );
-  } catch {
-    return false;
-  }
+  return window[RECEIPT_CLUB_BRIDGE_NAME] || null;
 }
 
 function isReceiptClubApp() {
@@ -427,11 +406,8 @@ async function printViaReceiptClubApp(copies = 1, urls = {}) {
   })();
   const localPrintDataUrl = urls.localPrintDataUrl || cached.localPrintDataUrl;
 
-  if (
-    typeof bridge.printImageBase64 === "function" &&
-    typeof localPrintDataUrl === "string" &&
-    localPrintDataUrl.startsWith("data:image/")
-  ) {
+  if (typeof localPrintDataUrl === "string" && localPrintDataUrl.startsWith("data:image/")) {
+    console.info(`[print] receipt-club base64 copies=${count} len=${localPrintDataUrl.length}`);
     return printViaReceiptClubBase64(bridge, localPrintDataUrl, count);
   }
 

@@ -1043,22 +1043,6 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
   return data;
 }
 
-async function createDownloadQRLocally(downloadId) {
-  const downloadUrl = `${API_URL}/api/download/${downloadId}`;
-
-  if (typeof QRCode !== "undefined" && typeof QRCode.toDataURL === "function") {
-    const qrCodeUrl = await QRCode.toDataURL(downloadUrl, {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 450,
-    });
-    console.info("[print] qr generated locally");
-    return { qrCodeUrl, downloadUrl };
-  }
-
-  return createDownloadQR(downloadId);
-}
-
 async function createDownloadQR(downloadId) {
   const data = await fetchJsonWithRetry(`${API_URL}/api/qrcode`, {
     method: "POST",
@@ -1072,6 +1056,35 @@ async function createDownloadQR(downloadId) {
   return { qrCodeUrl: data.qrCodeUrl, downloadUrl: data.downloadUrl };
 }
 
+async function uploadReceiptFilesInBackground(downloadId, printId, downloadCanvas, printScaled) {
+  try {
+    const downloadJpegBase64 = canvasToUploadJpeg(downloadCanvas);
+    const printJpegBase64 = canvasToUploadJpeg(printScaled);
+    const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
+    const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
+
+    let cached = {};
+    try {
+      cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    } catch {
+      /* ignore */
+    }
+
+    sessionStorage.setItem(
+      "downloadQR",
+      JSON.stringify({
+        ...cached,
+        downloadUrl: downloadUpload.downloadUrl || cached.downloadUrl,
+        printUrl: printUpload.printUrl || printUpload.downloadUrl,
+        uploadPending: false,
+      })
+    );
+    console.info("[print] background uploads ok");
+  } catch (err) {
+    console.warn("[print] background uploads failed", err);
+  }
+}
+
 async function preparePrintReceipt() {
   const layoutId = getSelectedLayoutId();
   const layout = getLayoutById(layoutId);
@@ -1083,51 +1096,65 @@ async function preparePrintReceipt() {
   }
 
   const downloadId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQRLocally(downloadId);
+  const printId = crypto.randomUUID();
+  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQR(downloadId);
 
   const photos = getPreviewSessionPhotos().length ? getPreviewSessionPhotos() : data.photos;
 
   await drawCompositeForPrint(printCanvas, layout, photos, qrCodeUrl, { thermal: true });
+
+  const downloadCanvas = document.createElement("canvas");
+  if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
+    const { layer } = await renderTheBlumoReceiptLayer(layout, photos, { thermal: false });
+    downloadCanvas.width = layer.width;
+    downloadCanvas.height = layer.height;
+    downloadCanvas.getContext("2d").drawImage(layer, 0, 0);
+  } else {
+    await drawComposite(downloadCanvas, layout, photos, { preview: false });
+  }
+  console.info(
+    `[print] download canvas ${downloadCanvas.width}x${downloadCanvas.height} (receipt, no QR)`
+  );
 
   const uploadPrintCanvas = document.createElement("canvas");
   await drawCompositeForPrint(uploadPrintCanvas, layout, photos, qrCodeUrl, {
     thermal: false,
   });
   const printScaled = scaleCanvasForThermal(uploadPrintCanvas, RAWBT_TARGET_WIDTH_PX);
-  const localPrintDataUrl = printScaled.toDataURL("image/jpeg", UPLOAD_JPEG_QUALITY);
+  const localPrintDataUrl = printScaled.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
   console.info(
-    `[print] local print canvas ${printScaled.width}x${printScaled.height} b64len=${localPrintDataUrl.length}`
+    `[print] print canvas ${printScaled.width}x${printScaled.height} b64len=${localPrintDataUrl.length}`
   );
 
-  const inReceiptClubApp =
-    !!window.ReceiptClubBridge ||
-    (typeof isReceiptClubApp === "function" && isReceiptClubApp());
-  const canPrintOffline =
-    inReceiptClubApp &&
-    typeof receiptClubSupportsOfflinePrint === "function" &&
-    receiptClubSupportsOfflinePrint();
+  const inReceiptClubApp = !!window.ReceiptClubBridge;
+  console.info(`[print] inApp=${inReceiptClubApp}`);
 
-  console.info(
-    `[print] offline=${canPrintOffline} inApp=${inReceiptClubApp} b64len=${localPrintDataUrl.length}`
-  );
+  const receiptMeta = {
+    qrCodeUrl,
+    downloadUrl: qrDownloadPath,
+    printUrl: null,
+    localPrintDataUrl,
+    uploadPending: true,
+  };
 
-  let downloadUrl = qrDownloadPath;
-  let printUrl = null;
-
-  try {
-    const printJpegBase64 = canvasToUploadJpeg(printScaled);
-    const printUpload = await uploadCompositeAndGetQR(printJpegBase64, downloadId);
-    downloadUrl = printUpload.downloadUrl || qrDownloadPath;
-    printUrl = printUpload.printUrl || printUpload.downloadUrl;
-  } catch (uploadError) {
-    console.warn("[print] upload failed", uploadError);
-    if (!canPrintOffline) {
-      const hint = inReceiptClubApp
-        ? " (APK เก่า — ติดตั้ง APK ที่มี printImageBase64)"
-        : " (เปิดผ่าน The Receipt Club app)";
-      throw new Error(`${uploadError?.message || "upload failed"}${hint}`);
-    }
+  if (inReceiptClubApp) {
+    sessionStorage.setItem("downloadQR", JSON.stringify(receiptMeta));
+    void uploadReceiptFilesInBackground(downloadId, printId, downloadCanvas, printScaled);
+    return {
+      qrCodeUrl,
+      downloadUrl: qrDownloadPath,
+      printUrl: null,
+      localPrintDataUrl,
+    };
   }
+
+  const downloadJpegBase64 = canvasToUploadJpeg(downloadCanvas);
+  const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
+  const printJpegBase64 = canvasToUploadJpeg(printScaled);
+  const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
+
+  const downloadUrl = downloadUpload.downloadUrl || qrDownloadPath;
+  const printUrl = printUpload.printUrl || printUpload.downloadUrl;
 
   sessionStorage.setItem(
     "downloadQR",
@@ -1135,12 +1162,11 @@ async function preparePrintReceipt() {
       qrCodeUrl,
       downloadUrl,
       printUrl,
-      localPrintDataUrl,
-      uploadPending: !printUrl,
+      uploadPending: false,
     })
   );
 
-  return { qrCodeUrl, downloadUrl, printUrl, localPrintDataUrl };
+  return { qrCodeUrl, downloadUrl, printUrl };
 }
 
 function clearPrintCopies() {
@@ -1194,7 +1220,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth74";
+const PRINT_BUILD = "booth179";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -1804,7 +1830,7 @@ function printReceiptDirect(copies = 1, options = {}) {
   const localPrintDataUrl = options.localPrintDataUrl || cached.localPrintDataUrl;
 
   console.info(
-    `[print] driver=${driver} copies=${copies} downloadUrl=${downloadUrl || "(none)"}`
+    `[print] driver=${driver} copies=${copies} inApp=${!!window.ReceiptClubBridge} printUrl=${printUrl || "(base64)"}`
   );
 
   if (driver === "thermer") {
