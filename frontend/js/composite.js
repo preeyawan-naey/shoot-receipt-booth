@@ -13,6 +13,8 @@ const PRINT_GUEST_NAME_FONT_SIZE = 18;
 const PRINT_GUEST_NAME_GAP = 10;
 /** Hide thank-you tagline + guest name under QR on thermal print (temporary). */
 const PRINT_FOOTER_UNDER_QR_ENABLED = false;
+/** Hide QR code on thermal print receipt (temporary). Download QR page unchanged. */
+const PRINT_QR_ON_RECEIPT_ENABLED = false;
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -849,17 +851,18 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    const { layer, frameW, frameH, crop, frameSrc } = await renderTheBlumoReceiptLayer(
-      frameConfig,
-      resolvedPhotos,
-      { thermal }
-    );
+    const receipt = document.createElement("canvas");
+    await drawComposite(receipt, frameConfig, resolvedPhotos, { preview: true });
+
+    const frameW = receipt.width;
+    const receiptH = receipt.height;
     const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
     const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
+    const crop = { top: 0, height: receiptH };
     const { x: qrX, y: qrY, size: qrSize } = getPrintQrPosition(
       frameConfig,
       frameW,
-      frameH,
+      receiptH,
       crop,
       padTop
     );
@@ -868,7 +871,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
       ? await measureThankYouTextHeight()
       : 0;
     const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
-    const totalH = qrY + qrSize + footerGap + textHeight + padBottom;
+    const totalH = PRINT_QR_ON_RECEIPT_ENABLED
+      ? qrY + qrSize + footerGap + textHeight + padBottom
+      : padTop + receiptH + padBottom;
 
     canvas.width = frameW;
     canvas.height = totalH;
@@ -877,16 +882,16 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(layer, 0, padTop);
+    ctx.drawImage(receipt, 0, padTop);
 
-    await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+    if (PRINT_QR_ON_RECEIPT_ENABLED) {
+      await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+    }
     if (PRINT_FOOTER_UNDER_QR_ENABLED) {
       await drawThankYouText(ctx, frameW / 2, textY);
     }
 
-    console.info(
-      `[print] canvas ${frameW}x${totalH} theblumo cropH=${crop.height} frame=${frameSrc}`
-    );
+    console.info(`[print] canvas ${frameW}x${totalH} theblumo previewMatch receiptH=${receiptH}`);
     return canvas;
   }
 
@@ -912,7 +917,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     ? await measureThankYouTextHeight()
     : 0;
   const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
-  const totalH = qrY + qrSize + footerGap + textHeight + padBottom;
+  const totalH = PRINT_QR_ON_RECEIPT_ENABLED
+    ? qrY + qrSize + footerGap + textHeight + padBottom
+    : padTop + crop.height + padBottom;
 
   canvas.width = frameW;
   canvas.height = totalH;
@@ -974,7 +981,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     }
   }
 
-  await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+  if (PRINT_QR_ON_RECEIPT_ENABLED) {
+    await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
+  }
   if (PRINT_FOOTER_UNDER_QR_ENABLED) {
     await drawThankYouText(ctx, frameW / 2, textY);
   }
@@ -1271,7 +1280,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth186";
+const PRINT_BUILD = "booth188";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
