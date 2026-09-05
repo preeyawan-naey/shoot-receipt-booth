@@ -531,8 +531,26 @@ async function drawQRAt(ctx, qrDataUrl, x, y, size, options = {}) {
     ctx.fillRect(x, y, size, size);
   }
 
+  const drawW = size - pad * 2;
+  const drawH = size - pad * 2;
+  const drawX = x + pad;
+  const drawY = y + pad;
+
+  if (typeof qrDataUrl === "string" && qrDataUrl.startsWith("data:image/")) {
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        resolve();
+      };
+      img.onerror = () => reject(new Error("Failed to draw QR code"));
+      img.src = qrDataUrl;
+    });
+    return;
+  }
+
   const qrImg = await loadImage(qrDataUrl);
-  ctx.drawImage(qrImg, x + pad, y + pad, size - pad * 2, size - pad * 2);
+  ctx.drawImage(qrImg, drawX, drawY, drawW, drawH);
 }
 
 function getPhotosBoundsPx(frameConfig, canvasWidth, canvasHeight) {
@@ -665,9 +683,7 @@ async function measureThankYouBlockHeight() {
   const fontSize = PRINT_THANK_YOU_FONT_SIZE;
   const fontSpec = `${fontSize}px "OCR-B", monospace`;
 
-  if (document.fonts?.load) {
-    await document.fonts.load(fontSpec);
-  }
+  await ensureOcrBFontLoaded(fontSize);
 
   const measureCanvas = document.createElement("canvas");
   const measureCtx = measureCanvas.getContext("2d");
@@ -683,9 +699,7 @@ async function measureThankYouBlockHeight() {
   if (guestName) {
     const guestFontSize = PRINT_GUEST_NAME_FONT_SIZE;
     const guestFontSpec = `${guestFontSize}px "OCR-B", monospace`;
-    if (document.fonts?.load) {
-      await document.fonts.load(guestFontSpec);
-    }
+    await ensureOcrBFontLoaded(guestFontSize);
     measureCtx.font = guestFontSpec;
     const guestMetrics = measureCtx.measureText(guestName);
     height +=
@@ -1243,7 +1257,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth181";
+const PRINT_BUILD = "booth182";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 

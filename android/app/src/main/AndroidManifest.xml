@@ -4,25 +4,54 @@
     <uses-feature
         android:name="android.hardware.usb.host"
         android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Android 11+ — allow opening Fully Kiosk for print callback -->
-    <queries>
-        <package android:name="de.ozerov.fully" />
-    </queries>
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ShootPrint">
+        android:theme="@style/Theme.ReceiptClub"
+        android:usesCleartextTraffic="true">
 
-        <!-- Headless — no launcher icon; booth opens this via intent only -->
         <activity
-            android:name=".PrintActivity"
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+            </intent-filter>
+        </activity>
+
+        <!-- Legacy headless print — still callable via intent if needed -->
+        <activity
+            android:name="com.shootreceipt.print.PrintActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:launchMode="standard"
@@ -56,7 +85,16 @@
         </activity>
 
         <receiver
-            android:name=".UsbPermissionReceiver"
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="com.shootreceipt.print.UsbPermissionReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.shootreceipt.print.USB_PERMISSION" />

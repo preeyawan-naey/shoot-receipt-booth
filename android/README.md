@@ -1,4 +1,8 @@
-# Shoot Print Bridge (Android APK)
+# Android — The Receipt Club Booth App
+
+> **แอpp kiosk ใหม่ (แนะนำ):** อ่าน **[BOOTH_APP.md](./BOOTH_APP.md)** — WebView app ชื่อ **The Receipt Club** ไม่ต้องใช้ Fully
+
+# Shoot Print Bridge (legacy / in-app print engine)
 
 Native print bridge for **SHOOT Receipt BOOTH** — silent USB printing to **XPrinter XP-T80A** without RawBT modal.
 

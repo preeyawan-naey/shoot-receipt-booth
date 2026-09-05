@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ShootPrintBridge"
+rootProject.name = "TheReceiptClub"
 include(":app")

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shoot Print</string>
-    <string name="launcher_ready">Shoot Print Bridge ready.\nConnect XP-T80A via USB.\nBooth uses driver=native.</string>
+    <string name="app_name">The Receipt Club</string>
+    <string name="launcher_ready">The Receipt Club booth ready.\nConnect printer via USB.</string>
     <string name="launcher_no_usb">No USB printer detected.</string>
     <string name="launcher_usb_ok">USB printer connected and permitted.</string>
     <string name="launcher_need_permission">USB printer found — accept permission dialog.</string>

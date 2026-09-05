@@ -209,27 +209,59 @@ object PrintEngine {
     fun printImageUrl(context: android.content.Context, url: String, copies: Int = 1) {
         val count = copies.coerceIn(1, 10)
         Log.i(TAG, "print url=$url copies=$count")
+        ensureUsbReady(context)
+        printBitmap(context, downloadBitmap(url), count)
+    }
+
+    fun printImageBase64(context: android.content.Context, dataUrl: String, copies: Int = 1) {
+        val count = copies.coerceIn(1, 10)
+        Log.i(TAG, "print base64 copies=$count len=${dataUrl.length}")
+        ensureUsbReady(context)
+        printBitmap(context, decodeDataUrlBitmap(dataUrl), count)
+    }
+
+    private fun ensureUsbReady(context: android.content.Context) {
         val usb = UsbEscPosPrinter(context)
-        val device = usb.findPrinterDevice()
-            ?: throw IllegalStateException(usb.describePrinterLookupFailure())
+        val device =
+            usb.findPrinterDevice()
+                ?: throw IllegalStateException(usb.describePrinterLookupFailure())
         if (!UsbPermissionHelper.waitForPermission(context, device)) {
             throw IllegalStateException(
                 "USB permission not granted. Accept USB access on tablet.",
             )
         }
+    }
 
-        val source = downloadBitmap(url)
+    private fun printBitmap(context: android.content.Context, source: Bitmap, copies: Int) {
         val scaled = scaleToPrintWidth(source)
-        if (scaled !== source) {
-            source.recycle()
-        }
+        val toPrint =
+            if (scaled !== source) {
+                source.recycle()
+                scaled
+            } else {
+                source
+            }
 
         val printer = UsbEscPosPrinter(context)
         try {
-            printer.printBitmapCopies(scaled, count)
+            printer.printBitmapCopies(toPrint, copies)
         } finally {
-            scaled.recycle()
+            toPrint.recycle()
         }
+    }
+
+    private fun decodeDataUrlBitmap(dataUrl: String): Bitmap {
+        val payload = dataUrl.substringAfter(",", dataUrl)
+        val bytes = android.util.Base64.decode(payload, android.util.Base64.DEFAULT)
+        val decoded =
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                ?: throw IllegalStateException("Could not decode base64 image")
+        if (decoded.config != Bitmap.Config.ARGB_8888) {
+            val copy = decoded.copy(Bitmap.Config.ARGB_8888, false)
+            decoded.recycle()
+            return copy
+        }
+        return decoded
     }
 
     fun cutPaper(context: android.content.Context) {

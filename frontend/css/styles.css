@@ -1,6 +1,8 @@
 @font-face {
   font-family: "OCR-B";
-  src: url("https://cdn.jsdelivr.net/gh/raisty/OCR-B@1/dist/OCR-B.ttf") format("truetype");
+  src:
+    url("fonts/OCR-B.ttf") format("truetype"),
+    url("https://cdn.jsdelivr.net/gh/raisty/OCR-B/dist/OCR-B.ttf") format("truetype");
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
