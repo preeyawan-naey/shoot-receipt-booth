@@ -1043,6 +1043,27 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
   return data;
 }
 
+async function createDownloadQRLocally(downloadId) {
+  const downloadUrl = `${API_URL}/api/download/${downloadId}`;
+
+  if (typeof QRCode !== "undefined" && typeof QRCode.toDataURL === "function") {
+    const qrCodeUrl = await QRCode.toDataURL(downloadUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 450,
+    });
+    console.info("[print] qr generated locally");
+    return { qrCodeUrl, downloadUrl };
+  }
+
+  if (window.ReceiptClubBridge) {
+    throw new Error("QR library not loaded — reload booth page");
+  }
+
+  console.warn("[print] QRCode library missing — falling back to /api/qrcode");
+  return createDownloadQR(downloadId);
+}
+
 async function createDownloadQR(downloadId) {
   const data = await fetchJsonWithRetry(`${API_URL}/api/qrcode`, {
     method: "POST",
@@ -1097,7 +1118,7 @@ async function preparePrintReceipt() {
 
   const downloadId = crypto.randomUUID();
   const printId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQR(downloadId);
+  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQRLocally(downloadId);
 
   const photos = getPreviewSessionPhotos().length ? getPreviewSessionPhotos() : data.photos;
 
@@ -1126,8 +1147,10 @@ async function preparePrintReceipt() {
     `[print] print canvas ${printScaled.width}x${printScaled.height} b64len=${localPrintDataUrl.length}`
   );
 
-  const inReceiptClubApp = !!window.ReceiptClubBridge;
-  console.info(`[print] inApp=${inReceiptClubApp}`);
+  const inReceiptClubApp =
+    !!window.ReceiptClubBridge ||
+    (typeof isReceiptClubApp === "function" && isReceiptClubApp());
+  console.info(`[print] inApp=${inReceiptClubApp} bridge=${!!window.ReceiptClubBridge}`);
 
   const receiptMeta = {
     qrCodeUrl,
@@ -1220,7 +1243,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth179";
+const PRINT_BUILD = "booth180";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
