@@ -11,6 +11,8 @@ const PRINT_THANK_YOU_TEXT = "PRINT THE MOMENT,KEEP THE RECEIPT";
 const PRINT_THANK_YOU_FONT_SIZE = 20;
 const PRINT_GUEST_NAME_FONT_SIZE = 18;
 const PRINT_GUEST_NAME_GAP = 10;
+/** Hide thank-you tagline + guest name under QR on thermal print (temporary). */
+const PRINT_FOOTER_UNDER_QR_ENABLED = false;
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -434,7 +436,7 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
 
   ctx.save();
 
-  if (options.eraseBackground !== false) {
+  if (options.eraseBackground !== false && !options.previewMode) {
     const erase = slot.erase || slot;
     const ex = (erase.left / 100) * canvasWidth;
     const ey = (erase.top / 100) * canvasHeight + offsetY;
@@ -474,29 +476,24 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
 }
 
 async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight, options = {}) {
-  const useLayoutMock =
-    options.useLayoutMock &&
-    frameConfig?.selectImagePath &&
-    typeof isTheBlumoBoothActive === "function" &&
-    isTheBlumoBoothActive();
+  const usePreviewSlots = Boolean(options.usePreviewSlots ?? options.useLayoutMock);
 
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useLayoutMock
-    ? frameConfig.selectImagePath
-    : options.frameSrc || previewPath || frameConfig.imagePath;
+  const frameSrc =
+    options.frameSrc || previewPath || frameConfig.imagePath;
 
   const frameImg = await loadImage(frameSrc);
   ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
 
   await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
     eraseBackground: options.eraseGuestNameBackground !== false,
-    previewMode: useLayoutMock,
+    previewMode: usePreviewSlots,
   });
   await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawImageCover, {
-    previewMode: useLayoutMock,
+    previewMode: usePreviewSlots,
   });
 }
 
@@ -738,7 +735,11 @@ async function drawThankYouText(ctx, centerX, y) {
 
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
+  const useTheBlumoFrameSelect =
+    typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
+
   const useLayoutMock =
+    !useTheBlumoFrameSelect &&
     isPreview &&
     typeof isTheBlumoBoothActive === "function" &&
     isTheBlumoBoothActive() &&
@@ -748,9 +749,11 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useLayoutMock
-    ? frameConfig.selectImagePath
-    : previewPath || frameConfig.imagePath;
+  const frameSrc = useTheBlumoFrameSelect
+    ? resolveTheBlumoFrameSelectPath(frameConfig)
+    : useLayoutMock
+      ? frameConfig.selectImagePath
+      : previewPath || frameConfig.imagePath;
   const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
@@ -759,11 +762,15 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
-    useLayoutMock,
-    eraseGuestNameBackground: !useLayoutMock,
+    usePreviewSlots: useLayoutMock || useTheBlumoFrameSelect,
+    frameSrc,
+    eraseGuestNameBackground: !useLayoutMock && !useTheBlumoFrameSelect,
   });
 
-  if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
+  const shouldCropTheBlumo =
+    useTheBlumoFrameSelect ||
+    (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock);
+  if (isPreview && shouldCropTheBlumo) {
     const cropPct =
       typeof getTheBlumoPreviewBottomPct === "function"
         ? getTheBlumoPreviewBottomPct(frameConfig.id)
@@ -806,28 +813,37 @@ async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
   const frameImg = await loadImage(frameSrc);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
-  const crop = getPrintCropRect(frameImg, frameConfig, frameH);
   const drawPhotoFn = options.thermal ? drawImageCoverForPrint : drawImageCover;
-  const layerOffsetY = -crop.top;
+
+  const full = document.createElement("canvas");
+  full.width = frameW;
+  full.height = frameH;
+  const fullCtx = full.getContext("2d");
+  fullCtx.drawImage(frameImg, 0, 0);
+
+  await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
+    eraseBackground: false,
+    previewMode: true,
+  });
+  await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
+    previewMode: true,
+  });
+
+  const layoutId = frameConfig?.id;
+  const cropPct =
+    typeof getTheBlumoPreviewBottomPct === "function"
+      ? getTheBlumoPreviewBottomPct(layoutId)
+      : 61.3;
+  const cropH = Math.max(1, Math.round((cropPct / 100) * frameH));
+  const crop = { top: 0, height: cropH };
 
   const layer = document.createElement("canvas");
   layer.width = frameW;
-  layer.height = crop.height;
-  const layerCtx = layer.getContext("2d");
-
-  layerCtx.drawImage(frameImg, 0, crop.top, frameW, crop.height, 0, 0, frameW, crop.height);
-
-  await drawTheBlumoGuestName(layerCtx, frameW, frameH, layerOffsetY, {
-    eraseBackground: true,
-    previewMode: false,
-  });
-  await drawPhotosInSlots(layerCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
-    previewMode: false,
-    slotOffsetY: layerOffsetY,
-  });
+  layer.height = cropH;
+  layer.getContext("2d").drawImage(full, 0, 0, frameW, cropH, 0, 0, frameW, cropH);
 
   console.info(
-    `[print] theblumo layer ${frameW}x${crop.height} frame=${frameSrc} photos=${photos.length}`
+    `[print] theblumo layer ${frameW}x${cropH} frame=${frameSrc} photos=${photos.length} previewSlots=true`
   );
 
   return { layer, frameW, frameH, crop, frameSrc };
@@ -857,8 +873,11 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
       padTop
     );
     const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
-    const textHeight = await measureThankYouTextHeight();
-    const totalH = textY + textHeight + padBottom;
+    const textHeight = PRINT_FOOTER_UNDER_QR_ENABLED
+      ? await measureThankYouTextHeight()
+      : 0;
+    const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
+    const totalH = qrY + qrSize + footerGap + textHeight + padBottom;
 
     canvas.width = frameW;
     canvas.height = totalH;
@@ -870,7 +889,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     ctx.drawImage(layer, 0, padTop);
 
     await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
-    await drawThankYouText(ctx, frameW / 2, textY);
+    if (PRINT_FOOTER_UNDER_QR_ENABLED) {
+      await drawThankYouText(ctx, frameW / 2, textY);
+    }
 
     console.info(
       `[print] canvas ${frameW}x${totalH} theblumo cropH=${crop.height} frame=${frameSrc}`
@@ -896,8 +917,11 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     padTop
   );
   const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
-  const textHeight = await measureThankYouTextHeight();
-  const totalH = textY + textHeight + padBottom;
+  const textHeight = PRINT_FOOTER_UNDER_QR_ENABLED
+    ? await measureThankYouTextHeight()
+    : 0;
+  const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
+  const totalH = qrY + qrSize + footerGap + textHeight + padBottom;
 
   canvas.width = frameW;
   canvas.height = totalH;
@@ -960,7 +984,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   }
 
   await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
-  await drawThankYouText(ctx, frameW / 2, textY);
+  if (PRINT_FOOTER_UNDER_QR_ENABLED) {
+    await drawThankYouText(ctx, frameW / 2, textY);
+  }
 
   console.info(
     `[print] canvas ${frameW}x${totalH} cropTop=${crop.top} layoutH=${crop.height} padTop=${padTop} padBottom=${padBottom}`
@@ -1140,10 +1166,7 @@ async function preparePrintReceipt() {
 
   const downloadCanvas = document.createElement("canvas");
   if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
-    const { layer } = await renderTheBlumoReceiptLayer(layout, photos, { thermal: false });
-    downloadCanvas.width = layer.width;
-    downloadCanvas.height = layer.height;
-    downloadCanvas.getContext("2d").drawImage(layer, 0, 0);
+    await drawComposite(downloadCanvas, layout, photos, { preview: true });
   } else {
     await drawComposite(downloadCanvas, layout, photos, { preview: false });
   }
@@ -1257,7 +1280,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth182";
+const PRINT_BUILD = "booth185";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
