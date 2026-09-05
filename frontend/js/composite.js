@@ -961,22 +961,95 @@ async function exportCompositeForDownload(frameConfig, photos) {
   return canvas.toDataURL("image/png");
 }
 
+async function fetchJsonWithRetry(url, options = {}, retryOpts = {}) {
+  const retries = retryOpts.retries ?? UPLOAD_FETCH_RETRIES;
+  const timeoutMs = retryOpts.timeoutMs ?? UPLOAD_FETCH_TIMEOUT_MS;
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      window.clearTimeout(timer);
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(`Server response invalid (HTTP ${response.status})`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}`);
+      }
+
+      return data;
+    } catch (err) {
+      window.clearTimeout(timer);
+      lastError =
+        err?.name === "AbortError"
+          ? new Error("การเชื่อมต่อช้าเกินไป — ลองใหม่อีกครั้ง")
+          : err;
+      if (attempt < retries) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function compressCanvasForUpload(source, maxWidth = UPLOAD_MAX_WIDTH_PX) {
+  if (!source?.width || !source?.height) return source;
+  if (source.width <= maxWidth) return source;
+
+  const scale = maxWidth / source.width;
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, width, height);
+  return canvas;
+}
+
+function canvasToUploadJpeg(source, quality = UPLOAD_JPEG_QUALITY) {
+  const canvas = compressCanvasForUpload(source);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
 async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
-  const response = await fetch(`${API_URL}/api/upload`, {
+  const payloadLen = String(imageBase64 || "").length;
+  console.info(`[print] upload start replaceId=${replaceId || "(new)"} b64len=${payloadLen}`);
+
+  const data = await fetchJsonWithRetry(`${API_URL}/api/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageBase64, replaceId }),
   });
-  return response.json();
+
+  if (!data.success) {
+    throw new Error(data.message || "Upload failed");
+  }
+
+  return data;
 }
 
 async function createDownloadQR(downloadId) {
-  const response = await fetch(`${API_URL}/api/qrcode`, {
+  const data = await fetchJsonWithRetry(`${API_URL}/api/qrcode`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ downloadId }),
   });
-  const data = await response.json();
+
   if (!data.success || !data.qrCodeUrl) {
     throw new Error(data.message || "Failed to create QR code");
   }
@@ -1013,12 +1086,8 @@ async function preparePrintReceipt() {
   console.info(
     `[print] download upload ${downloadCanvas.width}x${downloadCanvas.height} (theblumo receipt, no QR)`
   );
-  const downloadJpegBase64 = downloadCanvas.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const downloadJpegBase64 = canvasToUploadJpeg(downloadCanvas);
   const downloadUpload = await uploadCompositeAndGetQR(downloadJpegBase64, downloadId);
-
-  if (!downloadUpload.success) {
-    throw new Error(downloadUpload.message || "Upload failed");
-  }
 
   // Color upload — APK Atkinson dithers once (thermal:true here causes double-dither fade)
   const uploadPrintCanvas = document.createElement("canvas");
@@ -1027,12 +1096,8 @@ async function preparePrintReceipt() {
   });
   const printScaled = scaleCanvasForThermal(uploadPrintCanvas, RAWBT_TARGET_WIDTH_PX);
   console.info(`[print] print upload ${printScaled.width}x${printScaled.height} (color→APK dither)`);
-  const printJpegBase64 = printScaled.toDataURL("image/jpeg", RAWBT_JPEG_QUALITY);
+  const printJpegBase64 = canvasToUploadJpeg(printScaled);
   const printUpload = await uploadCompositeAndGetQR(printJpegBase64, printId);
-
-  if (!printUpload.success) {
-    throw new Error(printUpload.message || "Print upload failed");
-  }
 
   const downloadUrl = downloadUpload.downloadUrl || qrDownloadPath;
   const printUrl = printUpload.printUrl || printUpload.downloadUrl;
@@ -1087,6 +1152,11 @@ async function setupPrintCopies(count) {
 /** 80mm thermal @ 203dpi — always render at full printable width */
 const RAWBT_TARGET_WIDTH_PX = 576;
 const RAWBT_JPEG_QUALITY = 0.92;
+/** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
+const UPLOAD_JPEG_QUALITY = 0.82;
+const UPLOAD_MAX_WIDTH_PX = 960;
+const UPLOAD_FETCH_TIMEOUT_MS = 90000;
+const UPLOAD_FETCH_RETRIES = 2;
 const RAWBT_COPY_DELAY_MS = 900;
 const RAWBT_CUT_DELAY_MS = 4500;
 const ESCPOS_COPY_DELAY_MS = 500;
