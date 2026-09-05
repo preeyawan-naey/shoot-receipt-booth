@@ -32,7 +32,7 @@ const THE_BLUMO_GUEST_NAME_SLOT = {
   erase: { left: 5.5, top: 2.5, width: 88.5, height: 6.8 },
 };
 
-/** Photo slots on TheBlumo artwork (1325 × 3970) — inner gray boxes */
+/** Photo slots on TheBlumo artwork (663 × 1986 frame-select export) */
 const THE_BLUMO_FRAME_SLOTS = {
   "Layout-1": {
     theblumo: [

@@ -737,7 +737,13 @@ async function drawThankYouText(ctx, centerX, y) {
 
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
+  const useFrameSelectArtwork =
+    options.useFrameSelectArtwork &&
+    typeof isTheBlumoLayout === "function" &&
+    isTheBlumoLayout(frameConfig?.id);
+
   const useLayoutMock =
+    !useFrameSelectArtwork &&
     isPreview &&
     typeof isTheBlumoBoothActive === "function" &&
     isTheBlumoBoothActive() &&
@@ -747,9 +753,11 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useLayoutMock
-    ? frameConfig.selectImagePath
-    : previewPath || frameConfig.imagePath;
+  const frameSrc = useFrameSelectArtwork
+    ? resolveTheBlumoFrameSelectPath(frameConfig)
+    : useLayoutMock
+      ? frameConfig.selectImagePath
+      : previewPath || frameConfig.imagePath;
   const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
@@ -758,12 +766,15 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
-    usePreviewSlots: useLayoutMock,
+    usePreviewSlots: useLayoutMock || useFrameSelectArtwork,
     frameSrc,
-    eraseGuestNameBackground: !useLayoutMock,
+    eraseGuestNameBackground: !useLayoutMock && !useFrameSelectArtwork,
   });
 
-  if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
+  const shouldCropTheBlumo =
+    useFrameSelectArtwork ||
+    (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock);
+  if (shouldCropTheBlumo) {
     const cropPct =
       typeof getTheBlumoPreviewBottomPct === "function"
         ? getTheBlumoPreviewBottomPct(frameConfig.id)
@@ -852,7 +863,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
 
   if (useTheBlumo) {
     const receipt = document.createElement("canvas");
-    await drawComposite(receipt, frameConfig, resolvedPhotos, { preview: true });
+    await drawComposite(receipt, frameConfig, resolvedPhotos, {
+      useFrameSelectArtwork: true,
+    });
 
     const frameW = receipt.width;
     const receiptH = receipt.height;
@@ -891,7 +904,9 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
       await drawThankYouText(ctx, frameW / 2, textY);
     }
 
-    console.info(`[print] canvas ${frameW}x${totalH} theblumo previewMatch receiptH=${receiptH}`);
+    console.info(
+      `[print] canvas ${frameW}x${totalH} theblumo frameSelect receiptH=${receiptH}`
+    );
     return canvas;
   }
 
@@ -1280,7 +1295,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth188";
+const PRINT_BUILD = "booth189";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
