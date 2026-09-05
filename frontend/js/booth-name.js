@@ -65,41 +65,8 @@ function updateNameEntrySubmitState() {
   submitBtn.disabled = !input.value.trim();
 }
 
-function resetNameEntryKeyboardLayout() {
-  const page = document.getElementById("page-name-entry");
-  const body = page?.querySelector(".name-entry-body");
-  page?.classList.remove("name-entry--keyboard-open");
-  body?.style.setProperty("--name-entry-shift", "0px");
-}
-
-function syncNameEntryKeyboardLayout() {
-  const page = document.getElementById("page-name-entry");
-  const body = page?.querySelector(".name-entry-body");
-  const input = document.getElementById("name-entry-input");
-  if (!page || !body || !input) return;
-
-  const isFocused = document.activeElement === input;
-  const viewport = window.visualViewport;
-  const keyboardOpen = viewport && viewport.height < window.innerHeight * 0.92;
-
-  if (!isFocused || !keyboardOpen) {
-    resetNameEntryKeyboardLayout();
-    return;
-  }
-
-  page.classList.add("name-entry--keyboard-open");
-
-  const inputRect = input.getBoundingClientRect();
-  const visibleBottom = viewport.offsetTop + viewport.height;
-  const gap = 20;
-  const overflow = inputRect.bottom - (visibleBottom - gap);
-  const shift = overflow > 0 ? overflow : 0;
-  body.style.setProperty("--name-entry-shift", `${Math.round(shift)}px`);
-}
-
 function goToNameEntry() {
   navigateTo("name-entry");
-  resetNameEntryKeyboardLayout();
 
   const input = document.getElementById("name-entry-input");
   if (input) {
@@ -170,17 +137,6 @@ function initBoothNameModule() {
     input.setSelectionRange(input.value.length, input.value.length);
     updateNameEntrySubmitState();
   });
-
-  input?.addEventListener("focus", () => {
-    window.requestAnimationFrame(syncNameEntryKeyboardLayout);
-  });
-
-  input?.addEventListener("blur", () => {
-    window.setTimeout(resetNameEntryKeyboardLayout, 80);
-  });
-
-  window.visualViewport?.addEventListener("resize", syncNameEntryKeyboardLayout);
-  window.visualViewport?.addEventListener("scroll", syncNameEntryKeyboardLayout);
 
   input?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;

@@ -1783,7 +1783,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: var(--page-padding-y) var(--section-padding-x);
-  gap: clamp(15px, 3vh, 27px);
+  gap: clamp(13px, 2.5vh, 23px);
 }
 
 .qr-download__title {
@@ -1813,10 +1813,10 @@ body {
   align-items: center;
   justify-content: center;
   min-height: clamp(180px, 32vw, 240px);
-  padding: clamp(9px, 1.5vw, 15px);
+  padding: clamp(8px, 1.3vw, 13px);
   border-radius: 16px;
   background: var(--color-bg-card);
-  margin-top: 15%;
+  margin-top: 12.75%;
 }
 
 .qr-download__image {
@@ -1834,7 +1834,7 @@ body {
   font-size: clamp(12px, 2.2vw, 15px);
   color: #666;
   text-align: center;
-  margin-top: 15%;
+  margin-top: 12.75%;
 }
 
 .qr-download__countdown span {
@@ -1880,11 +1880,6 @@ body {
   min-height: calc(clamp(28px, 5vw, 36px) * 1.1);
 }
 
-#page-name-entry.page.name-entry--keyboard-open .name-entry-body {
-  justify-content: flex-start;
-  --name-entry-keyboard-nudge: 10vh;
-}
-
 .name-entry-body {
   flex: 1;
   min-height: 0;
@@ -1896,8 +1891,6 @@ body {
   margin-top: 0;
   padding: 0 clamp(24px, 8vw, 64px);
   width: 100%;
-  transform: translateY(calc(var(--name-entry-keyboard-nudge, 0px) - var(--name-entry-shift, 0px)));
-  transition: transform 0.22s ease;
 }
 
 .name-entry__title {
