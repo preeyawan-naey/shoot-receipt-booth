@@ -77,11 +77,20 @@ function resolveSlotForDraw(slot, previewMode = false) {
   };
 }
 
-function slotToDrawRect(slot, canvasWidth, canvasHeight, offsetX = 0, offsetY = 0) {
-  let x = (slot.left / 100) * canvasWidth + offsetX;
-  let y = (slot.top / 100) * canvasHeight + offsetY;
-  let w = (slot.width / 100) * canvasWidth;
-  let h = (slot.height / 100) * canvasHeight;
+function slotToDrawRect(
+  slot,
+  canvasWidth,
+  canvasHeight,
+  offsetX = 0,
+  offsetY = 0,
+  layoutReference = null
+) {
+  const refW = layoutReference?.width ?? canvasWidth;
+  const refH = layoutReference?.height ?? canvasHeight;
+  let x = (slot.left / 100) * refW + offsetX;
+  let y = (slot.top / 100) * refH + offsetY;
+  let w = (slot.width / 100) * refW;
+  let h = (slot.height / 100) * refH;
 
   const canBleed = slot.fit !== "contain" && !slot.noBleed;
   if (canBleed) {
@@ -382,7 +391,8 @@ async function drawPhotosInSlots(
       canvasWidth,
       canvasHeight,
       0,
-      slotOffsetY
+      slotOffsetY,
+      options.layoutReference
     );
     const rotation = slot.rotation || 0;
     const fit = drawSlot.fit || "cover";
@@ -431,10 +441,12 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
 
   const topPct =
     options.previewMode && slot.previewTop != null ? slot.previewTop : slot.top;
-  const x = (slot.left / 100) * canvasWidth;
-  const y = (topPct / 100) * canvasHeight + offsetY;
-  const w = (slot.width / 100) * canvasWidth;
-  const h = (slot.height / 100) * canvasHeight;
+  const refW = options.layoutReference?.width ?? canvasWidth;
+  const refH = options.layoutReference?.height ?? canvasHeight;
+  const x = (slot.left / 100) * refW;
+  const y = (topPct / 100) * refH + offsetY;
+  const w = (slot.width / 100) * refW;
+  const h = (slot.height / 100) * refH;
 
   ctx.save();
 
@@ -735,6 +747,25 @@ async function drawThankYouText(ctx, centerX, y) {
   ctx.fillText(guestName, centerX, guestY);
 }
 
+function getTheBlumoCropHeight(sourceHeight, layoutId) {
+  const cropPct =
+    typeof getTheBlumoPreviewBottomPct === "function"
+      ? getTheBlumoPreviewBottomPct(layoutId)
+      : 61.3;
+  return Math.max(1, Math.round((cropPct / 100) * sourceHeight));
+}
+
+async function getTheBlumoLayoutReferenceSize(frameConfig) {
+  if (!frameConfig?.selectImagePath) {
+    throw new Error("Missing TheBlumo preview mock for layout reference");
+  }
+  const mockImg = await loadImage(frameConfig.selectImagePath);
+  return {
+    width: mockImg.naturalWidth,
+    height: mockImg.naturalHeight,
+  };
+}
+
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
   const useFrameSelectArtwork =
@@ -742,8 +773,43 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof isTheBlumoLayout === "function" &&
     isTheBlumoLayout(frameConfig?.id);
 
+  if (useFrameSelectArtwork) {
+    const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
+    const frameImg = await loadImage(frameSrc);
+    const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
+
+    canvas.width = frameImg.naturalWidth;
+    canvas.height = frameImg.naturalHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(frameImg, 0, 0);
+
+    await drawTheBlumoGuestName(ctx, canvas.width, canvas.height, 0, {
+      eraseBackground: false,
+      previewMode: true,
+      layoutReference: layoutRef,
+    });
+    await drawPhotosInSlots(
+      ctx,
+      frameConfig,
+      photos,
+      canvas.width,
+      canvas.height,
+      drawImageCover,
+      {
+        previewMode: true,
+        layoutReference: layoutRef,
+      }
+    );
+
+    console.info(
+      `[composite] frame-select full ${canvas.width}x${canvas.height} ref=${layoutRef.width}x${layoutRef.height} src=${frameSrc}`
+    );
+    return canvas;
+  }
+
   const useLayoutMock =
-    !useFrameSelectArtwork &&
     isPreview &&
     typeof isTheBlumoBoothActive === "function" &&
     isTheBlumoBoothActive() &&
@@ -753,11 +819,9 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useFrameSelectArtwork
-    ? resolveTheBlumoFrameSelectPath(frameConfig)
-    : useLayoutMock
-      ? frameConfig.selectImagePath
-      : previewPath || frameConfig.imagePath;
+  const frameSrc = useLayoutMock
+    ? frameConfig.selectImagePath
+    : previewPath || frameConfig.imagePath;
   const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
@@ -766,20 +830,13 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
-    usePreviewSlots: useLayoutMock || useFrameSelectArtwork,
+    usePreviewSlots: useLayoutMock,
     frameSrc,
-    eraseGuestNameBackground: !useLayoutMock && !useFrameSelectArtwork,
+    eraseGuestNameBackground: !useLayoutMock,
   });
 
-  const shouldCropTheBlumo =
-    useFrameSelectArtwork ||
-    (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock);
-  if (shouldCropTheBlumo) {
-    const cropPct =
-      typeof getTheBlumoPreviewBottomPct === "function"
-        ? getTheBlumoPreviewBottomPct(frameConfig.id)
-        : 70;
-    const cropH = Math.max(1, Math.round((cropPct / 100) * canvas.height));
+  if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
+    const cropH = getTheBlumoCropHeight(canvas.height, frameConfig.id);
     if (cropH < canvas.height) {
       const cropped = ctx.getImageData(0, 0, canvas.width, cropH);
       canvas.height = cropH;
@@ -1295,7 +1352,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth189";
+const PRINT_BUILD = "booth190";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
