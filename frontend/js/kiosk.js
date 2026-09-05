@@ -54,7 +54,7 @@ function applyKioskUI() {
   document.body.classList.toggle("kiosk-active", active);
 
   const badge = document.getElementById("kiosk-mode-badge");
-  if (badge) badge.hidden = !active;
+  if (badge) badge.hidden = true;
 
   updateAdminMenuLabels();
   updateConsoleMenuLabels();

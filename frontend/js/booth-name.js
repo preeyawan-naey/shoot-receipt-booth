@@ -5,6 +5,7 @@ const BOOTH_GUEST_NAME_KEY = "boothGuestName";
 const BOOTH_GUEST_NAME_MAX = 12;
 const BOOTH_GUEST_NAME_EMOJI =
   /^\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?)*/u;
+const BOOTH_GUEST_NAME_THAI = /[\u0E00-\u0E7F]/;
 
 function sanitizeBoothGuestNameInput(raw) {
   const value = String(raw ?? "");
@@ -20,7 +21,7 @@ function sanitizeBoothGuestNameInput(raw) {
     }
 
     const char = value[i];
-    if (/[A-Za-z0-9]/.test(char)) {
+    if (!BOOTH_GUEST_NAME_THAI.test(char) && /[\x20-\x7E]/.test(char)) {
       result += char;
     }
     i += 1;
