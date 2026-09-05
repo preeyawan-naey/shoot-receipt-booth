@@ -9,6 +9,11 @@ const ADMIN_EDGE_MAX_X = 36;
 
 let adminTouchStart = null;
 let kioskPinAction = "disable-kiosk";
+let erudaReady = false;
+let erudaVisible = false;
+
+const ERUDA_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/eruda@3.4.1/eruda.min.js";
+const ERUDA_STORAGE_KEY = "boothErudaEnabled";
 
 function isKioskMode() {
   try {
@@ -52,6 +57,7 @@ function applyKioskUI() {
   if (badge) badge.hidden = !active;
 
   updateAdminMenuLabels();
+  updateConsoleMenuLabels();
 }
 
 function getReceiptClubBridge() {
@@ -85,6 +91,7 @@ function showAdminDrawer() {
   if (!backdrop) return;
 
   updateAdminMenuLabels();
+  updateConsoleMenuLabels();
 
   const versionEl = document.getElementById("admin-drawer-version");
   const bridge = getReceiptClubBridge();
@@ -111,6 +118,140 @@ function hideAdminDrawer() {
   backdrop.hidden = true;
   backdrop.setAttribute("aria-hidden", "true");
   document.body.classList.remove("admin-drawer-open");
+}
+
+function updateConsoleMenuLabels() {
+  const title = document.getElementById("admin-menu-console-title");
+  const desc = document.getElementById("admin-menu-console-desc");
+  if (!title) return;
+
+  if (erudaVisible) {
+    title.textContent = "ปิด Debug console";
+    if (desc) {
+      desc.textContent = `bridge=${!!window.ReceiptClubBridge} · แตะเพื่อซ่อน Eruda`;
+    }
+  } else {
+    title.textContent = "เปิด Debug console";
+    if (desc) {
+      desc.textContent = `bridge=${!!window.ReceiptClubBridge} · ดู log / network`;
+    }
+  }
+}
+
+function logBoothDiagnostics() {
+  const build =
+    typeof BOOTH_BUILD !== "undefined"
+      ? BOOTH_BUILD
+      : document.querySelector('script[src*="app.js"]')?.src?.match(/v=([^&]+)/)?.[1] || "?";
+
+  console.info("[booth] diagnostics", {
+    build,
+    bridge: !!window.ReceiptClubBridge,
+    bridgePatch: window.__receiptClubBridgePatch || null,
+    qrcode: typeof QRCode,
+    inApp: typeof isReceiptClubApp === "function" ? isReceiptClubApp() : null,
+    kiosk: isKioskMode(),
+  });
+}
+
+function setErudaVisible(visible) {
+  erudaVisible = !!visible;
+  try {
+    if (visible && window.eruda?.show) {
+      window.eruda.show();
+    } else if (!visible && window.eruda?.hide) {
+      window.eruda.hide();
+    }
+  } catch (error) {
+    console.warn("[kiosk] eruda toggle failed", error);
+  }
+
+  try {
+    if (visible) {
+      localStorage.setItem(ERUDA_STORAGE_KEY, "1");
+    } else {
+      localStorage.removeItem(ERUDA_STORAGE_KEY);
+    }
+  } catch {
+    /* private mode */
+  }
+
+  updateConsoleMenuLabels();
+}
+
+function loadErudaScript() {
+  return new Promise((resolve, reject) => {
+    if (window.eruda) {
+      resolve(window.eruda);
+      return;
+    }
+
+    const existing = document.getElementById("eruda-script");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.eruda), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Eruda load failed")), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "eruda-script";
+    script.src = ERUDA_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve(window.eruda);
+    script.onerror = () => reject(new Error("Eruda load failed"));
+    document.body.appendChild(script);
+  });
+}
+
+async function ensureErudaReady() {
+  if (erudaReady && window.eruda) return window.eruda;
+
+  const eruda = await loadErudaScript();
+  if (!eruda?.init) {
+    throw new Error("Eruda unavailable");
+  }
+
+  if (!erudaReady) {
+    eruda.init();
+    erudaReady = true;
+  }
+
+  return eruda;
+}
+
+async function toggleErudaConsole() {
+  hideAdminDrawer();
+
+  if (erudaVisible) {
+    setErudaVisible(false);
+    return;
+  }
+
+  try {
+    await ensureErudaReady();
+    setErudaVisible(true);
+    logBoothDiagnostics();
+  } catch (error) {
+    console.error("[kiosk] eruda", error);
+    alert("เปิด Debug console ไม่สำเร็จ — ตรวจสอบ internet");
+  }
+}
+
+async function restoreErudaIfEnabled() {
+  try {
+    if (localStorage.getItem(ERUDA_STORAGE_KEY) !== "1") return;
+    await ensureErudaReady();
+    setErudaVisible(true);
+    logBoothDiagnostics();
+  } catch (error) {
+    console.warn("[kiosk] eruda restore skipped", error);
+  }
+}
+
+function handleAdminConsoleAction() {
+  void toggleErudaConsole();
 }
 
 function updateAdminMenuLabels() {
@@ -262,6 +403,7 @@ function initKioskModule() {
 
   document.getElementById("admin-menu-kiosk")?.addEventListener("click", handleAdminKioskAction);
   document.getElementById("admin-menu-reload")?.addEventListener("click", handleAdminReloadAction);
+  document.getElementById("admin-menu-console")?.addEventListener("click", handleAdminConsoleAction);
   document.getElementById("admin-menu-exit")?.addEventListener("click", handleAdminExitAction);
 
   document.getElementById("admin-drawer-backdrop")?.addEventListener("click", (event) => {
@@ -282,9 +424,12 @@ function initKioskModule() {
   if (isKioskMode()) {
     syncNativeKioskMode(true);
   }
+  void restoreErudaIfEnabled();
 }
 
 document.addEventListener("DOMContentLoaded", initKioskModule);
 
 window.isKioskMode = isKioskMode;
 window.setKioskMode = setKioskMode;
+window.toggleErudaConsole = toggleErudaConsole;
+window.logBoothDiagnostics = logBoothDiagnostics;
