@@ -29,6 +29,10 @@ function sanitizeBoothGuestNameInput(raw) {
   return result;
 }
 
+function isAllowedNameEntryInput(text) {
+  return sanitizeBoothGuestNameInput(text) === String(text ?? "");
+}
+
 function applyNameEntrySanitize(input) {
   if (!input) return;
   const sanitized = sanitizeBoothGuestNameInput(input.value);
@@ -106,23 +110,24 @@ function initBoothNameModule() {
   const input = document.getElementById("name-entry-input");
   const submitBtn = document.getElementById("name-entry-submit");
   const btnBack = document.getElementById("btn-name-back");
-  let composing = false;
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
   });
 
-  input?.addEventListener("compositionstart", () => {
-    composing = true;
+  input?.addEventListener("beforeinput", (event) => {
+    const data = event.data;
+    if (!data) return;
+    if (!isAllowedNameEntryInput(data)) {
+      event.preventDefault();
+    }
   });
 
   input?.addEventListener("compositionend", () => {
-    composing = false;
     applyNameEntrySanitize(input);
   });
 
   input?.addEventListener("input", () => {
-    if (composing) return;
     applyNameEntrySanitize(input);
   });
 
