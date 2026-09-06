@@ -21,15 +21,25 @@ const THE_BLUMO_PRINT_CROP_BOTTOM_PCT = {
 /** Guest name overlay — replaces baked-in "Mun" on TheBlumo artwork */
 const THE_BLUMO_GUEST_NAME_SLOT = {
   left: 4,
-  top: 3.2,
-  previewTop: 8,
+  top: 4.68,
+  previewTop: 3.65,
   width: 88.5,
-  height: 8.5,
+  height: 5.19,
+  previewHeight: 8.57,
+  textOffsetPct: 0.55,
+  previewTextOffsetPct: 1.5,
   padLeftPct: 0.4,
   /** Illustrator type size at 662px design width (TheBlumo exports at 2×) */
   fontSizePx: 72,
   /** Print only — tight patch over "Mun" (preview mock has no large white wipe) */
-  erase: { left: 5.5, top: 2.5, width: 88.5, height: 6.8 },
+  erase: { left: 5.5, top: 4.5, width: 88.5, height: 5.5 },
+};
+
+/** QR overlay on preview mock — centered in gray square below thank-you text */
+const THE_BLUMO_PREVIEW_QR_SCALE = 1.05;
+const THE_BLUMO_PREVIEW_QR_SLOT = {
+  "Layout-1": { left: 36.56, top: 80.86, width: 27.09, height: 11.03, scale: THE_BLUMO_PREVIEW_QR_SCALE },
+  "Layout-2": { left: 36.48, top: 80.68, width: 27.03, height: 11.21, scale: THE_BLUMO_PREVIEW_QR_SCALE },
 };
 
 /** Photo slots on TheBlumo artwork (663 × 1986 frame-select export) */
@@ -41,10 +51,10 @@ const THE_BLUMO_FRAME_SLOTS = {
         top: 50,
         width: 87.321,
         height: 43.979,
-        previewLeft: 6.787,
-        previewTop: 21.30,
-        previewWidth: 86.425,
-        previewHeight: 57,
+        previewLeft: 5.51,
+        previewTop: 16.41,
+        previewWidth: 89.87,
+        previewHeight: 45.35,
         fit: "cover",
         noBleed: true,
       },
@@ -57,24 +67,24 @@ const THE_BLUMO_FRAME_SLOTS = {
         top: 21.21,
         width: 86.94,
         height: 27.99,
-        previewLeft: 6.18,
-        previewTop: 21.04,
-        previewWidth: 87.18,
-        previewHeight: 28.18,
+        previewLeft: 5.05,
+        previewTop: 16.41,
+        previewWidth: 89.67,
+        previewHeight: 21.97,
         fit: "cover",
-        noBleed: true,
+        noBleed: false,
       },
       {
         left: 6.34,
         top: 51.05,
         width: 86.94,
         height: 27.95,
-        previewLeft: 6.18,
-        previewTop: 50.86,
-        previewWidth: 87.18,
-        previewHeight: 28.18,
+        previewLeft: 5.05,
+        previewTop: 39.93,
+        previewWidth: 89.67,
+        previewHeight: 21.88,
         fit: "cover",
-        noBleed: true,
+        noBleed: false,
       },
     ],
   },
@@ -284,3 +294,5 @@ window.isTheBlumoBoothActive = isTheBlumoBoothActive;
 window.getTheBlumoPreviewBottomPct = getTheBlumoPreviewBottomPct;
 window.getTheBlumoPrintCropBottomPct = getTheBlumoPrintCropBottomPct;
 window.getTheBlumoGuestNameSlot = () => THE_BLUMO_GUEST_NAME_SLOT;
+window.getTheBlumoPreviewQrSlot = (layoutId) =>
+  THE_BLUMO_PREVIEW_QR_SLOT[layoutId] || null;

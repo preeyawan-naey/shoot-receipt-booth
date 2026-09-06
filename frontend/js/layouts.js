@@ -72,7 +72,7 @@ function waitForReceiptPrintAnimation(timeoutMs = 4200) {
 }
 
 /**
- * แสดง preview (ไม่มี QR) + animation ปริ้นออกจากเครื่องพิมพ์
+ * แสดง preview + animation ปริ้นออกจากเครื่องพิมพ์
  */
 async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
   const layoutConfig = getLayoutById(selectedLayoutId);
@@ -83,7 +83,22 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
 
   dispenser?.classList.add("preview-dispenser--preparing");
 
-  await drawComposite(canvas, layoutConfig, capturedPhotosArray);
+  const qrCodeUrl =
+    typeof ensurePreviewQrCodeUrl === "function" ? await ensurePreviewQrCodeUrl() : null;
+
+  await drawComposite(canvas, layoutConfig, capturedPhotosArray, { qrCodeUrl });
+
+  let cached = {};
+  try {
+    cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  } catch {
+    /* ignore */
+  }
+
+  if (cached.downloadId && cached.uploadPending !== false) {
+    void uploadPreviewDownloadInBackground(canvas, cached.downloadId);
+  }
+
   const receiptEl = document.getElementById("receipt-composite");
   if (receiptEl && canvas.width > 0 && canvas.height > 0) {
     receiptEl.style.setProperty(

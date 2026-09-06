@@ -15,6 +15,8 @@ const PRINT_GUEST_NAME_GAP = 10;
 const PRINT_FOOTER_UNDER_QR_ENABLED = false;
 /** Hide QR code on thermal print receipt (temporary). Download QR page unchanged. */
 const PRINT_QR_ON_RECEIPT_ENABLED = false;
+/** Draw QR on TheBlumo preview mock (gray square). */
+const PREVIEW_QR_ON_RECEIPT_ENABLED = true;
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -441,12 +443,14 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
 
   const topPct =
     options.previewMode && slot.previewTop != null ? slot.previewTop : slot.top;
+  const heightPct =
+    options.previewMode && slot.previewHeight != null ? slot.previewHeight : slot.height;
   const refW = options.layoutReference?.width ?? canvasWidth;
   const refH = options.layoutReference?.height ?? canvasHeight;
   const x = (slot.left / 100) * refW;
   const y = (topPct / 100) * refH + offsetY;
   const w = (slot.width / 100) * refW;
-  const h = (slot.height / 100) * refH;
+  const h = (heightPct / 100) * refH;
 
   ctx.save();
 
@@ -464,7 +468,7 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   await ensureOcrBFontLoaded(fontSize);
   ctx.fillStyle = "#000000";
   ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
+  ctx.textBaseline = "middle";
 
   const padX = ((slot.padLeftPct || 0) / 100) * canvasWidth;
   const maxTextW = w - padX * 2;
@@ -479,14 +483,90 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
     }
   }
 
-  const metrics = ctx.measureText(guestName);
-  const textHeight =
-    (metrics.actualBoundingBoxAscent || fontSize * 0.78) +
-    (metrics.actualBoundingBoxDescent || fontSize * 0.12);
-  const textY = y + (h - textHeight) / 2 + (metrics.actualBoundingBoxAscent || fontSize * 0.78);
+  const textOffsetPct = options.previewMode
+    ? slot.previewTextOffsetPct ?? slot.textOffsetPct ?? 0
+    : slot.textOffsetPct ?? 0;
+  const textY = y + h / 2 + (textOffsetPct / 100) * refH;
 
   ctx.fillText(guestName, x + padX, textY);
   ctx.restore();
+}
+
+async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canvasHeight) {
+  if (!PREVIEW_QR_ON_RECEIPT_ENABLED || !qrDataUrl) return;
+
+  const slot =
+    typeof getTheBlumoPreviewQrSlot === "function"
+      ? getTheBlumoPreviewQrSlot(layoutId)
+      : null;
+  if (!slot) return;
+
+  const slotX = (slot.left / 100) * canvasWidth;
+  const slotY = (slot.top / 100) * canvasHeight;
+  const slotW = (slot.width / 100) * canvasWidth;
+  const slotH = ((slot.height ?? slot.width) / 100) * canvasHeight;
+  const scale = slot.scale ?? 1;
+  const size = Math.min(slotW, slotH) * scale;
+  const x = slotX + (slotW - size) / 2;
+  const y = slotY + (slotH - size) / 2;
+
+  await drawQRAt(ctx, qrDataUrl, x, y, size, { background: true });
+}
+
+async function ensurePreviewQrCodeUrl() {
+  let cached = {};
+  try {
+    cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  } catch {
+    /* ignore */
+  }
+
+  if (cached.qrCodeUrl) {
+    return cached.qrCodeUrl;
+  }
+
+  const downloadId = crypto.randomUUID();
+  const { qrCodeUrl, downloadUrl } = await createDownloadQRLocally(downloadId);
+
+  sessionStorage.setItem(
+    "downloadQR",
+    JSON.stringify({
+      downloadId,
+      qrCodeUrl,
+      downloadUrl,
+      uploadPending: true,
+    })
+  );
+
+  return qrCodeUrl;
+}
+
+async function uploadPreviewDownloadInBackground(canvas, downloadId) {
+  if (!canvas?.width || !downloadId) return;
+
+  try {
+    const imageBase64 = canvasToUploadJpeg(canvas);
+    const upload = await uploadCompositeAndGetQR(imageBase64, downloadId);
+
+    let cached = {};
+    try {
+      cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+    } catch {
+      /* ignore */
+    }
+
+    sessionStorage.setItem(
+      "downloadQR",
+      JSON.stringify({
+        ...cached,
+        downloadUrl: upload.downloadUrl || cached.downloadUrl,
+        uploadPending: false,
+      })
+    );
+    console.info("[preview] download upload ok");
+  } catch (error) {
+    console.warn("[preview] download upload failed", error);
+  }
 }
 
 async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight, options = {}) {
@@ -766,6 +846,60 @@ async function getTheBlumoLayoutReferenceSize(frameConfig) {
   };
 }
 
+function cloneReceiptCanvas(targetCanvas, sourceCanvas) {
+  if (!targetCanvas || !sourceCanvas?.width || !sourceCanvas?.height) return false;
+  targetCanvas.width = sourceCanvas.width;
+  targetCanvas.height = sourceCanvas.height;
+  targetCanvas.getContext("2d").drawImage(sourceCanvas, 0, 0);
+  return true;
+}
+
+/** TheBlumo print — preview slots/guest/QR on frame-select artwork, cropped to mock height */
+async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options = {}) {
+  const { thermal = true, qrCodeUrl = null } = options;
+  const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
+  const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
+  if (!frameSrc) {
+    throw new Error("Missing TheBlumo frame-select artwork");
+  }
+
+  const frameImg = await loadImage(frameSrc);
+  const frameW = frameImg.naturalWidth;
+  const frameH = frameImg.naturalHeight;
+  const cropH = layoutRef.height;
+  const drawPhotoFn = thermal ? drawImageCoverForPrint : drawImageCover;
+
+  const full = document.createElement("canvas");
+  full.width = frameW;
+  full.height = frameH;
+  const fullCtx = full.getContext("2d");
+  fullCtx.drawImage(frameImg, 0, 0);
+
+  await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
+    eraseBackground: false,
+    previewMode: true,
+    layoutReference: layoutRef,
+  });
+  await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
+    previewMode: true,
+    layoutReference: layoutRef,
+  });
+
+  canvas.width = frameW;
+  canvas.height = cropH;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(full, 0, 0, frameW, cropH, 0, 0, frameW, cropH);
+
+  if (PREVIEW_QR_ON_RECEIPT_ENABLED && qrCodeUrl) {
+    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, cropH);
+  }
+
+  console.info(
+    `[composite] theblumo frame-select ${frameW}x${cropH} thermal=${thermal} src=${frameSrc}`
+  );
+  return canvas;
+}
+
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
   const useFrameSelectArtwork =
@@ -774,38 +908,10 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     isTheBlumoLayout(frameConfig?.id);
 
   if (useFrameSelectArtwork) {
-    const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
-    const frameImg = await loadImage(frameSrc);
-    const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
-
-    canvas.width = frameImg.naturalWidth;
-    canvas.height = frameImg.naturalHeight;
-
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(frameImg, 0, 0);
-
-    await drawTheBlumoGuestName(ctx, canvas.width, canvas.height, 0, {
-      eraseBackground: false,
-      previewMode: true,
-      layoutReference: layoutRef,
+    await drawTheBlumoPrintComposite(canvas, frameConfig, photos, {
+      thermal: false,
+      qrCodeUrl: options.qrCodeUrl || null,
     });
-    await drawPhotosInSlots(
-      ctx,
-      frameConfig,
-      photos,
-      canvas.width,
-      canvas.height,
-      drawImageCover,
-      {
-        previewMode: true,
-        layoutReference: layoutRef,
-      }
-    );
-
-    console.info(
-      `[composite] frame-select full ${canvas.width}x${canvas.height} ref=${layoutRef.width}x${layoutRef.height} src=${frameSrc}`
-    );
     return canvas;
   }
 
@@ -834,6 +940,23 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     frameSrc,
     eraseGuestNameBackground: !useLayoutMock,
   });
+
+  if (
+    isPreview &&
+    PREVIEW_QR_ON_RECEIPT_ENABLED &&
+    options.qrCodeUrl &&
+    useLayoutMock &&
+    typeof isTheBlumoBoothActive === "function" &&
+    isTheBlumoBoothActive()
+  ) {
+    await drawTheBlumoPreviewQR(
+      ctx,
+      frameConfig.id,
+      options.qrCodeUrl,
+      canvas.width,
+      canvas.height
+    );
+  }
 
   if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
     const cropH = getTheBlumoCropHeight(canvas.height, frameConfig.id);
@@ -871,6 +994,7 @@ async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
     throw new Error("Missing TheBlumo frame-select artwork");
   }
 
+  const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
   const frameImg = await loadImage(frameSrc);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
@@ -885,17 +1009,14 @@ async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
   await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
+    layoutReference: layoutRef,
   });
   await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
     previewMode: true,
+    layoutReference: layoutRef,
   });
 
-  const layoutId = frameConfig?.id;
-  const cropPct =
-    typeof getTheBlumoPreviewBottomPct === "function"
-      ? getTheBlumoPreviewBottomPct(layoutId)
-      : 61.3;
-  const cropH = Math.max(1, Math.round((cropPct / 100) * frameH));
+  const cropH = layoutRef.height;
   const crop = { top: 0, height: cropH };
 
   const layer = document.createElement("canvas");
@@ -919,51 +1040,10 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    const receipt = document.createElement("canvas");
-    await drawComposite(receipt, frameConfig, resolvedPhotos, {
-      useFrameSelectArtwork: true,
+    await drawTheBlumoPrintComposite(canvas, frameConfig, resolvedPhotos, {
+      thermal,
+      qrCodeUrl: PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null,
     });
-
-    const frameW = receipt.width;
-    const receiptH = receipt.height;
-    const padTop = edgePadding ? getDownloadEdgePadding(frameW) : 0;
-    const padBottom = edgePadding ? getDownloadEdgePadding(frameW) : PRINT_BOTTOM_PADDING;
-    const crop = { top: 0, height: receiptH };
-    const { x: qrX, y: qrY, size: qrSize } = getPrintQrPosition(
-      frameConfig,
-      frameW,
-      receiptH,
-      crop,
-      padTop
-    );
-    const textY = qrY + qrSize + PRINT_QR_TEXT_GAP;
-    const textHeight = PRINT_FOOTER_UNDER_QR_ENABLED
-      ? await measureThankYouTextHeight()
-      : 0;
-    const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
-    const totalH = PRINT_QR_ON_RECEIPT_ENABLED
-      ? qrY + qrSize + footerGap + textHeight + padBottom
-      : padTop + receiptH + padBottom;
-
-    canvas.width = frameW;
-    canvas.height = totalH;
-
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(receipt, 0, padTop);
-
-    if (PRINT_QR_ON_RECEIPT_ENABLED) {
-      await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
-    }
-    if (PRINT_FOOTER_UNDER_QR_ENABLED) {
-      await drawThankYouText(ctx, frameW / 2, textY);
-    }
-
-    console.info(
-      `[print] canvas ${frameW}x${totalH} theblumo frameSelect receiptH=${receiptH}`
-    );
     return canvas;
   }
 
@@ -1228,22 +1308,37 @@ async function preparePrintReceipt() {
     throw new Error("Missing print data");
   }
 
-  const downloadId = crypto.randomUUID();
+  let cached = {};
+  try {
+    cached = JSON.parse(sessionStorage.getItem("downloadQR") || "{}");
+  } catch {
+    /* ignore */
+  }
+
+  const downloadId = cached.downloadId || crypto.randomUUID();
   const printId = crypto.randomUUID();
-  const { qrCodeUrl, downloadUrl: qrDownloadPath } = await createDownloadQRLocally(downloadId);
+  const { qrCodeUrl, downloadUrl: qrDownloadPath } = cached.qrCodeUrl
+    ? { qrCodeUrl: cached.qrCodeUrl, downloadUrl: cached.downloadUrl }
+    : await createDownloadQRLocally(downloadId);
 
   const photos = getPreviewSessionPhotos().length ? getPreviewSessionPhotos() : data.photos;
 
   await drawCompositeForPrint(printCanvas, layout, photos, qrCodeUrl, { thermal: true });
 
   const downloadCanvas = document.createElement("canvas");
+  const previewCanvas = document.getElementById("receipt-canvas");
   if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
-    await drawComposite(downloadCanvas, layout, photos, { preview: true });
+    if (!cloneReceiptCanvas(downloadCanvas, previewCanvas)) {
+      await drawComposite(downloadCanvas, layout, photos, {
+        preview: true,
+        qrCodeUrl,
+      });
+    }
   } else {
     await drawComposite(downloadCanvas, layout, photos, { preview: false });
   }
   console.info(
-    `[print] download canvas ${downloadCanvas.width}x${downloadCanvas.height} (receipt, no QR)`
+    `[print] download canvas ${downloadCanvas.width}x${downloadCanvas.height} (matches preview for TheBlumo)`
   );
 
   const uploadPrintCanvas = document.createElement("canvas");
@@ -1262,6 +1357,7 @@ async function preparePrintReceipt() {
   console.info(`[print] inApp=${inReceiptClubApp} bridge=${!!window.ReceiptClubBridge}`);
 
   const receiptMeta = {
+    downloadId,
     qrCodeUrl,
     downloadUrl: qrDownloadPath,
     printUrl: null,
@@ -1291,6 +1387,7 @@ async function preparePrintReceipt() {
   sessionStorage.setItem(
     "downloadQR",
     JSON.stringify({
+      downloadId,
       qrCodeUrl,
       downloadUrl,
       printUrl,

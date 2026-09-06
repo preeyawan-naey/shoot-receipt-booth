@@ -343,6 +343,7 @@ function finishCaptureSession() {
   };
 
   sessionStorage.setItem("capturedPhotos", JSON.stringify(payload));
+  sessionStorage.removeItem("downloadQR");
 
   showCameraBusyOverlay();
   hideCameraVideoInstantly();
