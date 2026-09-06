@@ -492,7 +492,7 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   ctx.restore();
 }
 
-async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canvasHeight) {
+async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canvasHeight, layoutReference = null) {
   if (!PREVIEW_QR_ON_RECEIPT_ENABLED || !qrDataUrl) return;
 
   const slot =
@@ -501,10 +501,12 @@ async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canv
       : null;
   if (!slot) return;
 
-  const slotX = (slot.left / 100) * canvasWidth;
-  const slotY = (slot.top / 100) * canvasHeight;
-  const slotW = (slot.width / 100) * canvasWidth;
-  const slotH = ((slot.height ?? slot.width) / 100) * canvasHeight;
+  const refW = layoutReference?.width ?? canvasWidth;
+  const refH = layoutReference?.height ?? canvasHeight;
+  const slotX = (slot.left / 100) * refW;
+  const slotY = (slot.top / 100) * refH;
+  const slotW = (slot.width / 100) * refW;
+  const slotH = ((slot.height ?? slot.width) / 100) * refH;
   const scale = slot.scale ?? 1;
   const size = Math.min(slotW, slotH) * scale;
   const x = slotX + (slotW - size) / 2;
@@ -854,7 +856,7 @@ function cloneReceiptCanvas(targetCanvas, sourceCanvas) {
   return true;
 }
 
-/** TheBlumo print — preview slots/guest/QR on frame-select artwork, cropped to mock height */
+/** TheBlumo print — preview slots/guest/QR on full frame-select artwork (no height crop) */
 async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options = {}) {
   const { thermal = true, qrCodeUrl = null } = options;
   const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
@@ -866,36 +868,29 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   const frameImg = await loadImage(frameSrc);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
-  const cropH = layoutRef.height;
   const drawPhotoFn = thermal ? drawImageCoverForPrint : drawImageCover;
 
-  const full = document.createElement("canvas");
-  full.width = frameW;
-  full.height = frameH;
-  const fullCtx = full.getContext("2d");
-  fullCtx.drawImage(frameImg, 0, 0);
+  canvas.width = frameW;
+  canvas.height = frameH;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(frameImg, 0, 0);
 
-  await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
+  await drawTheBlumoGuestName(ctx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
     layoutReference: layoutRef,
   });
-  await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
+  await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
     previewMode: true,
     layoutReference: layoutRef,
   });
 
-  canvas.width = frameW;
-  canvas.height = cropH;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(full, 0, 0, frameW, cropH, 0, 0, frameW, cropH);
-
   if (PREVIEW_QR_ON_RECEIPT_ENABLED && qrCodeUrl) {
-    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, cropH);
+    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH, layoutRef);
   }
 
   console.info(
-    `[composite] theblumo frame-select ${frameW}x${cropH} thermal=${thermal} src=${frameSrc}`
+    `[composite] theblumo frame-select full ${frameW}x${frameH} thermal=${thermal} src=${frameSrc}`
   );
   return canvas;
 }

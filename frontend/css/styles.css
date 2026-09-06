@@ -381,13 +381,13 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  font-family: var(--font-sans);
+  font-family: "OCR-B", monospace;
   color: var(--color-text);
   padding: 16px 32px;
   transition: transform 0.15s ease;
   /*font-size: clamp(14px, 2.5vw, 22px);*/
   font-size: 32px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .home-footer:active .start-btn,
@@ -396,8 +396,8 @@ body {
 }
 
 .start-btn__highlight {
-  font-family: var(--font-sans);
-  font-weight: 700;
+  font-family: inherit;
+  font-weight: 400;
   color: var(--color-red);
 }
 
@@ -1280,6 +1280,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   padding: 0 var(--section-padding-x);
   min-height: 0;
   overflow: hidden;
@@ -1289,7 +1290,7 @@ body {
   flex-shrink: 0;
   width: min(100%, clamp(260px, 60vw, 480px));
   margin-inline: auto;
-  margin-top: clamp(96px, 14vh, 240px);
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1306,7 +1307,7 @@ body {
   max-width: clamp(240px, 50vw, 400px);
   height: auto;
   display: block;
-  margin: clamp(12px, 2vh, 18px) auto 0;
+  margin: 0 auto;
   object-fit: contain;
   z-index: 1;
   pointer-events: none;
@@ -1570,7 +1571,9 @@ body {
 }
 
 .preview-prints__btn:disabled {
-  opacity: 0.35;
+  background: #E1E1E1;
+  color: var(--color-white);
+  opacity: 1;
   cursor: not-allowed;
 }
 
