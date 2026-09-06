@@ -856,9 +856,10 @@ function cloneReceiptCanvas(targetCanvas, sourceCanvas) {
   return true;
 }
 
-/** TheBlumo print — same preview slot % on full frame-select artwork (no height crop) */
+/** TheBlumo print — frame-select background, preview slot/name/QR settings */
 async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options = {}) {
   const { thermal = true, qrCodeUrl = null } = options;
+  const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
   const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
   if (!frameSrc) {
     throw new Error("Missing TheBlumo frame-select artwork");
@@ -874,21 +875,22 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   const ctx = canvas.getContext("2d");
   ctx.drawImage(frameImg, 0, 0);
 
-  // Use full print canvas for slot % — same as preview on mock (no mock-height layoutReference).
   await drawTheBlumoGuestName(ctx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
+    layoutReference: layoutRef,
   });
   await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
     previewMode: true,
+    layoutReference: layoutRef,
   });
 
   if (PREVIEW_QR_ON_RECEIPT_ENABLED && qrCodeUrl) {
-    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH);
+    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH, layoutRef);
   }
 
   console.info(
-    `[composite] theblumo frame-select full ${frameW}x${frameH} thermal=${thermal} src=${frameSrc}`
+    `[composite] theblumo frame-select full ${frameW}x${frameH} thermal=${thermal} previewSlots=true src=${frameSrc}`
   );
   return canvas;
 }
@@ -1033,14 +1035,8 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    const previewCanvas = document.getElementById("receipt-canvas");
-    if (previewCanvas?.width && cloneReceiptCanvas(canvas, previewCanvas)) {
-      console.info("[print] theblumo print canvas cloned from preview");
-      return canvas;
-    }
-
-    await drawComposite(canvas, frameConfig, resolvedPhotos, {
-      preview: true,
+    await drawTheBlumoPrintComposite(canvas, frameConfig, resolvedPhotos, {
+      thermal,
       qrCodeUrl: PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null,
     });
     return canvas;
