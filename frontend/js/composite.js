@@ -1033,8 +1033,14 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    await drawTheBlumoPrintComposite(canvas, frameConfig, resolvedPhotos, {
-      thermal,
+    const previewCanvas = document.getElementById("receipt-canvas");
+    if (previewCanvas?.width && cloneReceiptCanvas(canvas, previewCanvas)) {
+      console.info("[print] theblumo print canvas cloned from preview");
+      return canvas;
+    }
+
+    await drawComposite(canvas, frameConfig, resolvedPhotos, {
+      preview: true,
       qrCodeUrl: PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null,
     });
     return canvas;
