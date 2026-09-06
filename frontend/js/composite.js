@@ -856,10 +856,9 @@ function cloneReceiptCanvas(targetCanvas, sourceCanvas) {
   return true;
 }
 
-/** TheBlumo print — preview slots/guest/QR on full frame-select artwork (no height crop) */
+/** TheBlumo print — same preview slot % on full frame-select artwork (no height crop) */
 async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options = {}) {
   const { thermal = true, qrCodeUrl = null } = options;
-  const layoutRef = await getTheBlumoLayoutReferenceSize(frameConfig);
   const frameSrc = resolveTheBlumoFrameSelectPath(frameConfig);
   if (!frameSrc) {
     throw new Error("Missing TheBlumo frame-select artwork");
@@ -875,18 +874,17 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   const ctx = canvas.getContext("2d");
   ctx.drawImage(frameImg, 0, 0);
 
+  // Use full print canvas for slot % — same as preview on mock (no mock-height layoutReference).
   await drawTheBlumoGuestName(ctx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
-    layoutReference: layoutRef,
   });
   await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
     previewMode: true,
-    layoutReference: layoutRef,
   });
 
   if (PREVIEW_QR_ON_RECEIPT_ENABLED && qrCodeUrl) {
-    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH, layoutRef);
+    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH);
   }
 
   console.info(
