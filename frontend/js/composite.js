@@ -428,6 +428,21 @@ function getTheBlumoGuestNameFontSize(canvasWidth, slot) {
   return 36 * (canvasWidth / designW);
 }
 
+function getTheBlumoPhotoFrameBounds(frameConfig, refW, previewMode = false) {
+  const slots =
+    typeof getActivePhotoSlots === "function"
+      ? getActivePhotoSlots(frameConfig)
+      : frameConfig?.slots;
+  const photoSlot = slots?.[0];
+  if (!photoSlot) return null;
+
+  const drawSlot = resolveSlotForDraw(photoSlot, previewMode);
+  return {
+    x: (drawSlot.left / 100) * refW,
+    w: (drawSlot.width / 100) * refW,
+  };
+}
+
 async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0, options = {}) {
   if (typeof isTheBlumoBoothActive !== "function" || !isTheBlumoBoothActive()) return;
 
@@ -447,10 +462,22 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
     options.previewMode && slot.previewHeight != null ? slot.previewHeight : slot.height;
   const refW = options.layoutReference?.width ?? canvasWidth;
   const refH = options.layoutReference?.height ?? canvasHeight;
-  const x = (slot.left / 100) * refW;
+  let x = (slot.left / 100) * refW;
   const y = (topPct / 100) * refH + offsetY;
-  const w = (slot.width / 100) * refW;
+  let w = (slot.width / 100) * refW;
   const h = (heightPct / 100) * refH;
+
+  if (options.previewMode && options.frameConfig) {
+    const photoBounds = getTheBlumoPhotoFrameBounds(
+      options.frameConfig,
+      refW,
+      true
+    );
+    if (photoBounds) {
+      x = photoBounds.x;
+      w = photoBounds.w;
+    }
+  }
 
   ctx.save();
 
@@ -472,7 +499,7 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
 
   const padX = ((slot.padLeftPct || 0) / 100) * canvasWidth;
   const maxTextW = w - padX * 2;
-  const minFontSize = Math.max(12, fontSize * 0.55);
+  const minFontSize = Math.max(10, fontSize * 0.45);
 
   ctx.font = `${fontSize}px "OCR-B", monospace`;
 
@@ -587,6 +614,8 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
   await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
     eraseBackground: options.eraseGuestNameBackground !== false,
     previewMode: usePreviewSlots,
+    frameConfig,
+    layoutReference: options.layoutReference,
   });
   await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawImageCover, {
     previewMode: usePreviewSlots,
@@ -878,6 +907,7 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   await drawTheBlumoGuestName(ctx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
+    frameConfig,
     layoutReference: layoutRef,
   });
   await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
@@ -1004,6 +1034,7 @@ async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
   await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
     eraseBackground: false,
     previewMode: true,
+    frameConfig,
     layoutReference: layoutRef,
   });
   await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
