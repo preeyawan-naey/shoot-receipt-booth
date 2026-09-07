@@ -70,13 +70,32 @@ function getPhotoSlotBleed(canvasWidth) {
 
 function resolveSlotForDraw(slot, previewMode = false) {
   if (!previewMode) return slot;
+  const top = slot.previewTop ?? slot.top;
+  const height = slot.previewHeight ?? slot.height;
+  const scaleV =
+    typeof scalePreviewMockVerticalPct === "function"
+      ? scalePreviewMockVerticalPct
+      : (pct) => pct;
   return {
     ...slot,
     left: slot.previewLeft ?? slot.left,
-    top: slot.previewTop ?? slot.top,
+    top: scaleV(top),
     width: slot.previewWidth ?? slot.width,
-    height: slot.previewHeight ?? slot.height,
+    height: scaleV(height),
   };
+}
+
+function getPreviewContentShiftPct(previewMode) {
+  if (!previewMode) return 0;
+  return typeof getTheBlumoPreviewContentShiftUpPct === "function"
+    ? getTheBlumoPreviewContentShiftUpPct()
+    : 0;
+}
+
+function getPreviewQrShiftPct() {
+  return typeof getTheBlumoPreviewQrShiftUpPct === "function"
+    ? getTheBlumoPreviewQrShiftUpPct()
+    : 0;
 }
 
 function slotToDrawRect(
@@ -85,14 +104,16 @@ function slotToDrawRect(
   canvasHeight,
   offsetX = 0,
   offsetY = 0,
-  layoutReference = null
+  layoutReference = null,
+  previewShiftPct = 0
 ) {
   const refW = layoutReference?.width ?? canvasWidth;
   const refH = layoutReference?.height ?? canvasHeight;
   let x = (slot.left / 100) * refW + offsetX;
-  let y = (slot.top / 100) * refH + offsetY;
+  let y = (slot.top / 100) * refH + offsetY - (previewShiftPct / 100) * refH;
   let w = (slot.width / 100) * refW;
   let h = (slot.height / 100) * refH;
+  y = Math.max(0, y);
 
   const canBleed = slot.fit !== "contain" && !slot.noBleed;
   if (canBleed) {
@@ -388,13 +409,15 @@ async function drawPhotosInSlots(
     const photo = await loadImage(photos[i]);
     const drawSlot = resolveSlotForDraw(slot, options.previewMode);
     const slotOffsetY = options.slotOffsetY || 0;
+    const shiftPct = getPreviewContentShiftPct(options.previewMode);
     const { x, y, w, h } = slotToDrawRect(
       drawSlot,
       canvasWidth,
       canvasHeight,
       0,
       slotOffsetY,
-      options.layoutReference
+      options.layoutReference,
+      shiftPct
     );
     const rotation = slot.rotation || 0;
     const fit = drawSlot.fit || "cover";
@@ -456,14 +479,24 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
       : null;
   if (!slot) return;
 
-  const topPct =
+  const topPctRaw =
     options.previewMode && slot.previewTop != null ? slot.previewTop : slot.top;
-  const heightPct =
+  const heightPctRaw =
     options.previewMode && slot.previewHeight != null ? slot.previewHeight : slot.height;
+  const scaleV =
+    options.previewMode && typeof scalePreviewMockVerticalPct === "function"
+      ? scalePreviewMockVerticalPct
+      : (pct) => pct;
+  const topPct = scaleV(topPctRaw);
+  const heightPct = scaleV(heightPctRaw);
   const refW = options.layoutReference?.width ?? canvasWidth;
   const refH = options.layoutReference?.height ?? canvasHeight;
+  const shiftPct = getPreviewContentShiftPct(options.previewMode);
   let x = (slot.left / 100) * refW;
-  const y = (topPct / 100) * refH + offsetY;
+  let y = Math.max(
+    0,
+    (topPct / 100) * refH + offsetY - (shiftPct / 100) * refH
+  );
   let w = (slot.width / 100) * refW;
   const h = (heightPct / 100) * refH;
 
@@ -530,10 +563,16 @@ async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canv
 
   const refW = layoutReference?.width ?? canvasWidth;
   const refH = layoutReference?.height ?? canvasHeight;
+  const shiftPct = getPreviewQrShiftPct();
+  const scaleV =
+    typeof scalePreviewMockVerticalPct !== "function"
+      ? (pct) => pct
+      : scalePreviewMockVerticalPct;
   const slotX = (slot.left / 100) * refW;
-  const slotY = (slot.top / 100) * refH;
+  const slotTopPct = scaleV(slot.top);
+  const slotY = Math.max(0, (slotTopPct / 100) * refH - (shiftPct / 100) * refH);
   const slotW = (slot.width / 100) * refW;
-  const slotH = ((slot.height ?? slot.width) / 100) * refH;
+  const slotH = ((scaleV(slot.height ?? slot.width)) / 100) * refH;
   const scale = slot.scale ?? 1;
   const size = Math.min(slotW, slotH) * scale;
   const x = slotX + (slotW - size) / 2;
@@ -598,6 +637,41 @@ async function uploadPreviewDownloadInBackground(canvas, downloadId) {
   }
 }
 
+async function drawTheBlumoPreviewOverlays(
+  ctx,
+  frameConfig,
+  photos,
+  canvasWidth,
+  canvasHeight,
+  options = {}
+) {
+  const layoutReference = options.layoutReference ?? null;
+  const drawPhotoFn = options.drawPhotoFn ?? drawImageCover;
+
+  await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, options.offsetY ?? 0, {
+    eraseBackground: options.eraseBackground ?? false,
+    previewMode: true,
+    frameConfig,
+    layoutReference,
+  });
+  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawPhotoFn, {
+    previewMode: true,
+    layoutReference,
+    slotOffsetY: options.slotOffsetY ?? 0,
+  });
+
+  if (PREVIEW_QR_ON_RECEIPT_ENABLED && options.qrCodeUrl) {
+    await drawTheBlumoPreviewQR(
+      ctx,
+      frameConfig.id,
+      options.qrCodeUrl,
+      canvasWidth,
+      canvasHeight,
+      layoutReference
+    );
+  }
+}
+
 async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasHeight, options = {}) {
   const usePreviewSlots = Boolean(options.usePreviewSlots ?? options.useLayoutMock);
 
@@ -610,6 +684,18 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
 
   const frameImg = await loadImage(frameSrc);
   ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+
+  if (
+    usePreviewSlots &&
+    typeof isTheBlumoBoothActive === "function" &&
+    isTheBlumoBoothActive()
+  ) {
+    await drawTheBlumoPreviewOverlays(ctx, frameConfig, photos, canvasWidth, canvasHeight, {
+      eraseBackground: options.eraseGuestNameBackground !== false,
+      qrCodeUrl: options.qrCodeUrl,
+    });
+    return;
+  }
 
   await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
     eraseBackground: options.eraseGuestNameBackground !== false,
@@ -897,27 +983,18 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   const frameImg = await loadImage(frameSrc);
   const frameW = frameImg.naturalWidth;
   const frameH = frameImg.naturalHeight;
-  const drawPhotoFn = thermal ? drawImageCoverForPrint : drawImageCover;
 
   canvas.width = frameW;
   canvas.height = frameH;
   const ctx = canvas.getContext("2d");
   ctx.drawImage(frameImg, 0, 0);
 
-  await drawTheBlumoGuestName(ctx, frameW, frameH, 0, {
+  await drawTheBlumoPreviewOverlays(ctx, frameConfig, photos, frameW, frameH, {
+    layoutReference: layoutRef,
+    drawPhotoFn: thermal ? drawImageCoverForPrint : drawImageCover,
+    qrCodeUrl,
     eraseBackground: false,
-    previewMode: true,
-    frameConfig,
-    layoutReference: layoutRef,
   });
-  await drawPhotosInSlots(ctx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
-    previewMode: true,
-    layoutReference: layoutRef,
-  });
-
-  if (PREVIEW_QR_ON_RECEIPT_ENABLED && qrCodeUrl) {
-    await drawTheBlumoPreviewQR(ctx, frameConfig.id, qrCodeUrl, frameW, frameH, layoutRef);
-  }
 
   console.info(
     `[composite] theblumo frame-select full ${frameW}x${frameH} thermal=${thermal} previewSlots=true src=${frameSrc}`
@@ -964,24 +1041,16 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     usePreviewSlots: useLayoutMock,
     frameSrc,
     eraseGuestNameBackground: !useLayoutMock,
+    qrCodeUrl:
+      isPreview &&
+      PREVIEW_QR_ON_RECEIPT_ENABLED &&
+      options.qrCodeUrl &&
+      useLayoutMock &&
+      typeof isTheBlumoBoothActive === "function" &&
+      isTheBlumoBoothActive()
+        ? options.qrCodeUrl
+        : null,
   });
-
-  if (
-    isPreview &&
-    PREVIEW_QR_ON_RECEIPT_ENABLED &&
-    options.qrCodeUrl &&
-    useLayoutMock &&
-    typeof isTheBlumoBoothActive === "function" &&
-    isTheBlumoBoothActive()
-  ) {
-    await drawTheBlumoPreviewQR(
-      ctx,
-      frameConfig.id,
-      options.qrCodeUrl,
-      canvas.width,
-      canvas.height
-    );
-  }
 
   if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
     const cropH = getTheBlumoCropHeight(canvas.height, frameConfig.id);
@@ -1031,15 +1100,10 @@ async function renderTheBlumoReceiptLayer(frameConfig, photos, options = {}) {
   const fullCtx = full.getContext("2d");
   fullCtx.drawImage(frameImg, 0, 0);
 
-  await drawTheBlumoGuestName(fullCtx, frameW, frameH, 0, {
+  await drawTheBlumoPreviewOverlays(fullCtx, frameConfig, photos, frameW, frameH, {
+    layoutReference: layoutRef,
+    drawPhotoFn,
     eraseBackground: false,
-    previewMode: true,
-    frameConfig,
-    layoutReference: layoutRef,
-  });
-  await drawPhotosInSlots(fullCtx, frameConfig, photos, frameW, frameH, drawPhotoFn, {
-    previewMode: true,
-    layoutReference: layoutRef,
   });
 
   const cropH = layoutRef.height;

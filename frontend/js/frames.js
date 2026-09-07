@@ -18,6 +18,27 @@ const THE_BLUMO_PRINT_CROP_BOTTOM_PCT = {
   "Layout-2": 61.3,
 };
 
+/**
+ * Preview mock (layoutN-theblumo.jpg) — artboard extended at bottom only.
+ * Frame/name/QR stay the same size & distance from top in Illustrator;
+ * only total export height changed 2193 → 2360 px (width still 908).
+ * Slot values below are % on the OLD mock; scalePreviewMockVerticalPct
+ * converts top/height to equivalent % on the taller mock (same px).
+ */
+const THE_BLUMO_PREVIEW_MOCK_HEIGHT_OLD = 2193;
+const THE_BLUMO_PREVIEW_MOCK_HEIGHT_NEW = 2360;
+const THE_BLUMO_PREVIEW_MOCK_V_SCALE =
+  THE_BLUMO_PREVIEW_MOCK_HEIGHT_OLD / THE_BLUMO_PREVIEW_MOCK_HEIGHT_NEW;
+
+/** oldMockPct × (2193/2360) → same pixel top/height on taller preview mock */
+function scalePreviewMockVerticalPct(pct) {
+  return pct * THE_BLUMO_PREVIEW_MOCK_V_SCALE;
+}
+
+/** Extra preview nudge — 0 when positions come from Illustrator px match */
+const THE_BLUMO_PREVIEW_CONTENT_SHIFT_UP_PCT = 0;
+const THE_BLUMO_PREVIEW_QR_SHIFT_UP_PCT = 0;
+
 /** Guest name overlay — replaces baked-in "Mun" on TheBlumo artwork */
 const THE_BLUMO_GUEST_NAME_SLOT = {
   left: 4,
@@ -72,7 +93,7 @@ const THE_BLUMO_FRAME_SLOTS = {
         previewWidth: 89.67,
         previewHeight: 21.97,
         fit: "cover",
-        noBleed: false,
+        noBleed: true,
       },
       {
         left: 6.34,
@@ -84,7 +105,7 @@ const THE_BLUMO_FRAME_SLOTS = {
         previewWidth: 89.67,
         previewHeight: 21.88,
         fit: "cover",
-        noBleed: false,
+        noBleed: true,
       },
     ],
   },
@@ -293,6 +314,9 @@ window.isTheBlumoLayout = isTheBlumoLayout;
 window.isTheBlumoBoothActive = isTheBlumoBoothActive;
 window.getTheBlumoPreviewBottomPct = getTheBlumoPreviewBottomPct;
 window.getTheBlumoPrintCropBottomPct = getTheBlumoPrintCropBottomPct;
+window.scalePreviewMockVerticalPct = scalePreviewMockVerticalPct;
+window.getTheBlumoPreviewContentShiftUpPct = () => THE_BLUMO_PREVIEW_CONTENT_SHIFT_UP_PCT;
+window.getTheBlumoPreviewQrShiftUpPct = () => THE_BLUMO_PREVIEW_QR_SHIFT_UP_PCT;
 window.getTheBlumoGuestNameSlot = () => THE_BLUMO_GUEST_NAME_SLOT;
 window.getTheBlumoPreviewQrSlot = (layoutId) =>
   THE_BLUMO_PREVIEW_QR_SLOT[layoutId] || null;
