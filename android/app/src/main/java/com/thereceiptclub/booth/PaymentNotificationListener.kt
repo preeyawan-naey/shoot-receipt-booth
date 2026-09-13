@@ -13,10 +13,15 @@ class PaymentNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.i(TAG, "notification listener connected")
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.w(TAG, "notification listener disconnected — requesting rebind")
         try {
             requestRebind(PaymentNotifyAccess.componentName(this))
         } catch (error: Exception) {
-            Log.w(TAG, "requestRebind failed", error)
+            Log.w(TAG, "requestRebind after disconnect failed", error)
         }
     }
 
@@ -62,6 +67,7 @@ class PaymentNotificationListener : NotificationListenerService() {
                 )
             PaymentNotifyDebug.recordResult(
                 this,
+                sessionId = config.sessionId,
                 matched = result.matched,
                 httpCode = result.httpCode,
                 body = result.body,

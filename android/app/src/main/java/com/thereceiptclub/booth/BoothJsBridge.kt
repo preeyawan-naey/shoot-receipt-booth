@@ -58,8 +58,12 @@ class BoothJsBridge(
         sessionId: String,
         expectedAmount: Int,
     ) {
+        val previous = PaymentNotifyConfig.read(activity).sessionId
         PaymentNotifyConfig.save(activity, apiBase, webhookSecret, sessionId, expectedAmount)
         if (sessionId.isNotBlank()) {
+            if (sessionId != previous) {
+                PaymentNotifyDebug.clearForSession(activity, sessionId)
+            }
             PaymentForegroundService.start(activity)
         }
         PaymentNotifyAccess.requestRebind(activity)
@@ -84,11 +88,16 @@ class BoothJsBridge(
 
     @JavascriptInterface
     fun syncPaymentNotifySession(sessionId: String, expectedAmount: Int) {
+        val previous = PaymentNotifyConfig.read(activity).sessionId
         PaymentNotifyConfig.saveSession(activity, sessionId, expectedAmount)
         if (sessionId.isNotBlank()) {
+            if (sessionId != previous) {
+                PaymentNotifyDebug.clearForSession(activity, sessionId)
+            }
             PaymentForegroundService.start(activity)
         } else {
             PaymentForegroundService.stop(activity)
+            PaymentNotifyDebug.clearAll(activity)
         }
         PaymentNotifyAccess.requestRebind(activity)
         Log.i(TAG, "syncPaymentNotifySession session=${sessionId.take(8)} amount=$expectedAmount")
@@ -97,6 +106,7 @@ class BoothJsBridge(
     @JavascriptInterface
     fun clearPaymentNotifySession() {
         PaymentNotifyConfig.clearSession(activity)
+        PaymentNotifyDebug.clearAll(activity)
     }
 
     @JavascriptInterface

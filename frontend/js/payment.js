@@ -12,6 +12,7 @@ let activePaymentSession = null;
 let paymentFlowGeneration = 0;
 let paymentQrLoadGeneration = 0;
 let paymentNotifyAccessPrompted = false;
+let paymentSessionStartedAt = 0;
 
 function getActivePaymentSessionId() {
   return paymentSessionId || "";
@@ -24,6 +25,7 @@ function getActivePaymentSessionAmount() {
 function clearPaymentSessionState() {
   paymentSessionId = null;
   activePaymentSession = null;
+  paymentSessionStartedAt = 0;
   syncNativePaymentNotify(null);
 }
 
@@ -316,12 +318,24 @@ async function pollPaymentSessionOnce() {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUntilPaymentConfirmed(maxAttempts = 12) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (!paymentSessionId) return;
+    await pollPaymentSessionOnce();
+    if (!paymentSessionId) return;
+    await sleep(400);
+  }
+}
+
 function startPaymentPolling() {
   clearPaymentPolling();
   void pollPaymentSessionOnce();
   paymentPollTimer = setInterval(() => {
     void pollPaymentSessionOnce();
-    refreshPaymentNotifyDebugStatus();
   }, PAYMENT_POLL_MS);
 }
 
@@ -334,8 +348,25 @@ function clearPaymentWaitingHint() {
   }
 }
 
+function isCurrentPaymentDebugEvent(status) {
+  if (!paymentSessionId || !status) return false;
+
+  const activeSessionId = status.active_session_id || status.session_id || "";
+  if (activeSessionId && activeSessionId !== paymentSessionId) {
+    return false;
+  }
+
+  if (status.session_started_at && paymentSessionStartedAt) {
+    if (status.session_started_at + 500 < paymentSessionStartedAt) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function formatPaymentNotifyDebugStatus(raw) {
-  if (!raw) return "";
+  if (!raw || !paymentSessionId) return "";
   try {
     const status = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!status.listener_enabled) {
@@ -344,22 +375,38 @@ function formatPaymentNotifyDebugStatus(raw) {
     if (!status.config_ready) {
       return "แอpp ยัง sync secret ไม่ครบ — รอ server หรือเปิดหน้า QR ใหม่";
     }
-    if (status.last_matched) {
+
+    const forCurrentSession = isCurrentPaymentDebugEvent(status);
+
+    if (
+      forCurrentSession &&
+      status.last_matched &&
+      status.last_matched_session_id === paymentSessionId
+    ) {
       return "server ยืนยันแล้ว — กำลังไปขั้นถัดไป...";
     }
-    if (status.last_http_code && status.last_http_code !== 200) {
+
+    if (forCurrentSession && status.last_http_code && status.last_http_code !== 200) {
       return `ส่ง webhook ไม่สำเร็จ (HTTP ${status.last_http_code})`;
     }
-    if (status.last_forward_at && status.last_forward_at > 0) {
+
+    if (forCurrentSession && status.last_forward_at > 0) {
       return "อ่าน noti แล้ว — รอ server ยืนยัน...";
     }
-    if (status.last_reason === "not_payment_text" && status.last_text) {
+
+    if (
+      forCurrentSession &&
+      status.last_reason === "not_payment_text" &&
+      status.last_text
+    ) {
       return "เห็น noti ธนาคารแล้ว แต่ข้อความไม่ตรงรูปแบบ";
     }
-    if (status.last_seen_at && status.last_seen_at > 0) {
+
+    if (forCurrentSession && status.last_seen_at > 0) {
       return "เห็น noti ธนาคารแล้ว — กำลังส่งไป server...";
     }
-    return "รอ noti SCB EASY / แม่มณีบน tablet นี้";
+
+    return getPaymentWaitingMessage();
   } catch {
     return "";
   }
@@ -387,14 +434,7 @@ function startPaymentWaitingHint() {
   paymentWaitingHintTimer = setTimeout(() => {
     if (!paymentSessionId) return;
     refreshPaymentNotifyDebugStatus();
-    if (!document.getElementById("payment-status")?.textContent) {
-      setPaymentStatus(
-        "waiting",
-        "รอการยืนยันเงินเข้า — เปิด Notification access + แอpp SCB EASY/แม่มณีบน tablet นี้",
-        true
-      );
-    }
-  }, 20000);
+  }, 15000);
 }
 
 function ensureNativeNotificationAccess() {
@@ -424,7 +464,8 @@ function ensureNativeNotificationAccess() {
 window.__receiptClubOnBankNotifyResult = function onBankNotifyResult(result) {
   console.info("[payment] bank notify result", result);
   if (result?.matched) {
-    void pollPaymentSessionOnce();
+    setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปเลือก layout...", true);
+    void pollUntilPaymentConfirmed();
     return;
   }
   refreshPaymentNotifyDebugStatus();
@@ -445,6 +486,7 @@ async function startAutoPaymentSession(flowId) {
 
     paymentSessionId = session.id;
     activePaymentSession = session;
+    paymentSessionStartedAt = Date.now();
     renderPaymentPage(session.amount, session);
     syncNativePaymentNotify(session.id, session.amount);
     ensureNativeNotificationAccess();
