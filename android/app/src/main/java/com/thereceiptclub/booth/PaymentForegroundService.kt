@@ -8,18 +8,37 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 
 /**
  * Keeps the booth process alive on MIUI/HyperOS while waiting for bank notifications.
+ * Polls active notifications because some OEMs skip NotificationListenerService callbacks.
  */
 class PaymentForegroundService : Service() {
+    private val handler = Handler(Looper.getMainLooper())
+    private var scanGeneration = 0
+
+    private val scanRunnable =
+        object : Runnable {
+            override fun run() {
+                val generation = scanGeneration
+                PaymentNotifyAccess.requestRebind(this@PaymentForegroundService)
+                PaymentNotificationListener.scanActiveNotifications(this@PaymentForegroundService)
+                if (generation == scanGeneration) {
+                    handler.postDelayed(this, SCAN_INTERVAL_MS)
+                }
+            }
+        }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                stopScanLoop()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -27,9 +46,26 @@ class PaymentForegroundService : Service() {
             else -> {
                 ensureChannel()
                 startForeground(NOTIFICATION_ID, buildNotification())
+                startScanLoop()
                 return START_STICKY
             }
         }
+    }
+
+    override fun onDestroy() {
+        stopScanLoop()
+        super.onDestroy()
+    }
+
+    private fun startScanLoop() {
+        scanGeneration += 1
+        handler.removeCallbacks(scanRunnable)
+        handler.post(scanRunnable)
+    }
+
+    private fun stopScanLoop() {
+        scanGeneration += 1
+        handler.removeCallbacks(scanRunnable)
     }
 
     private fun ensureChannel() {
@@ -39,7 +75,7 @@ class PaymentForegroundService : Service() {
             NotificationChannel(
                 CHANNEL_ID,
                 "Payment listener",
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Waiting for SCB / Mae Manee payment notifications"
                 setShowBadge(false)
@@ -62,7 +98,10 @@ class PaymentForegroundService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(openIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
     }
 
@@ -70,8 +109,10 @@ class PaymentForegroundService : Service() {
         private const val CHANNEL_ID = "payment_listener"
         private const val NOTIFICATION_ID = 88001
         private const val ACTION_STOP = "com.thereceiptclub.booth.action.STOP_PAYMENT_LISTEN"
+        private const val SCAN_INTERVAL_MS = 3_000L
 
         fun start(context: Context) {
+            PaymentNotifyAccess.requestIgnoreBatteryOptimizations(context)
             val intent = Intent(context, PaymentForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)

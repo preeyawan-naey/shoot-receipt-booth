@@ -54,6 +54,15 @@ object PaymentNotifyDebug {
             .apply()
     }
 
+    fun recordScan(context: Context, bankCount: Int, totalCount: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_scan_at", System.currentTimeMillis())
+            .putInt("last_active_bank_count", bankCount)
+            .putInt("last_active_total_count", totalCount)
+            .apply()
+    }
+
     fun recordResult(
         context: Context,
         sessionId: String,
@@ -76,6 +85,7 @@ object PaymentNotifyDebug {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return JSONObject()
             .put("listener_enabled", PaymentNotifyAccess.isEnabled(context))
+            .put("battery_optimization_exempt", PaymentNotifyAccess.isIgnoringBatteryOptimizations(context))
             .put("config_ready", config.isReady)
             .put("session_id", config.sessionId)
             .put("active_session_id", prefs.getString(KEY_ACTIVE_SESSION_ID, "") ?: "")
@@ -95,6 +105,10 @@ object PaymentNotifyDebug {
             )
             .put("last_http_code", prefs.getInt("last_http_code", 0))
             .put("last_http_body", prefs.getString("last_http_body", "") ?: "")
+            .put("last_scan_at", prefs.getLong("last_scan_at", 0))
+            .put("last_active_bank_count", prefs.getInt("last_active_bank_count", 0))
+            .put("last_active_total_count", prefs.getInt("last_active_total_count", 0))
+            .put("listener_connected", PaymentNotificationListener.isConnected())
             .toString()
     }
 }

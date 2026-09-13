@@ -67,6 +67,7 @@ class BoothJsBridge(
             PaymentForegroundService.start(activity)
         }
         PaymentNotifyAccess.requestRebind(activity)
+        PaymentNotificationListener.scanActiveNotifications(activity)
         Log.i(
             TAG,
             "syncPaymentNotifyConfig session=${sessionId.take(8)} amount=$expectedAmount api=${apiBase.take(32)}",
@@ -100,8 +101,26 @@ class BoothJsBridge(
             PaymentNotifyDebug.clearAll(activity)
         }
         PaymentNotifyAccess.requestRebind(activity)
+        PaymentNotificationListener.scanActiveNotifications(activity)
         Log.i(TAG, "syncPaymentNotifySession session=${sessionId.take(8)} amount=$expectedAmount")
     }
+
+    @JavascriptInterface
+    fun scanPaymentNotifications() {
+        PaymentNotifyAccess.requestRebind(activity)
+        PaymentNotificationListener.scanActiveNotifications(activity)
+    }
+
+    @JavascriptInterface
+    fun requestBatteryOptimizationExemption() {
+        activity.runOnUiThread {
+            PaymentNotifyAccess.requestIgnoreBatteryOptimizations(activity)
+        }
+    }
+
+    @JavascriptInterface
+    fun isBatteryOptimizationExempt(): Boolean =
+        PaymentNotifyAccess.isIgnoringBatteryOptimizations(activity)
 
     @JavascriptInterface
     fun clearPaymentNotifySession() {

@@ -12,7 +12,10 @@ let activePaymentSession = null;
 let paymentFlowGeneration = 0;
 let paymentQrLoadGeneration = 0;
 let paymentNotifyAccessPrompted = false;
+let paymentBatteryPrompted = false;
 let paymentSessionStartedAt = 0;
+let paymentDebugTimer = null;
+const PAYMENT_DEBUG_POLL_MS = 3000;
 
 function getActivePaymentSessionId() {
   return paymentSessionId || "";
@@ -43,10 +46,18 @@ function clearPaymentPolling() {
   }
 }
 
+function clearPaymentDebugPolling() {
+  if (paymentDebugTimer) {
+    clearInterval(paymentDebugTimer);
+    paymentDebugTimer = null;
+  }
+}
+
 function clearPaymentFlow() {
   clearPaymentCountdown();
   clearPaymentPolling();
   clearPaymentWaitingHint();
+  clearPaymentDebugPolling();
   clearPaymentSessionState();
 }
 
@@ -406,9 +417,31 @@ function formatPaymentNotifyDebugStatus(raw) {
       return "เห็น noti ธนาคารแล้ว — กำลังส่งไป server...";
     }
 
+    if (!status.listener_connected) {
+      return "listener ยังไม่เชื่อม — กำลัง reconnect...";
+    }
+
+    if (forCurrentSession && status.last_active_bank_count > 0) {
+      return `เห็น noti SCB ในระบบ (${status.last_active_bank_count}) — กำลังส่งไป server...`;
+    }
+
+    if (!status.battery_optimization_exempt) {
+      return "อนุญาตแบตเตอรี่ไม่จำกัดให้ The Receipt Club — รอ noti SCB...";
+    }
+
     return getPaymentWaitingMessage();
   } catch {
     return "";
+  }
+}
+
+function triggerNativePaymentNotificationScan() {
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.scanPaymentNotifications || !paymentSessionId) return;
+  try {
+    bridge.scanPaymentNotifications();
+  } catch (error) {
+    console.warn("[payment] notification scan failed:", error);
   }
 }
 
@@ -427,6 +460,19 @@ function refreshPaymentNotifyDebugStatus() {
   }
 }
 
+function startPaymentDebugPolling() {
+  clearPaymentDebugPolling();
+  if (!isStaticQrPaymentMode()) return;
+
+  refreshPaymentNotifyDebugStatus();
+  triggerNativePaymentNotificationScan();
+  paymentDebugTimer = setInterval(() => {
+    if (!paymentSessionId) return;
+    triggerNativePaymentNotificationScan();
+    refreshPaymentNotifyDebugStatus();
+  }, PAYMENT_DEBUG_POLL_MS);
+}
+
 function startPaymentWaitingHint() {
   clearPaymentWaitingHint();
   if (!isStaticQrPaymentMode()) return;
@@ -434,7 +480,7 @@ function startPaymentWaitingHint() {
   paymentWaitingHintTimer = setTimeout(() => {
     if (!paymentSessionId) return;
     refreshPaymentNotifyDebugStatus();
-  }, 15000);
+  }, 5000);
 }
 
 function ensureNativeNotificationAccess() {
@@ -456,6 +502,16 @@ function ensureNativeNotificationAccess() {
       return;
     }
     paymentNotifyAccessPrompted = false;
+
+    if (
+      bridge.requestBatteryOptimizationExemption &&
+      bridge.isBatteryOptimizationExempt &&
+      !bridge.isBatteryOptimizationExempt() &&
+      !paymentBatteryPrompted
+    ) {
+      paymentBatteryPrompted = true;
+      bridge.requestBatteryOptimizationExemption();
+    }
   } catch (error) {
     console.warn("[payment] notification access check failed:", error);
   }
@@ -493,6 +549,7 @@ async function startAutoPaymentSession(flowId) {
 
     setPaymentStatus("waiting", getPaymentWaitingMessage(), true);
     startPaymentWaitingHint();
+    startPaymentDebugPolling();
     startPaymentPolling();
   } catch (error) {
     if (flowId !== paymentFlowGeneration) return;
