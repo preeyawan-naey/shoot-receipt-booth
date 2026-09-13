@@ -36,6 +36,10 @@ INSERT INTO booth_settings (setting_key, setting_value)
 VALUES ('omise_enabled', 'false')
 ON CONFLICT (setting_key) DO NOTHING;
 
+INSERT INTO booth_settings (setting_key, setting_value)
+VALUES ('payment_mode', 'static_qr')
+ON CONFLICT (setting_key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id UUID PRIMARY KEY,
   amount INTEGER NOT NULL,

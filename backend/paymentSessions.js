@@ -47,8 +47,16 @@ async function expirePendingSessions() {
   );
 }
 
-function mapSession(row) {
+function mapSession(row, paymentMode = "omise") {
   if (!row) return null;
+
+  let qrImageUrl = null;
+  if (paymentMode === "static_qr") {
+    qrImageUrl = "/api/booth/payment-qr";
+  } else if (row.omise_charge_id) {
+    qrImageUrl = `/api/booth/payment-sessions/${row.id}/qr-image`;
+  }
+
   return {
     id: row.id,
     amount: Number(row.amount),
@@ -58,10 +66,9 @@ function mapSession(row) {
     paid_at: row.paid_at || null,
     omise_source_id: row.omise_source_id || null,
     omise_charge_id: row.omise_charge_id || null,
-    payment_provider: row.omise_charge_id ? "omise" : "manual",
-    qr_image_url: row.omise_charge_id
-      ? `/api/booth/payment-sessions/${row.id}/qr-image`
-      : null,
+    payment_provider:
+      paymentMode === "static_qr" ? "static_qr" : row.omise_charge_id ? "omise" : "manual",
+    qr_image_url: qrImageUrl,
   };
 }
 
@@ -98,8 +105,11 @@ async function getSessionById(sessionId) {
   let row = await getSessionRowById(sessionId);
   if (!row) return null;
 
-  row = await syncOmiseChargeStatus(row);
-  return mapSession(row);
+  const paymentMode = await paymentSettings.getPaymentMode();
+  if (paymentMode === "omise") {
+    row = await syncOmiseChargeStatus(row);
+  }
+  return mapSession(row, paymentMode);
 }
 
 async function cancelPendingSessions() {
@@ -116,8 +126,10 @@ async function createSession() {
   await cancelPendingSessions();
 
   const payment = await paymentSettings.getPaymentSettings();
-  if (payment.omise_enabled === false) {
-    throw new Error("ระบบชำระเงิน Omise ถูกปิดจากหลังบ้าน");
+  const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode());
+
+  if (paymentMode === "free") {
+    throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
   }
 
   const amount = Math.round(Number(payment.payment_amount) || 59);
@@ -131,7 +143,19 @@ async function createSession() {
     [id, amount, createdAt.toISOString(), expiresAt.toISOString()]
   );
 
-  let omiseMeta = null;
+  if (paymentMode === "static_qr") {
+    if (!payment.payment_qr_configured) {
+      throw new Error(
+        "ยังไม่ได้อัปโหลด QR PromptPay — ไปที่ Admin → Payment → อัปโหลด QR ของร้าน"
+      );
+    }
+    return getSessionById(id);
+  }
+
+  if (paymentMode !== "omise") {
+    throw new Error(`โหมดชำระเงินไม่รองรับ: ${paymentMode}`);
+  }
+
   if (!omise.isConfigured()) {
     throw new Error(
       "Omise ยังไม่ได้ตั้งค่าบน server นี้ — ใส่ OMISE_SECRET_KEY ใน backend/.env หรือ Render env"
@@ -139,7 +163,7 @@ async function createSession() {
   }
 
   try {
-    omiseMeta = await omise.createPromptPayPayment(amount, id);
+    const omiseMeta = await omise.createPromptPayPayment(amount, id);
     await db.execute(
       `UPDATE payment_sessions
        SET omise_source_id = $1, omise_charge_id = $2
@@ -175,7 +199,21 @@ async function getLatestPendingSession() {
      LIMIT 1`,
     []
   );
-  return mapSession(row);
+  const paymentMode = await paymentSettings.getPaymentMode();
+  return mapSession(row, paymentMode);
+}
+
+async function getPendingSessionById(sessionId) {
+  await expirePendingSessions();
+  const row = await db.queryOne(
+    `SELECT id, amount, status, created_at, expires_at, paid_at,
+            raw_notification, omise_source_id, omise_charge_id
+     FROM payment_sessions
+     WHERE id = $1 AND status = 'pending'`,
+    [sessionId]
+  );
+  const paymentMode = await paymentSettings.getPaymentMode();
+  return mapSession(row, paymentMode);
 }
 
 async function markSessionPaidFromOmise(sessionId, charge) {
@@ -251,12 +289,24 @@ async function confirmFromOmiseCharge(charge) {
   };
 }
 
-async function confirmFromBankNotification({ text, packageName = null }) {
+async function confirmFromBankNotification({
+  text,
+  packageName = null,
+  sessionId = null,
+  source = "bank_notify",
+}) {
   await expirePendingSessions();
 
-  const pending = await getLatestPendingSession();
+  const pending = sessionId
+    ? await getPendingSessionById(sessionId)
+    : await getLatestPendingSession();
+
   if (!pending) {
-    return { matched: false, reason: "no_pending_session" };
+    return {
+      matched: false,
+      reason: sessionId ? "session_not_found_or_not_pending" : "no_pending_session",
+      session_id: sessionId || null,
+    };
   }
 
   const parsedAmount = parseAmountFromNotification(text, pending.amount);
@@ -272,9 +322,10 @@ async function confirmFromBankNotification({ text, packageName = null }) {
 
   const paidAt = nowIso();
   const raw = JSON.stringify({
-    provider: "bank_notify",
+    provider: source,
     text: String(text || ""),
     package: packageName || null,
+    session_id: pending.id,
     received_at: paidAt,
   });
 

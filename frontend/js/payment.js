@@ -1,8 +1,8 @@
 /**
- * Payment page — Omise PromptPay QR (dynamic) with poll auto-advance
+ * Payment page — Omise PromptPay or Static QR + bank notification auto-advance
  */
 
-const PAYMENT_TIMEOUT_SEC = 60;
+const PAYMENT_TIMEOUT_SEC = 300;
 const PAYMENT_POLL_MS = 2500;
 
 let paymentCountdownTimer = null;
@@ -15,6 +15,7 @@ let paymentQrLoadGeneration = 0;
 function clearPaymentSessionState() {
   paymentSessionId = null;
   activePaymentSession = null;
+  syncNativePaymentNotify(null);
 }
 
 function clearPaymentCountdown() {
@@ -63,7 +64,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error(`เชื่อมต่อ server ไม่สำเร็จ (${API_URL}) — ตรวจสอบ Wi‑Fi และ URL ใน Fully`);
+      throw new Error(`เชื่อมต่อ server ไม่สำเร็จ (${API_URL}) — ตรวจสอบ Wi‑Fi`);
     }
     throw new Error(`เชื่อมต่อ server ไม่ได้ (${API_URL}) — ${error.message}`);
   } finally {
@@ -72,13 +73,27 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 }
 
 async function verifyPaymentBackend() {
-  if (boothSettingsState?.omise_enabled === false) {
+  const mode = getBoothPaymentMode();
+
+  if (mode === "free") {
     throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
+  }
+
+  if (mode === "static_qr") {
+    if (!boothSettingsState?.payment_qr_configured && !boothSettingsState?.payment_qr_url) {
+      throw new Error("ยังไม่ได้อัปโหลด QR PromptPay — ตั้งค่าใน Admin → Payment");
+    }
+    if (!boothSettingsState?.bank_webhook_secret_configured) {
+      throw new Error(
+        "ยังไม่ได้ตั้ง BANK_WEBHOOK_SECRET บน server — ตั้งใน Render env แล้ว redeploy"
+      );
+    }
+    return;
   }
 
   if (boothSettingsState?.omise_configured === false) {
     throw new Error(
-      `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — เปิด Fully ด้วย http://<IP-เครื่อง-Mac>:3000`
+      `Server นี้ยังไม่ได้ตั้ง Omise (${API_URL}) — ใส่ OMISE_SECRET_KEY ใน backend/.env`
     );
   }
 
@@ -97,7 +112,11 @@ async function verifyPaymentBackend() {
       );
     }
   } catch (error) {
-    if (error.message.includes("Omise") || error.message.includes("เชื่อมต่อ") || error.message.includes("หลังบ้าน")) {
+    if (
+      error.message.includes("Omise") ||
+      error.message.includes("เชื่อมต่อ") ||
+      error.message.includes("หลังบ้าน")
+    ) {
       throw error;
     }
     console.warn("[payment] server-info check skipped:", error.message);
@@ -106,9 +125,7 @@ async function verifyPaymentBackend() {
 
 function assertPaymentSessionHasQr(session) {
   if (session?.qr_image_url) return;
-  throw new Error(
-    `ไม่ได้รับ QR จาก server (${API_URL}) — ตรวจสอบว่า Fully เปิด URL เดียวกับ Mac (LAN IP :3000)`
-  );
+  throw new Error(`ไม่ได้รับ QR จาก server (${API_URL})`);
 }
 
 function startPaymentCountdown(seconds = PAYMENT_TIMEOUT_SEC) {
@@ -199,7 +216,8 @@ function renderPaymentPage(sessionAmount, session = activePaymentSession) {
   const qrUrl = resolvePaymentQrUrl(session);
 
   if (amountEl) {
-    amountEl.textContent = `สแกนโอน ${formatPaymentAmount(amount)} บาท`;
+    const prefix = isStaticQrPaymentMode() ? "สแกนโอน" : "สแกน PromptPay";
+    amountEl.textContent = `${prefix} ${formatPaymentAmount(amount)} บาท`;
   }
 
   if (!qrImage || !qrWrap) return;
@@ -296,6 +314,32 @@ function startPaymentPolling() {
   }, PAYMENT_POLL_MS);
 }
 
+function ensureNativeNotificationAccess() {
+  if (!isStaticQrPaymentMode()) return;
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.isNotificationListenerEnabled || !bridge?.openNotificationAccessSettings) return;
+
+  try {
+    if (!bridge.isNotificationListenerEnabled()) {
+      setPaymentStatus(
+        "warning",
+        "เปิดสิทธิ์อ่านการแจ้งเตือนธนาคารในแอpp The Receipt Club",
+        true
+      );
+      bridge.openNotificationAccessSettings();
+    }
+  } catch (error) {
+    console.warn("[payment] notification access check failed:", error);
+  }
+}
+
+function getPaymentWaitingMessage() {
+  if (isStaticQrPaymentMode()) {
+    return "สแกน QR แล้วโอนให้ตรงยอด — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อเงินเข้า";
+  }
+  return "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ";
+}
+
 async function startAutoPaymentSession(flowId) {
   try {
     await verifyPaymentBackend();
@@ -305,29 +349,19 @@ async function startAutoPaymentSession(flowId) {
     paymentSessionId = session.id;
     activePaymentSession = session;
     renderPaymentPage(session.amount, session);
+    syncNativePaymentNotify(session.id);
+    ensureNativeNotificationAccess();
 
-    setPaymentStatus(
-      "waiting",
-      "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ",
-      true
-    );
+    setPaymentStatus("waiting", getPaymentWaitingMessage(), true);
     startPaymentPolling();
   } catch (error) {
     if (flowId !== paymentFlowGeneration) return;
 
-    console.warn("[payment] omise session failed:", error.message);
+    console.warn("[payment] session failed:", error.message);
     clearPaymentSessionState();
     renderPaymentPage();
-    setPaymentQrLoading(
-      true,
-      error.message || "ไม่สามารถสร้าง QR ชำระเงินได้",
-      true
-    );
-    setPaymentStatus(
-      "error",
-      error.message || "ไม่สามารถสร้าง QR ชำระเงินได้",
-      true
-    );
+    setPaymentQrLoading(true, error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
+    setPaymentStatus("error", error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
   }
 }
 

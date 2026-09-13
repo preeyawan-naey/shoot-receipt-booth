@@ -52,11 +52,13 @@ app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/server-info", async (_req, res) => {
   try {
-    const omiseEnabled = await paymentSettings.isOmisePaymentEnabled();
+    const paymentMode = await paymentSettings.getPaymentMode();
+    const omiseEnabled = paymentMode === "omise";
     return res.json({
       publicUrl: config.publicUrl,
       storageMode: storage.getStorageMode(),
       apiBase: config.publicUrl,
+      paymentMode,
       omiseConfigured: Boolean(config.omiseSecretKey),
       omiseEnabled,
     });
@@ -65,8 +67,9 @@ app.get("/api/server-info", async (_req, res) => {
       publicUrl: config.publicUrl,
       storageMode: storage.getStorageMode(),
       apiBase: config.publicUrl,
+      paymentMode: "static_qr",
       omiseConfigured: Boolean(config.omiseSecretKey),
-      omiseEnabled: true,
+      omiseEnabled: false,
     });
   }
 });

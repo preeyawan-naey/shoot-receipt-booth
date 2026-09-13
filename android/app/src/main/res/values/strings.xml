@@ -5,4 +5,5 @@
     <string name="launcher_no_usb">No USB printer detected.</string>
     <string name="launcher_usb_ok">USB printer connected and permitted.</string>
     <string name="launcher_need_permission">USB printer found — accept permission dialog.</string>
+    <string name="payment_notification_listener_label">The Receipt Club — Payment notifications</string>
 </resources>

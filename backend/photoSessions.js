@@ -24,7 +24,7 @@ async function recordSession({
 } = {}) {
   const payment = await paymentSettings.getPaymentSettings();
   const amount = Math.round(Number(payment.payment_amount) || 59);
-  const paymentMode = payment.omise_enabled === false ? "free" : "omise";
+  const paymentMode = payment.payment_mode || (payment.omise_enabled === false ? "free" : "omise");
   const id = randomUUID();
   const copies = Math.max(1, Math.round(Number(printCount) || 1));
   const createdAt = new Date().toISOString();

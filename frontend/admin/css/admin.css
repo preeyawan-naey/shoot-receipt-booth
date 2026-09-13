@@ -741,6 +741,21 @@ body {
   font-size: 13px;
 }
 
+.payment-qr-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.payment-qr-preview {
+  width: min(220px, 100%);
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #fff;
+}
+
 .payment-webhook-info__hint {
   margin: 0;
   font-size: 13px;

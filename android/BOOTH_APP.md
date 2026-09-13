@@ -7,7 +7,7 @@ WebView kiosk app สำหรับ tablet — โหลด booth UI จาก 
 | ชื่อแอpp | **The Receipt Club** |
 | Package | `com.thereceiptclub.booth` |
 | Booth URL (default) | `https://shoot-receipt-boot.onrender.com` |
-| Frontend build tag | `booth121-trc2` |
+| APK version | **1.1.0** (104) — Static QR + bank notification |
 
 ---
 
@@ -67,6 +67,15 @@ Release (ต้อง sign เอง):
 4. ครั้งแรกที่ปริ้น: อนุญาต **USB** + **กล้อง** → **Always allow**
 5. (Optional) ตั้งเป็น **default launcher** / **Lock Task** สำหรับ kiosk
 
+### Static QR Payment (ไม่ต้อง Omise / ไม่ต้องมือถือแยก)
+
+1. Admin → Payment → โหมด **Static QR**
+2. อัปโหลด QR PromptPay ของร้าน + ตั้งราคา
+3. Render env: `BANK_WEBHOOK_SECRET=<secret ยาวๆ>`
+4. ติดตั้งแอpp **ธนาคาร/แม่มณี** บน tablet เดียวกัน + ล็อกอินบัญชีรับเงิน
+5. Settings → Special app access → **Notification access** → เปิด **The Receipt Club**
+6. ลูกค้าสแกน QR → โอนตามยอด → แอppอ่าน noti → booth ไปต่ออัตโนมัติ
+
 ---
 
 ## เปลี่ยน URL booth
@@ -113,7 +122,7 @@ Console ควรเห็น:
 | เปลี่ยนอะไร | ต้อง build APK ใหม่? |
 |-------------|---------------------|
 | UI, payment, layout, ราคา | **ไม่** — deploy frontend/server |
-| ปริ้น, kiosk, URL เริ่มต้น, icon | **ใช่** |
+| ปริ้น, kiosk, URL เริ่มต้น, icon, notification listener | **ใช่** |
 
 ---
 
@@ -121,9 +130,11 @@ Console ควรเห็น:
 
 ```
 android/app/src/main/java/com/thereceiptclub/booth/
-  MainActivity.kt      — WebView kiosk
-  BoothJsBridge.kt     — JS bridge (ReceiptClubBridge)
-  BootReceiver.kt      — auto-start on boot
+  MainActivity.kt                 — WebView kiosk
+  BoothJsBridge.kt                — JS bridge (ReceiptClubBridge)
+  PaymentNotificationListener.kt  — อ่าน noti ธนาคาร → webhook
+  PaymentNotifyClient.kt          — POST bank-notify
+  BootReceiver.kt                 — auto-start on boot
 
 android/app/src/main/res/mipmap-*/
   ic_launcher.png      — icon จาก The Receipt Club

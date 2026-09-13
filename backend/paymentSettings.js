@@ -6,8 +6,11 @@ const PAYMENT_AMOUNT_KEY = "payment_amount";
 const PAYMENT_QR_UPDATED_KEY = "payment_qr_updated_at";
 const PAYMENT_QR_BASE64_KEY = "payment_qr_base64";
 const OMISE_ENABLED_KEY = "omise_enabled";
+const PAYMENT_MODE_KEY = "payment_mode";
 const DEFAULT_AMOUNT = 59;
 const DEFAULT_OMISE_ENABLED = false;
+const PAYMENT_MODES = ["free", "static_qr", "omise"];
+const DEFAULT_PAYMENT_MODE = "static_qr";
 const PAYMENT_QR_PATH = path.join(__dirname, "uploads", "payment-qr.png");
 
 function ensureUploadDir() {
@@ -71,7 +74,45 @@ function parseBooleanSetting(value, fallback = DEFAULT_OMISE_ENABLED) {
   return fallback;
 }
 
+function normalizePaymentMode(value, fallback = DEFAULT_PAYMENT_MODE) {
+  const mode = String(value || fallback).trim().toLowerCase();
+  return PAYMENT_MODES.includes(mode) ? mode : fallback;
+}
+
+async function getPaymentMode() {
+  const stored = await getSettingValue(PAYMENT_MODE_KEY, null);
+  if (stored) {
+    return normalizePaymentMode(stored);
+  }
+
+  const omiseEnabled = await isOmisePaymentEnabled();
+  if (omiseEnabled) {
+    return "omise";
+  }
+
+  const buffer = await getPaymentQrBuffer();
+  return buffer && buffer.length > 0 ? "static_qr" : "free";
+}
+
+async function setPaymentMode(mode) {
+  const normalized = normalizePaymentMode(mode);
+  await setSettingValue(PAYMENT_MODE_KEY, normalized);
+
+  if (normalized === "omise") {
+    await setOmisePaymentEnabled(true);
+  } else if (normalized === "free" || normalized === "static_qr") {
+    await setOmisePaymentEnabled(false);
+  }
+
+  return normalized;
+}
+
 async function isOmisePaymentEnabled() {
+  const mode = await getSettingValue(PAYMENT_MODE_KEY, null);
+  if (mode) {
+    return normalizePaymentMode(mode) === "omise";
+  }
+
   const raw = await getSettingValue(OMISE_ENABLED_KEY, String(DEFAULT_OMISE_ENABLED));
   return parseBooleanSetting(raw, DEFAULT_OMISE_ENABLED);
 }
@@ -86,13 +127,17 @@ async function getPaymentSettings() {
   const amount = Number(amountRaw) || DEFAULT_AMOUNT;
   const updatedAt = await getSettingValue(PAYMENT_QR_UPDATED_KEY, null);
   const buffer = await getPaymentQrBuffer();
-  const omiseEnabled = await isOmisePaymentEnabled();
+  const paymentMode = await getPaymentMode();
+  const omiseEnabled = paymentMode === "omise";
 
   return {
+    payment_mode: paymentMode,
     payment_amount: amount,
     payment_qr_url: buffer ? "/api/booth/payment-qr" : null,
+    payment_qr_configured: Boolean(buffer && buffer.length > 0),
     payment_qr_updated_at: updatedAt,
     omise_enabled: omiseEnabled,
+    payment_required: paymentMode !== "free",
   };
 }
 
@@ -123,11 +168,14 @@ function getPaymentQrPath() {
 
 module.exports = {
   getPaymentSettings,
+  getPaymentMode,
+  setPaymentMode,
   setPaymentAmount,
   setOmisePaymentEnabled,
   isOmisePaymentEnabled,
   savePaymentQr,
   getPaymentQrBuffer,
   getPaymentQrPath,
+  PAYMENT_MODES,
   PAYMENT_QR_PATH,
 };

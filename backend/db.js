@@ -57,6 +57,17 @@ function runSqliteMigration() {
       .run("omise_enabled", "false");
   }
 
+  const defaultPaymentMode = sqlite
+    .prepare("SELECT 1 FROM booth_settings WHERE setting_key = ?")
+    .get("payment_mode");
+  if (!defaultPaymentMode) {
+    sqlite
+      .prepare(
+        "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
+      )
+      .run("payment_mode", "static_qr");
+  }
+
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS payment_sessions (
       id TEXT PRIMARY KEY,
@@ -118,6 +129,12 @@ async function runPostgresMigration() {
     ALTER TABLE payment_sessions
       ADD COLUMN IF NOT EXISTS omise_source_id TEXT,
       ADD COLUMN IF NOT EXISTS omise_charge_id TEXT;
+  `);
+
+  await pgPool.query(`
+    INSERT INTO booth_settings (setting_key, setting_value)
+    VALUES ('payment_mode', 'static_qr')
+    ON CONFLICT (setting_key) DO NOTHING;
   `);
 
   await pgPool.query(`

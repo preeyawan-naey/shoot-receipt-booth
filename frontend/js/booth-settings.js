@@ -7,11 +7,32 @@ const BOOTH_SETTINGS_POLL_MS = 15000;
 let boothSettingsState = {
   payment_amount: 59,
   payment_qr_url: null,
+  payment_mode: "static_qr",
   omise_enabled: false,
+  payment_required: true,
 };
 
+function getBoothPaymentMode() {
+  if (boothSettingsState?.payment_mode) {
+    return boothSettingsState.payment_mode;
+  }
+  return boothSettingsState?.omise_enabled === false ? "free" : "omise";
+}
+
 function isBoothPaymentRequired() {
+  const mode = getBoothPaymentMode();
+  if (mode === "free") return false;
+  if (mode === "static_qr" || mode === "omise") return true;
+  if (boothSettingsState?.payment_required === false) return false;
   return boothSettingsState?.omise_enabled !== false;
+}
+
+function isStaticQrPaymentMode() {
+  return getBoothPaymentMode() === "static_qr";
+}
+
+function isOmisePaymentMode() {
+  return getBoothPaymentMode() === "omise";
 }
 
 async function fetchBoothSettings() {
@@ -66,5 +87,21 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
     });
   } catch (error) {
     console.warn("[booth-settings] photo session record failed", error);
+  }
+}
+
+function syncNativePaymentNotify(sessionId = null) {
+  if (!isStaticQrPaymentMode()) return;
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.syncPaymentNotifyConfig) return;
+
+  try {
+    bridge.syncPaymentNotifyConfig(
+      API_URL,
+      boothSettingsState?.bank_webhook_secret || "",
+      sessionId || ""
+    );
+  } catch (error) {
+    console.warn("[booth-settings] native payment notify sync failed", error);
   }
 }

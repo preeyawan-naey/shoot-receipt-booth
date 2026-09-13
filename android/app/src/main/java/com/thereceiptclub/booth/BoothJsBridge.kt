@@ -52,6 +52,27 @@ class BoothJsBridge(
     }
 
     @JavascriptInterface
+    fun syncPaymentNotifyConfig(apiBase: String, webhookSecret: String, sessionId: String) {
+        PaymentNotifyConfig.save(activity, apiBase, webhookSecret, sessionId)
+        Log.i(TAG, "syncPaymentNotifyConfig session=${sessionId.take(8)} api=${apiBase.take(32)}")
+    }
+
+    @JavascriptInterface
+    fun clearPaymentNotifySession() {
+        PaymentNotifyConfig.clearSession(activity)
+    }
+
+    @JavascriptInterface
+    fun isNotificationListenerEnabled(): Boolean = PaymentNotifyAccess.isEnabled(activity)
+
+    @JavascriptInterface
+    fun openNotificationAccessSettings() {
+        activity.runOnUiThread {
+            PaymentNotifyAccess.openSettings(activity)
+        }
+    }
+
+    @JavascriptInterface
     fun printImageBase64(dataUrl: String, copies: Int, jobId: String) {
         val count = copies.coerceIn(1, 10)
         val safeJobId = jobId.ifBlank { "print-${System.currentTimeMillis()}" }

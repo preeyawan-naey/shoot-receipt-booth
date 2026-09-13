@@ -193,12 +193,6 @@
     });
   }
 
-  function paymentModeLabel(mode) {
-    if (mode === "free") return "ปิด Omise";
-    if (mode === "manual") return "manual";
-    return "Omise";
-  }
-
   function renderPagination(data) {
     const { page, limit, total } = data;
     const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -292,113 +286,219 @@
     }
   }
 
+  function paymentModeLabel(mode) {
+    if (mode === "static_qr") return "Static QR";
+    if (mode === "omise") return "Omise";
+    if (mode === "free") return "Free";
+    if (mode === "manual") return "Manual";
+    return mode || "—";
+  }
+
   async function loadPaymentAdmin() {
     const paymentData = await apiFetch("/payment");
-
     const payment = paymentData.payment || {};
     const amount = payment.payment_amount ?? 59;
+    const mode = payment.payment_mode || payment.payment_provider || "static_qr";
 
     setText("payment-kpi-amount", formatMoney(amount));
-    setText(
-      "payment-kpi-omise",
-      payment.omise_enabled === false
-        ? "Off"
-        : payment.omise_configured
-          ? "On"
-          : "Not set"
-    );
-    setText(
-      "payment-kpi-omise-hint",
-      payment.omise_enabled === false
-        ? "Booth ข้ามหน้าชำระเงิน"
-        : payment.omise_configured
-          ? "QR สร้างจาก Omise ต่อรอบ"
-          : "ตั้ง SECRET_KEY บน server"
-    );
+    setText("payment-kpi-mode", paymentModeLabel(mode));
 
-    const omiseToggle = $("#toggle-omise-payment");
-    if (omiseToggle) {
-      omiseToggle.checked = payment.omise_enabled !== false;
-    }
-    updateOmiseToggleHint(payment);
+    const modeSelect = $("#payment-mode-select");
+    if (modeSelect) modeSelect.value = mode;
+
+    const staticPanel = $("#payment-static-qr-panel");
+    if (staticPanel) staticPanel.hidden = mode !== "static_qr";
 
     const amountInput = $("#payment-amount-input");
-    if (amountInput) amountInput.value = String(amount);
+    if (amountInput) {
+      amountInput.min = mode === "omise" ? "20" : "1";
+      amountInput.value = String(amount);
+    }
+
+    const amountMinHint = $("#payment-amount-min-hint");
+    if (amountMinHint) {
+      amountMinHint.textContent =
+        mode === "omise" ? "ขั้นต่ำ 20 บาท (Omise PromptPay)" : "ขั้นต่ำ 1 บาท";
+    }
+
+    setText(
+      "payment-kpi-amount-hint",
+      mode === "free" ? "ไม่เรียกเก็บเงิน" : "ยอดที่ลูกค้าต้องโอน"
+    );
+
+    setText(
+      "payment-kpi-mode-hint",
+      mode === "static_qr"
+        ? "QR ร้าน + แอppตู่อ่าน noti"
+        : mode === "omise"
+          ? payment.omise_configured
+            ? "Omise dynamic QR"
+            : "ตั้ง OMISE_SECRET_KEY"
+          : "ข้ามหน้า payment"
+    );
+
+    updatePaymentModeHint(mode, payment);
+
+    const qrPreview = $("#payment-qr-preview");
+    const qrStatus = $("#payment-qr-status");
+    if (payment.payment_qr_url && qrPreview) {
+      qrPreview.src = `${window.location.origin}${payment.payment_qr_url}?t=${Date.now()}`;
+      qrPreview.hidden = false;
+      if (qrStatus) {
+        qrStatus.textContent = payment.payment_qr_updated_at
+          ? `อัปโหลดแล้ว — ${formatDateTime(payment.payment_qr_updated_at)}`
+          : "อัปโหลด QR แล้ว";
+      }
+    } else if (qrPreview) {
+      qrPreview.hidden = true;
+      qrPreview.removeAttribute("src");
+      if (qrStatus) qrStatus.textContent = "ยังไม่ได้อัปโหลด QR";
+    }
 
     const webhookUrlInput = $("#payment-webhook-url");
     const webhookSecretStatus = $("#payment-webhook-secret-status");
     const providerHint = $("#payment-webhook-provider-hint");
-    if (webhookUrlInput) {
-      webhookUrlInput.value = payment.webhook_url || "";
+    const webhookSubtitle = $("#payment-webhook-subtitle");
+
+    if (webhookUrlInput) webhookUrlInput.value = payment.webhook_url || "";
+
+    if (webhookSubtitle) {
+      webhookSubtitle.textContent =
+        mode === "omise"
+          ? "ตั้ง webhook ใน Omise Dashboard → charge.complete"
+          : "ตั้ง BANK_WEBHOOK_SECRET บน Render — แอppตู้ sync อัตโนมัติ";
     }
+
     if (webhookSecretStatus) {
-      if (payment.omise_configured) {
-        webhookSecretStatus.textContent = payment.omise_public_key_configured
-          ? "Omise: configured (test/live keys on server)"
-          : "Omise: secret key set — public key missing";
-      } else {
+      if (mode === "omise") {
+        webhookSecretStatus.textContent = payment.omise_configured
+          ? payment.omise_public_key_configured
+            ? "Omise keys configured"
+            : "Omise secret set — public key missing"
+          : "Omise NOT SET — add OMISE_SECRET_KEY on server";
+      } else if (mode === "static_qr") {
         webhookSecretStatus.textContent = payment.webhook_secret_configured
-          ? "Legacy bank webhook secret configured"
-          : "Omise: NOT SET — add OMISE_SECRET_KEY / SECRET_KEY on server";
+          ? "BANK_WEBHOOK_SECRET configured"
+          : "BANK_WEBHOOK_SECRET NOT SET on server";
+      } else {
+        webhookSecretStatus.textContent = "Payment disabled";
       }
     }
+
     if (providerHint) {
-      if (payment.omise_enabled === false) {
+      if (mode === "free") {
+        providerHint.textContent = "Booth ข้ามหน้าชำระเงิน";
+      } else if (mode === "static_qr") {
         providerHint.textContent =
-          "Omise ถูกปิด — Booth ข้ามหน้าชำระเงิน ไปเลือก layout ได้เลย";
-      } else if (payment.payment_provider === "omise" && payment.omise_configured) {
-        providerHint.textContent =
-          "Booth ใช้ Omise PromptPay QR ต่อรอบ — webhook charge.complete + poll อัตโนมัติ";
+          "ติดตั้งแอppธนาคาร/แม่มณีบน tablet + เปิดสิทธิ์ Notification access ให้ The Receipt Club";
+      } else if (payment.omise_configured) {
+        providerHint.textContent = "Omise PromptPay QR ต่อรอบ + webhook charge.complete";
       } else {
-        providerHint.textContent = "Omise ยังไม่ได้ตั้งค่า — ตั้ง SECRET_KEY บน server";
+        providerHint.textContent = "ตั้ง OMISE_SECRET_KEY บน server";
       }
     }
   }
 
-  function updateOmiseToggleHint(payment) {
-    const hint = $("#toggle-omise-payment-hint");
+  function updatePaymentModeHint(mode, payment) {
+    const hint = $("#payment-mode-hint");
     if (!hint) return;
 
-    if (payment.omise_enabled === false) {
-      hint.textContent = "ปิดอยู่ — ไม่เรียกเก็บเงินผ่าน Omise";
+    if (mode === "static_qr") {
+      hint.textContent =
+        "เงินเข้าบัญชีร้านตรง — แอppตู่อ่าน noti ธนาคารบน tablet เครื่องเดียว (ไม่ต้องมือถือแยก)";
       return;
     }
-    if (!payment.omise_configured) {
-      hint.textContent = "เปิดอยู่ แต่ยังไม่ได้ตั้ง SECRET_KEY บน server";
+    if (mode === "omise") {
+      hint.textContent = payment?.omise_configured
+        ? "Omise สร้าง QR ล็อกยอดต่อรอบ"
+        : "เลือก Omise แล้ว — ต้องตั้ง OMISE_SECRET_KEY บน server";
       return;
     }
-    hint.textContent = "เปิดอยู่ — ลูกค้าต้องสแกน QR PromptPay ก่อนถ่าย";
+    hint.textContent = "ปิดการชำระเงิน — ลูกค้าไปเลือก layout ได้เลย";
   }
 
-  async function saveOmiseEnabled(enabled) {
+  async function savePaymentMode() {
     const err = $("#payment-admin-error");
     const success = $("#payment-admin-success");
-    const toggle = $("#toggle-omise-payment");
+    const btn = $("#btn-save-payment-mode");
+    const mode = $("#payment-mode-select")?.value || "static_qr";
 
     if (err) err.hidden = true;
     if (success) success.hidden = true;
-    if (toggle) toggle.disabled = true;
+    if (btn) btn.disabled = true;
 
     try {
       await apiFetch("/payment", {
         method: "PATCH",
-        body: JSON.stringify({ omise_enabled: enabled }),
+        body: JSON.stringify({ payment_mode: mode }),
       });
       if (success) {
-        success.textContent = enabled
-          ? "เปิด Omise แล้ว — booth จะซิงก์ภายใน ~15 วินาที"
-          : "ปิด Omise แล้ว — booth จะข้ามหน้าชำระเงินภายใน ~15 วินาที";
+        success.textContent = "บันทึกโหมดชำระเงินแล้ว — booth sync ภายใน ~15 วินาที";
         success.hidden = false;
       }
       await loadPaymentAdmin();
     } catch (saveErr) {
-      if (toggle) toggle.checked = !enabled;
       if (err) {
         err.textContent = saveErr.message;
         err.hidden = false;
       }
     } finally {
-      if (toggle) toggle.disabled = false;
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function uploadPaymentQr() {
+    const err = $("#payment-admin-error");
+    const success = $("#payment-admin-success");
+    const btn = $("#btn-upload-payment-qr");
+    const fileInput = $("#payment-qr-file");
+    const file = fileInput?.files?.[0];
+
+    if (err) err.hidden = true;
+    if (success) success.hidden = true;
+
+    if (!file) {
+      if (err) {
+        err.textContent = "เลือกไฟล์ QR ก่อน";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Uploading...";
+    }
+
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Cannot read file"));
+        reader.readAsDataURL(file);
+      });
+
+      await apiFetch("/payment/qr", {
+        method: "POST",
+        body: JSON.stringify({ image_base64: base64 }),
+      });
+
+      if (success) {
+        success.textContent = "บันทึก QR แล้ว — booth sync ภายใน ~15 วินาที";
+        success.hidden = false;
+      }
+      if (fileInput) fileInput.value = "";
+      await loadPaymentAdmin();
+    } catch (saveErr) {
+      if (err) {
+        err.textContent = saveErr.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "บันทึก QR";
+      }
     }
   }
 
@@ -412,9 +512,15 @@
     if (err) err.hidden = true;
     if (success) success.hidden = true;
 
-    if (!Number.isFinite(amount) || amount < 20) {
+    const mode = $("#payment-mode-select")?.value || "static_qr";
+    const minAmount = mode === "omise" ? 20 : 1;
+
+    if (!Number.isFinite(amount) || amount < minAmount) {
       if (err) {
-        err.textContent = "Enter a valid amount (minimum 20 baht for Omise PromptPay)";
+        err.textContent =
+          mode === "omise"
+            ? "Enter a valid amount (minimum 20 baht for Omise PromptPay)"
+            : "Enter a valid amount (minimum 1 baht)";
         err.hidden = false;
       }
       return;
@@ -556,8 +662,12 @@
       savePaymentAmount().catch(console.error);
     });
 
-    $("#toggle-omise-payment")?.addEventListener("change", (e) => {
-      saveOmiseEnabled(e.target.checked).catch(console.error);
+    $("#btn-save-payment-mode")?.addEventListener("click", () => {
+      savePaymentMode().catch(console.error);
+    });
+
+    $("#btn-upload-payment-qr")?.addEventListener("click", () => {
+      uploadPaymentQr().catch(console.error);
     });
   }
 
