@@ -11,8 +11,8 @@ android {
         applicationId = "com.thereceiptclub.booth"
         minSdk = 24
         targetSdk = 34
-        versionCode = 104
-        versionName = "1.1.0"
+        versionCode = 106
+        versionName = "1.1.2"
 
         // Remote booth UI — change before release or override via adb intent data
         buildConfigField(

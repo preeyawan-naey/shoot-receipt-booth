@@ -52,9 +52,17 @@ class BoothJsBridge(
     }
 
     @JavascriptInterface
-    fun syncPaymentNotifyConfig(apiBase: String, webhookSecret: String, sessionId: String) {
-        PaymentNotifyConfig.save(activity, apiBase, webhookSecret, sessionId)
-        Log.i(TAG, "syncPaymentNotifyConfig session=${sessionId.take(8)} api=${apiBase.take(32)}")
+    fun syncPaymentNotifyConfig(
+        apiBase: String,
+        webhookSecret: String,
+        sessionId: String,
+        expectedAmount: Int,
+    ) {
+        PaymentNotifyConfig.save(activity, apiBase, webhookSecret, sessionId, expectedAmount)
+        Log.i(
+            TAG,
+            "syncPaymentNotifyConfig session=${sessionId.take(8)} amount=$expectedAmount api=${apiBase.take(32)}",
+        )
     }
 
     @JavascriptInterface

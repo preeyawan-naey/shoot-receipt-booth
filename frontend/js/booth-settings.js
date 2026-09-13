@@ -47,6 +47,7 @@ async function fetchBoothSettings() {
       ...boothSettingsState,
       ...data.settings,
     };
+    syncNativePaymentNotify(null);
   } catch (error) {
     console.warn("[booth-settings] fetch failed", error);
   }
@@ -90,16 +91,21 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
   }
 }
 
-function syncNativePaymentNotify(sessionId = null) {
+function syncNativePaymentNotify(sessionId = null, sessionAmount = null) {
   if (!isStaticQrPaymentMode()) return;
   const bridge = window.ReceiptClubBridge;
   if (!bridge?.syncPaymentNotifyConfig) return;
+
+  const amount = Math.round(
+    Number(sessionAmount ?? boothSettingsState?.payment_amount ?? 0) || 0
+  );
 
   try {
     bridge.syncPaymentNotifyConfig(
       API_URL,
       boothSettingsState?.bank_webhook_secret || "",
-      sessionId || ""
+      sessionId || "",
+      amount
     );
   } catch (error) {
     console.warn("[booth-settings] native payment notify sync failed", error);

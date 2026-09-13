@@ -35,6 +35,7 @@ function clearPaymentPolling() {
 function clearPaymentFlow() {
   clearPaymentCountdown();
   clearPaymentPolling();
+  clearPaymentWaitingHint();
   clearPaymentSessionState();
 }
 
@@ -314,6 +315,29 @@ function startPaymentPolling() {
   }, PAYMENT_POLL_MS);
 }
 
+let paymentWaitingHintTimer = null;
+
+function clearPaymentWaitingHint() {
+  if (paymentWaitingHintTimer) {
+    clearTimeout(paymentWaitingHintTimer);
+    paymentWaitingHintTimer = null;
+  }
+}
+
+function startPaymentWaitingHint() {
+  clearPaymentWaitingHint();
+  if (!isStaticQrPaymentMode()) return;
+
+  paymentWaitingHintTimer = setTimeout(() => {
+    if (!paymentSessionId) return;
+    setPaymentStatus(
+      "waiting",
+      "รอการยืนยันเงินเข้า — เปิด Notification access + แอpp SCB EASY/แม่มณีบน tablet นี้",
+      true
+    );
+  }, 20000);
+}
+
 function ensureNativeNotificationAccess() {
   if (!isStaticQrPaymentMode()) return;
   const bridge = window.ReceiptClubBridge;
@@ -335,7 +359,7 @@ function ensureNativeNotificationAccess() {
 
 function getPaymentWaitingMessage() {
   if (isStaticQrPaymentMode()) {
-    return "สแกน QR แล้วโอนให้ตรงยอด — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อเงินเข้า";
+    return "สแกน QR แล้วโอนให้ตรงยอด — รอแจ้งเตือน SCB/แม่มณีบน tablet นี้";
   }
   return "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ";
 }
@@ -349,10 +373,11 @@ async function startAutoPaymentSession(flowId) {
     paymentSessionId = session.id;
     activePaymentSession = session;
     renderPaymentPage(session.amount, session);
-    syncNativePaymentNotify(session.id);
+    syncNativePaymentNotify(session.id, session.amount);
     ensureNativeNotificationAccess();
 
     setPaymentStatus("waiting", getPaymentWaitingMessage(), true);
+    startPaymentWaitingHint();
     startPaymentPolling();
   } catch (error) {
     if (flowId !== paymentFlowGeneration) return;

@@ -64,6 +64,10 @@ router.post("/bank-notify", async (req, res) => {
     console.info("[webhook/bank-notify]", result.matched ? "paid" : result.reason, {
       session_id: result.session_id,
       amount: result.amount,
+      expected: result.expected,
+      parsed: result.parsed,
+      package: packageName || null,
+      text_preview: String(text || "").slice(0, 160),
     });
 
     return res.json({

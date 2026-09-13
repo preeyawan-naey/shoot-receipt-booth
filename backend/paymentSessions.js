@@ -17,8 +17,11 @@ function parseAmountFromNotification(text, expectedAmount) {
 
   const patterns = [
     new RegExp(`(${expected}(?:\\.00)?)\\s*บาท`, "i"),
+    new RegExp(`(?:^|[\\s:+])(${expected}(?:\\.00)?)(?:\\s*บาท|\\s*THB|\\s*฿|$)`, "i"),
+    new RegExp(`เงิน\\s*(${expected}(?:\\.00)?)\\s*บาท`, "i"),
+    new RegExp(`(?:เข้าบัญชี|รับชำระ|รับเงิน|ได้รับ)[^\\d]*(${expected}(?:\\.00)?)`, "i"),
     /(\d+(?:\.\d{1,2})?)\s*บาท/,
-    /(?:รับเงิน|โอนเข้า|ได้รับ|รับโอน)[^\d]*(\d+(?:\.\d{1,2})?)/i,
+    /(?:รับเงิน|โอนเข้า|ได้รับ|ได้รับเงิน|รับโอน|เงินเข้า|รับชำระ|เงินเข้าบัญชี|มีเงินโอนเข้า)[^\d]*(\d+(?:\.\d{1,2})?)/i,
     /(?:^|\s)(\d+(?:\.\d{1,2})?)(?:\s*บาท|\s*THB|\s*฿)?/i,
   ];
 
@@ -297,9 +300,10 @@ async function confirmFromBankNotification({
 }) {
   await expirePendingSessions();
 
-  const pending = sessionId
-    ? await getPendingSessionById(sessionId)
-    : await getLatestPendingSession();
+  let pending = sessionId ? await getPendingSessionById(sessionId) : null;
+  if (!pending) {
+    pending = await getLatestPendingSession();
+  }
 
   if (!pending) {
     return {

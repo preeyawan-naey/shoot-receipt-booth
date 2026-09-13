@@ -390,7 +390,7 @@
         providerHint.textContent = "Booth ข้ามหน้าชำระเงิน";
       } else if (mode === "static_qr") {
         providerHint.textContent =
-          "ติดตั้งแอppธนาคาร/แม่มณีบน tablet + เปิดสิทธิ์ Notification access ให้ The Receipt Club";
+          "ติดตั้ง SCB EASY หรือ แม่มณี บน tablet + เปิด Notification access ให้ The Receipt Club";
       } else if (payment.omise_configured) {
         providerHint.textContent = "Omise PromptPay QR ต่อรอบ + webhook charge.complete";
       } else {
