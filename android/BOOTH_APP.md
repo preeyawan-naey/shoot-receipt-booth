@@ -7,7 +7,7 @@ WebView kiosk app สำหรับ tablet — โหลด booth UI จาก 
 | ชื่อแอpp | **The Receipt Club** |
 | Package | `com.thereceiptclub.booth` |
 | Booth URL (default) | `https://shoot-receipt-boot.onrender.com` |
-| APK version | **1.1.0** (104) — Static QR + bank notification |
+| APK version | **1.1.3** (107) — Static QR + SCB listener + MIUI foreground |
 
 ---
 

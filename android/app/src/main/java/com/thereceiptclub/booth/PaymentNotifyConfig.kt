@@ -9,6 +9,31 @@ object PaymentNotifyConfig {
     private const val KEY_SESSION_ID = "session_id"
     private const val KEY_EXPECTED_AMOUNT = "expected_amount"
 
+    fun saveCredentials(
+        context: Context,
+        apiBase: String,
+        webhookSecret: String,
+        expectedAmount: Int = 0,
+    ) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_API_BASE, apiBase.trim().trimEnd('/'))
+            .putString(KEY_WEBHOOK_SECRET, webhookSecret.trim())
+            .putInt(KEY_EXPECTED_AMOUNT, expectedAmount.coerceAtLeast(0))
+            .apply()
+    }
+
+    fun saveSession(context: Context, sessionId: String, expectedAmount: Int = 0) {
+        val editor =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_SESSION_ID, sessionId.trim())
+        if (expectedAmount > 0) {
+            editor.putInt(KEY_EXPECTED_AMOUNT, expectedAmount)
+        }
+        editor.apply()
+    }
+
     fun save(
         context: Context,
         apiBase: String,
@@ -30,6 +55,7 @@ object PaymentNotifyConfig {
             .edit()
             .putString(KEY_SESSION_ID, "")
             .apply()
+        PaymentForegroundService.stop(context)
     }
 
     fun read(context: Context): Snapshot {
@@ -50,5 +76,8 @@ object PaymentNotifyConfig {
     ) {
         val isReady: Boolean
             get() = apiBase.isNotBlank() && webhookSecret.isNotBlank()
+
+        val hasActiveSession: Boolean
+            get() = sessionId.isNotBlank()
     }
 }

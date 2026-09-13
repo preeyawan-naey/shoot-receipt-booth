@@ -58,6 +58,7 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
         webView.addJavascriptInterface(BoothJsBridge(this, webView), BoothJsBridge.JS_NAME)
+        PaymentNotifyBridge.attach(webView)
 
         webView.webViewClient =
             object : WebViewClient() {
@@ -171,6 +172,11 @@ class MainActivity : Activity() {
                 )
     }
 
+    override fun onResume() {
+        super.onResume()
+        PaymentNotifyAccess.requestRebind(this)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) applyImmersiveMode()
@@ -184,6 +190,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        PaymentNotifyBridge.detach()
         if (::webView.isInitialized) {
             webView.removeJavascriptInterface(BoothJsBridge.JS_NAME)
             webView.destroy()

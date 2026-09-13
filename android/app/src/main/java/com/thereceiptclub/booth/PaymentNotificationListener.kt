@@ -13,6 +13,11 @@ class PaymentNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.i(TAG, "notification listener connected")
+        try {
+            requestRebind(PaymentNotifyAccess.componentName(this))
+        } catch (error: Exception) {
+            Log.w(TAG, "requestRebind failed", error)
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -23,25 +28,31 @@ class PaymentNotificationListener : NotificationListenerService() {
             return
         }
 
+        val text = extractNotificationText(sbn, packageName)
+        PaymentNotifyDebug.recordSeen(this, packageName, text, "bank_pkg_seen")
+
         val config = PaymentNotifyConfig.read(this)
         if (!config.isReady) {
             Log.w(TAG, "skip bank notification — payment config not ready pkg=$packageName")
+            PaymentNotifyDebug.recordSeen(this, packageName, text, "config_not_ready")
             return
         }
 
-        val text = extractNotificationText(sbn, packageName)
         if (text.isBlank()) {
             Log.w(TAG, "skip bank notification — empty text pkg=$packageName")
+            PaymentNotifyDebug.recordSeen(this, packageName, text, "empty_text")
             return
         }
 
         if (!looksLikeIncomingPayment(text, config.expectedAmount, packageName)) {
             Log.i(TAG, "skip bank notification — not payment text pkg=$packageName text=${text.take(120)}")
+            PaymentNotifyDebug.recordSeen(this, packageName, text, "not_payment_text")
             return
         }
 
+        PaymentNotifyDebug.recordForward(this, packageName, text)
         executor.execute {
-            val matched =
+            val result =
                 PaymentNotifyClient.postBankNotification(
                     apiBase = config.apiBase,
                     webhookSecret = config.webhookSecret,
@@ -49,9 +60,16 @@ class PaymentNotificationListener : NotificationListenerService() {
                     packageName = packageName,
                     sessionId = config.sessionId.takeIf { it.isNotBlank() },
                 )
+            PaymentNotifyDebug.recordResult(
+                this,
+                matched = result.matched,
+                httpCode = result.httpCode,
+                body = result.body,
+            )
+            PaymentNotifyBridge.dispatchResult(this, result.matched, result.httpCode, result.body)
             Log.i(
                 TAG,
-                "notification forwarded pkg=$packageName matched=$matched session=${config.sessionId.take(8)} text=${text.take(120)}",
+                "notification forwarded pkg=$packageName matched=${result.matched} code=${result.httpCode} session=${config.sessionId.take(8)} text=${text.take(120)}",
             )
         }
     }
@@ -88,7 +106,6 @@ class PaymentNotificationListener : NotificationListenerService() {
             }
         }
 
-        // SCB EASY / แม่มณี sometimes store body in custom notification extras
         if (isScbPackage(packageName) || packageName == LINE_PACKAGE) {
             for (key in extras.keySet()) {
                 when (val value = extras.get(key)) {
@@ -119,6 +136,23 @@ class PaymentNotificationListener : NotificationListenerService() {
             return false
         }
 
+        // SCB / Mae Manee: forward generously — backend validates amount.
+        if (isScbPackage(packageName) || isScbLineNotification(packageName, text)) {
+            if (normalized.contains("ได้รับ") ||
+                normalized.contains("เงินเข้า") ||
+                normalized.contains("เข้าบัญชี") ||
+                normalized.contains("รับชำระ") ||
+                normalized.contains("พร้อมเพย์") ||
+                normalized.contains("promptpay") ||
+                normalized.contains("บาท")
+            ) {
+                return true
+            }
+            if (expectedAmount > 0 && containsAmount(text, expectedAmount)) {
+                return true
+            }
+        }
+
         val incomingKeywords =
             listOf(
                 "รับเงิน",
@@ -139,15 +173,6 @@ class PaymentNotificationListener : NotificationListenerService() {
                 "พร้อมเพย์",
             )
 
-        val scbIncomingKeywords =
-            listOf(
-                "scb easy",
-                "แม่มณี",
-                "mae manee",
-                "maemanee",
-                "เงินเข้า scb",
-            )
-
         if (incomingKeywords.any { normalized.contains(it) }) {
             return true
         }
@@ -156,21 +181,18 @@ class PaymentNotificationListener : NotificationListenerService() {
             return true
         }
 
-        val isScbSource = isScbPackage(packageName) || isScbLineNotification(packageName, text)
-        if (isScbSource && scbIncomingKeywords.any { normalized.contains(it) }) {
+        if (expectedAmount > 0 && containsAmount(text, expectedAmount)) {
             return true
         }
 
-        if (expectedAmount > 0) {
-            val amountPlain = expectedAmount.toString()
-            val amountDecimal = "$amountPlain.00"
-            val hasAmount = normalized.contains(amountPlain) || normalized.contains(amountDecimal)
-            if (hasAmount) {
-                return true
-            }
-        }
-
         return false
+    }
+
+    private fun containsAmount(text: String, expectedAmount: Int): Boolean {
+        val normalized = text.replace(",", "")
+        val amountPlain = expectedAmount.toString()
+        val amountDecimal = "$amountPlain.00"
+        return normalized.contains(amountPlain) || normalized.contains(amountDecimal)
     }
 
     private fun isScbPackage(packageName: String): Boolean =

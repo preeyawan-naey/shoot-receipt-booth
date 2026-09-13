@@ -11,6 +11,15 @@ let paymentSessionId = null;
 let activePaymentSession = null;
 let paymentFlowGeneration = 0;
 let paymentQrLoadGeneration = 0;
+let paymentNotifyAccessPrompted = false;
+
+function getActivePaymentSessionId() {
+  return paymentSessionId || "";
+}
+
+function getActivePaymentSessionAmount() {
+  return activePaymentSession?.amount ?? boothSettingsState?.payment_amount ?? 59;
+}
 
 function clearPaymentSessionState() {
   paymentSessionId = null;
@@ -312,6 +321,7 @@ function startPaymentPolling() {
   void pollPaymentSessionOnce();
   paymentPollTimer = setInterval(() => {
     void pollPaymentSessionOnce();
+    refreshPaymentNotifyDebugStatus();
   }, PAYMENT_POLL_MS);
 }
 
@@ -324,38 +334,101 @@ function clearPaymentWaitingHint() {
   }
 }
 
+function formatPaymentNotifyDebugStatus(raw) {
+  if (!raw) return "";
+  try {
+    const status = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!status.listener_enabled) {
+      return "ยังไม่ได้เปิด Notification access ให้ The Receipt Club";
+    }
+    if (!status.config_ready) {
+      return "แอpp ยัง sync secret ไม่ครบ — รอ server หรือเปิดหน้า QR ใหม่";
+    }
+    if (status.last_matched) {
+      return "server ยืนยันแล้ว — กำลังไปขั้นถัดไป...";
+    }
+    if (status.last_http_code && status.last_http_code !== 200) {
+      return `ส่ง webhook ไม่สำเร็จ (HTTP ${status.last_http_code})`;
+    }
+    if (status.last_forward_at && status.last_forward_at > 0) {
+      return "อ่าน noti แล้ว — รอ server ยืนยัน...";
+    }
+    if (status.last_reason === "not_payment_text" && status.last_text) {
+      return "เห็น noti ธนาคารแล้ว แต่ข้อความไม่ตรงรูปแบบ";
+    }
+    if (status.last_seen_at && status.last_seen_at > 0) {
+      return "เห็น noti ธนาคารแล้ว — กำลังส่งไป server...";
+    }
+    return "รอ noti SCB EASY / แม่มณีบน tablet นี้";
+  } catch {
+    return "";
+  }
+}
+
+function refreshPaymentNotifyDebugStatus() {
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.getPaymentNotifyDebugStatus || !paymentSessionId) return;
+
+  try {
+    const raw = bridge.getPaymentNotifyDebugStatus();
+    const message = formatPaymentNotifyDebugStatus(raw);
+    if (message) {
+      setPaymentStatus("waiting", message, true);
+    }
+  } catch (error) {
+    console.warn("[payment] debug status failed:", error);
+  }
+}
+
 function startPaymentWaitingHint() {
   clearPaymentWaitingHint();
   if (!isStaticQrPaymentMode()) return;
 
   paymentWaitingHintTimer = setTimeout(() => {
     if (!paymentSessionId) return;
-    setPaymentStatus(
-      "waiting",
-      "รอการยืนยันเงินเข้า — เปิด Notification access + แอpp SCB EASY/แม่มณีบน tablet นี้",
-      true
-    );
+    refreshPaymentNotifyDebugStatus();
+    if (!document.getElementById("payment-status")?.textContent) {
+      setPaymentStatus(
+        "waiting",
+        "รอการยืนยันเงินเข้า — เปิด Notification access + แอpp SCB EASY/แม่มณีบน tablet นี้",
+        true
+      );
+    }
   }, 20000);
 }
 
 function ensureNativeNotificationAccess() {
   if (!isStaticQrPaymentMode()) return;
   const bridge = window.ReceiptClubBridge;
-  if (!bridge?.isNotificationListenerEnabled || !bridge?.openNotificationAccessSettings) return;
+  if (!bridge?.isNotificationListenerEnabled) return;
 
   try {
     if (!bridge.isNotificationListenerEnabled()) {
-      setPaymentStatus(
-        "warning",
-        "เปิดสิทธิ์อ่านการแจ้งเตือนธนาคารในแอpp The Receipt Club",
-        true
-      );
-      bridge.openNotificationAccessSettings();
+      if (!paymentNotifyAccessPrompted) {
+        paymentNotifyAccessPrompted = true;
+        setPaymentStatus(
+          "warning",
+          "เปิดสิทธิ์อ่านการแจ้งเตือนธนาคารในแอpp The Receipt Club",
+          true
+        );
+        bridge.openNotificationAccessSettings?.();
+      }
+      return;
     }
+    paymentNotifyAccessPrompted = false;
   } catch (error) {
     console.warn("[payment] notification access check failed:", error);
   }
 }
+
+window.__receiptClubOnBankNotifyResult = function onBankNotifyResult(result) {
+  console.info("[payment] bank notify result", result);
+  if (result?.matched) {
+    void pollPaymentSessionOnce();
+    return;
+  }
+  refreshPaymentNotifyDebugStatus();
+};
 
 function getPaymentWaitingMessage() {
   if (isStaticQrPaymentMode()) {

@@ -47,7 +47,7 @@ async function fetchBoothSettings() {
       ...boothSettingsState,
       ...data.settings,
     };
-    syncNativePaymentNotify(null);
+    resyncNativePaymentNotifyAfterSettings();
   } catch (error) {
     console.warn("[booth-settings] fetch failed", error);
   }
@@ -91,23 +91,58 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
   }
 }
 
+function getNativePaymentAmount(sessionAmount = null) {
+  return Math.round(Number(sessionAmount ?? boothSettingsState?.payment_amount ?? 0) || 0);
+}
+
 function syncNativePaymentNotify(sessionId = null, sessionAmount = null) {
   if (!isStaticQrPaymentMode()) return;
   const bridge = window.ReceiptClubBridge;
   if (!bridge?.syncPaymentNotifyConfig) return;
 
-  const amount = Math.round(
-    Number(sessionAmount ?? boothSettingsState?.payment_amount ?? 0) || 0
-  );
+  const amount = getNativePaymentAmount(sessionAmount);
+  const secret = boothSettingsState?.bank_webhook_secret || "";
 
   try {
-    bridge.syncPaymentNotifyConfig(
-      API_URL,
-      boothSettingsState?.bank_webhook_secret || "",
-      sessionId || "",
-      amount
-    );
+    if (bridge.syncPaymentNotifyCredentials && bridge.syncPaymentNotifySession) {
+      bridge.syncPaymentNotifyCredentials(API_URL, secret, amount);
+      bridge.syncPaymentNotifySession(sessionId || "", amount);
+    } else {
+      bridge.syncPaymentNotifyConfig(API_URL, secret, sessionId || "", amount);
+    }
   } catch (error) {
     console.warn("[booth-settings] native payment notify sync failed", error);
+  }
+}
+
+function resyncNativePaymentNotifyAfterSettings() {
+  if (!isStaticQrPaymentMode()) return;
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.syncPaymentNotifyCredentials) {
+    syncNativePaymentNotify(
+      typeof getActivePaymentSessionId === "function" ? getActivePaymentSessionId() : "",
+      typeof getActivePaymentSessionAmount === "function"
+        ? getActivePaymentSessionAmount()
+        : null
+    );
+    return;
+  }
+
+  const amount = getNativePaymentAmount(
+    typeof getActivePaymentSessionAmount === "function"
+      ? getActivePaymentSessionAmount()
+      : null
+  );
+  const secret = boothSettingsState?.bank_webhook_secret || "";
+
+  try {
+    bridge.syncPaymentNotifyCredentials(API_URL, secret, amount);
+    const sessionId =
+      typeof getActivePaymentSessionId === "function" ? getActivePaymentSessionId() : "";
+    if (sessionId && bridge.syncPaymentNotifySession) {
+      bridge.syncPaymentNotifySession(sessionId, amount);
+    }
+  } catch (error) {
+    console.warn("[booth-settings] native payment notify resync failed", error);
   }
 }

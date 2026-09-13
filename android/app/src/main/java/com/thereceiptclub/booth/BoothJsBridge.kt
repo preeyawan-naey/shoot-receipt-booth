@@ -59,6 +59,10 @@ class BoothJsBridge(
         expectedAmount: Int,
     ) {
         PaymentNotifyConfig.save(activity, apiBase, webhookSecret, sessionId, expectedAmount)
+        if (sessionId.isNotBlank()) {
+            PaymentForegroundService.start(activity)
+        }
+        PaymentNotifyAccess.requestRebind(activity)
         Log.i(
             TAG,
             "syncPaymentNotifyConfig session=${sessionId.take(8)} amount=$expectedAmount api=${apiBase.take(32)}",
@@ -66,9 +70,37 @@ class BoothJsBridge(
     }
 
     @JavascriptInterface
+    fun syncPaymentNotifyCredentials(
+        apiBase: String,
+        webhookSecret: String,
+        expectedAmount: Int,
+    ) {
+        PaymentNotifyConfig.saveCredentials(activity, apiBase, webhookSecret, expectedAmount)
+        Log.i(
+            TAG,
+            "syncPaymentNotifyCredentials amount=$expectedAmount api=${apiBase.take(32)}",
+        )
+    }
+
+    @JavascriptInterface
+    fun syncPaymentNotifySession(sessionId: String, expectedAmount: Int) {
+        PaymentNotifyConfig.saveSession(activity, sessionId, expectedAmount)
+        if (sessionId.isNotBlank()) {
+            PaymentForegroundService.start(activity)
+        } else {
+            PaymentForegroundService.stop(activity)
+        }
+        PaymentNotifyAccess.requestRebind(activity)
+        Log.i(TAG, "syncPaymentNotifySession session=${sessionId.take(8)} amount=$expectedAmount")
+    }
+
+    @JavascriptInterface
     fun clearPaymentNotifySession() {
         PaymentNotifyConfig.clearSession(activity)
     }
+
+    @JavascriptInterface
+    fun getPaymentNotifyDebugStatus(): String = PaymentNotifyDebug.toJson(activity)
 
     @JavascriptInterface
     fun isNotificationListenerEnabled(): Boolean = PaymentNotifyAccess.isEnabled(activity)

@@ -8,15 +8,21 @@ import java.net.URL
 object PaymentNotifyClient {
     private const val TAG = "ReceiptClubPay"
 
+    data class PostResult(
+        val matched: Boolean,
+        val httpCode: Int,
+        val body: String,
+    )
+
     fun postBankNotification(
         apiBase: String,
         webhookSecret: String,
         text: String,
         packageName: String,
         sessionId: String?,
-    ): Boolean {
+    ): PostResult {
         if (apiBase.isBlank() || webhookSecret.isBlank() || text.isBlank()) {
-            return false
+            return PostResult(false, 0, "missing_config_or_text")
         }
 
         val endpoint = "${apiBase.trimEnd('/')}/api/webhook/bank-notify"
@@ -35,8 +41,8 @@ object PaymentNotifyClient {
             connection =
                 (URL(endpoint).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
-                    connectTimeout = 15000
-                    readTimeout = 15000
+                    connectTimeout = 20000
+                    readTimeout = 20000
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
                     setRequestProperty("Accept", "application/json")
@@ -58,14 +64,14 @@ object PaymentNotifyClient {
             Log.i(TAG, "bank-notify code=$code body=${body.take(240)}")
 
             if (code !in 200..299) {
-                return false
+                return PostResult(false, code, body)
             }
 
             val json = JSONObject(body)
-            json.optBoolean("matched", false)
+            PostResult(json.optBoolean("matched", false), code, body)
         } catch (error: Exception) {
             Log.w(TAG, "bank-notify failed", error)
-            false
+            PostResult(false, -1, error.message ?: "network_error")
         } finally {
             connection?.disconnect()
         }
