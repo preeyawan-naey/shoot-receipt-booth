@@ -981,6 +981,34 @@ function cloneReceiptCanvas(targetCanvas, sourceCanvas) {
   return true;
 }
 
+/** Preview mock (selectImagePath) — same artwork/slots as on-screen preview */
+async function drawLayoutMockComposite(canvas, frameConfig, photos, options = {}) {
+  const frameSrc = frameConfig?.selectImagePath;
+  if (!frameSrc) return false;
+
+  const { thermal = false, qrCodeUrl = null } = options;
+  const frameImg = await loadImage(frameSrc);
+  const frameW = frameImg.naturalWidth;
+  const frameH = frameImg.naturalHeight;
+  const drawPhotoFn = thermal ? drawImageCoverForPrint : drawImageCover;
+
+  canvas.width = frameW;
+  canvas.height = frameH;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(frameImg, 0, 0);
+
+  await drawTheBlumoPreviewOverlays(ctx, frameConfig, photos, frameW, frameH, {
+    drawPhotoFn,
+    qrCodeUrl,
+    eraseBackground: false,
+  });
+
+  console.info(
+    `[composite] layout mock ${frameW}x${frameH} thermal=${thermal} src=${frameSrc}`
+  );
+  return true;
+}
+
 /** TheBlumo print — frame-select background, preview slot/name/QR settings */
 async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options = {}) {
   const { thermal = true, qrCodeUrl = null } = options;
@@ -1140,10 +1168,18 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    await drawTheBlumoPrintComposite(canvas, frameConfig, resolvedPhotos, {
-      thermal,
-      qrCodeUrl: PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null,
-    });
+    const qrCodeUrl = PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null;
+    if (frameConfig?.selectImagePath) {
+      await drawLayoutMockComposite(canvas, frameConfig, resolvedPhotos, {
+        thermal,
+        qrCodeUrl,
+      });
+    } else {
+      await drawTheBlumoPrintComposite(canvas, frameConfig, resolvedPhotos, {
+        thermal,
+        qrCodeUrl,
+      });
+    }
     return canvas;
   }
 
