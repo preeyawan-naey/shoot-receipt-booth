@@ -82,6 +82,8 @@ function resolveSlotForDraw(slot, previewMode = false) {
     top: scaleV(top),
     width: slot.previewWidth ?? slot.width,
     height: scaleV(height),
+    noBleed:
+      slot.previewNoBleed !== undefined ? slot.previewNoBleed : slot.noBleed,
   };
 }
 
@@ -501,14 +503,19 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   const h = (heightPct / 100) * refH;
 
   if (options.previewMode && options.frameConfig) {
-    const photoBounds = getTheBlumoPhotoFrameBounds(
-      options.frameConfig,
-      refW,
-      true
-    );
-    if (photoBounds) {
-      x = photoBounds.x;
-      w = photoBounds.w;
+    if (slot.previewLeft != null) {
+      x = (slot.previewLeft / 100) * refW;
+      w = ((slot.previewWidth ?? slot.width) / 100) * refW;
+    } else {
+      const photoBounds = getTheBlumoPhotoFrameBounds(
+        options.frameConfig,
+        refW,
+        true
+      );
+      if (photoBounds) {
+        x = photoBounds.x;
+        w = photoBounds.w;
+      }
     }
   }
 
@@ -525,6 +532,9 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   }
 
   let fontSize = getTheBlumoGuestNameFontSize(canvasWidth, slot);
+  if (options.previewMode && slot.previewFontSizePx) {
+    fontSize = slot.previewFontSizePx;
+  }
   await ensureOcrBFontLoaded(fontSize);
   ctx.fillStyle = "#000000";
   ctx.textAlign = "left";
@@ -648,16 +658,16 @@ async function drawTheBlumoPreviewOverlays(
   const layoutReference = options.layoutReference ?? null;
   const drawPhotoFn = options.drawPhotoFn ?? drawImageCover;
 
+  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawPhotoFn, {
+    previewMode: true,
+    layoutReference,
+    slotOffsetY: options.slotOffsetY ?? 0,
+  });
   await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, options.offsetY ?? 0, {
     eraseBackground: options.eraseBackground ?? false,
     previewMode: true,
     frameConfig,
     layoutReference,
-  });
-  await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawPhotoFn, {
-    previewMode: true,
-    layoutReference,
-    slotOffsetY: options.slotOffsetY ?? 0,
   });
 
   if (PREVIEW_QR_ON_RECEIPT_ENABLED && options.qrCodeUrl) {

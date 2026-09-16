@@ -1,5 +1,5 @@
 (function () {
-  const STORAGE_KEY = "shoot_admin_api_key";
+  const STORAGE_KEY = "shoot_admin_session_token";
   const API_BASE = "/api/admin";
 
   let memoryApiKey = "";
@@ -12,6 +12,8 @@
     limit: 20,
     view: "dashboard",
   };
+
+  let lastPaidPaymentMode = "static_qr";
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -57,8 +59,11 @@
 
     if (res.status === 401) {
       clearApiKey();
-      showLogin("Invalid API key — check backend/.env ADMIN_API_KEY");
-      throw new Error("Unauthorized");
+      const authMessage = data.message === "Unauthorized"
+        ? "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"
+        : (data.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+      showLogin(authMessage);
+      throw new Error(authMessage);
     }
 
     if (!res.ok) {
@@ -128,13 +133,80 @@
   }
 
   function setLoginLoading(loading) {
-    const btn = $("#admin-key-submit");
-    const input = $("#admin-key-input");
+    const btn = $("#admin-login-submit");
+    const usernameInput = $("#admin-username-input");
+    const passwordInput = $("#admin-password-input");
+    const passwordToggle = $("#admin-password-toggle");
     if (btn) {
       btn.disabled = loading;
       btn.textContent = loading ? "Signing in..." : "Sign in";
     }
-    if (input) input.disabled = loading;
+    if (usernameInput) usernameInput.disabled = loading;
+    if (passwordInput) passwordInput.disabled = loading;
+    if (passwordToggle) passwordToggle.disabled = loading;
+  }
+
+  function togglePasswordVisibility() {
+    const passwordInput = $("#admin-password-input");
+    const toggleBtn = $("#admin-password-toggle");
+    if (!passwordInput || !toggleBtn) return;
+
+    const showPassword = passwordInput.type === "password";
+    passwordInput.type = showPassword ? "text" : "password";
+    toggleBtn.setAttribute("aria-pressed", showPassword ? "true" : "false");
+    toggleBtn.setAttribute("aria-label", showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน");
+
+    const showIcon = toggleBtn.querySelector(".admin-login__password-icon--show");
+    const hideIcon = toggleBtn.querySelector(".admin-login__password-icon--hide");
+    if (showIcon) showIcon.hidden = showPassword;
+    if (hideIcon) hideIcon.hidden = !showPassword;
+  }
+
+  async function verifyAdminToken(token) {
+    const res = await fetch(`${API_BASE}/dashboard?period=today`, {
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": token,
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+    }
+    return true;
+  }
+
+  async function loginWithCredentials(username, password) {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      if (!data.token) {
+        throw new Error("Server did not return a session token");
+      }
+      return data.token;
+    }
+
+    const legacyUnauthorized =
+      res.status === 401 && String(data.message || "").toLowerCase() === "unauthorized";
+    const loginRouteMissing = res.status === 404;
+
+    if (legacyUnauthorized || loginRouteMissing) {
+      try {
+        await verifyAdminToken(password);
+        return password;
+      } catch {
+        throw new Error(
+          "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง — ถ้า server ยังไม่ deploy ล่าสุด ให้ใส่ ADMIN_API_KEY ในช่อง password"
+        );
+      }
+    }
+
+    throw new Error(data.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
   }
 
   function setText(id, value) {
@@ -294,26 +366,144 @@
     return mode || "—";
   }
 
+  function defaultPaymentTiers() {
+    return [
+      { prints: 1, amount: 49 },
+      { prints: 2, amount: 90 },
+      { prints: 3, amount: 130 },
+    ];
+  }
+
+  function normalizePaymentTiers(raw) {
+    if (!Array.isArray(raw) || raw.length === 0) return defaultPaymentTiers();
+    return raw
+      .slice(0, 5)
+      .map((tier) => ({
+        prints: Math.max(1, Math.round(Number(tier?.prints) || 1)),
+        amount: Math.max(1, Math.round(Number(tier?.amount) || 0)),
+      }))
+      .sort((a, b) => a.prints - b.prints || a.amount - b.amount);
+  }
+
+  function formatPaymentTierSummary(tiers) {
+    if (!Array.isArray(tiers) || tiers.length === 0) return "—";
+    if (tiers.length === 1) return formatMoney(tiers[0].amount);
+    const min = tiers[0].amount;
+    const max = tiers[tiers.length - 1].amount;
+    return `${formatMoney(min)} – ${formatMoney(max)}`;
+  }
+
+  function ensureThreeTierDefaults(tiers) {
+    const defaults = defaultPaymentTiers();
+    return [1, 2, 3].map((prints) => {
+      const found = tiers.find((tier) => tier.prints === prints);
+      const fallback = defaults.find((tier) => tier.prints === prints);
+      return found || fallback;
+    });
+  }
+
+  function detectPricingMode(tiers) {
+    return Array.isArray(tiers) && tiers.length === 1 ? "single" : "multi";
+  }
+
+  function getSelectedPricingMode() {
+    const selected = document.querySelector('input[name="pricing-mode"]:checked');
+    return selected?.value === "single" ? "single" : "multi";
+  }
+
+  function setSelectedPricingMode(mode) {
+    const input = document.querySelector(`input[name="pricing-mode"][value="${mode}"]`);
+    if (input) input.checked = true;
+    updatePricingModePanels();
+  }
+
+  function updatePricingModePanels() {
+    const isSingle = getSelectedPricingMode() === "single";
+    const multiPanel = $("#pricing-multi-panel");
+    const singlePanel = $("#pricing-single-panel");
+    if (multiPanel) multiPanel.hidden = isSingle;
+    if (singlePanel) singlePanel.hidden = !isSingle;
+  }
+
+  function isPaymentEnabledInForm() {
+    return Boolean($("#payment-enabled-toggle")?.checked);
+  }
+
+  function updatePaymentFormAvailability() {
+    const enabled = isPaymentEnabledInForm();
+    const pricingCard = $("#payment-pricing-card");
+    const methodCard = $("#payment-method-card");
+    const staticPanel = $("#payment-static-qr-panel");
+    const webhookPanel = $("#payment-webhook-panel");
+    const hint = $("#payment-enabled-hint");
+    const mode = $("#payment-mode-select")?.value || "static_qr";
+
+    if (pricingCard) pricingCard.hidden = !enabled;
+    if (methodCard) methodCard.hidden = !enabled;
+    if (staticPanel) staticPanel.hidden = !enabled || mode !== "static_qr";
+    if (webhookPanel) webhookPanel.hidden = !enabled;
+    if (hint) {
+      hint.textContent = enabled
+        ? "ลูกค้าต้องชำระก่อนถ่ายรูป"
+        : "ไม่มีการคิดเงิน — ข้ามหน้า Package/Payment";
+    }
+  }
+
+  function fillPaymentPricingForm(tiers) {
+    const normalizedTiers = normalizePaymentTiers(tiers);
+    const normalized = ensureThreeTierDefaults(normalizedTiers);
+    const pricingMode = detectPricingMode(normalizedTiers);
+    setSelectedPricingMode(pricingMode);
+
+    const singleInput = $("#tier-amount-single");
+    if (singleInput) {
+      singleInput.value = String(normalized[0]?.amount ?? 49);
+    }
+
+    normalized.forEach((tier) => {
+      const input = $(`#tier-amount-${tier.prints}`);
+      if (input) input.value = String(tier.amount);
+    });
+  }
+
+  function readPaymentTierFormValues() {
+    if (getSelectedPricingMode() === "single") {
+      const amount = Math.max(1, Math.round(Number($("#tier-amount-single")?.value) || 0));
+      return [{ prints: 1, amount }];
+    }
+
+    return [1, 2, 3].map((prints) => ({
+      prints,
+      amount: Math.max(1, Math.round(Number($(`#tier-amount-${prints}`)?.value) || 0)),
+    }));
+  }
+
   async function loadPaymentAdmin() {
     const paymentData = await apiFetch("/payment");
     const payment = paymentData.payment || {};
-    const amount = payment.payment_amount ?? 59;
+    const tiers = normalizePaymentTiers(payment.payment_tiers);
     const mode = payment.payment_mode || payment.payment_provider || "static_qr";
+    const paymentEnabled = mode !== "free";
 
-    setText("payment-kpi-amount", formatMoney(amount));
+    if (paymentEnabled) {
+      lastPaidPaymentMode = mode === "omise" ? "omise" : "static_qr";
+    }
+
+    setText("payment-kpi-amount", paymentEnabled ? formatPaymentTierSummary(tiers) : "Free");
     setText("payment-kpi-mode", paymentModeLabel(mode));
 
+    const enabledToggle = $("#payment-enabled-toggle");
+    if (enabledToggle) enabledToggle.checked = paymentEnabled;
+
     const modeSelect = $("#payment-mode-select");
-    if (modeSelect) modeSelect.value = mode;
+    if (modeSelect) modeSelect.value = lastPaidPaymentMode;
 
     const staticPanel = $("#payment-static-qr-panel");
-    if (staticPanel) staticPanel.hidden = mode !== "static_qr";
+    if (staticPanel) staticPanel.hidden = !paymentEnabled || lastPaidPaymentMode !== "static_qr";
 
-    const amountInput = $("#payment-amount-input");
-    if (amountInput) {
-      amountInput.min = mode === "omise" ? "20" : "1";
-      amountInput.value = String(amount);
-    }
+    fillPaymentPricingForm(tiers);
+    updatePaymentFormAvailability();
+    updatePricingModePanels();
 
     const amountMinHint = $("#payment-amount-min-hint");
     if (amountMinHint) {
@@ -323,7 +513,7 @@
 
     setText(
       "payment-kpi-amount-hint",
-      mode === "free" ? "ไม่เรียกเก็บเงิน" : "ยอดที่ลูกค้าต้องโอน"
+      mode === "free" ? "ไม่เรียกเก็บเงิน" : `${tiers.length} แพ็กบนหน้าแรก booth`
     );
 
     setText(
@@ -337,7 +527,7 @@
           : "ข้ามหน้า payment"
     );
 
-    updatePaymentModeHint(mode, payment);
+    updatePaymentModeHint(paymentEnabled ? lastPaidPaymentMode : "free", payment);
 
     const qrPreview = $("#payment-qr-preview");
     const qrStatus = $("#payment-qr-status");
@@ -346,7 +536,7 @@
       qrPreview.hidden = false;
       if (qrStatus) {
         qrStatus.textContent = payment.payment_qr_updated_at
-          ? `อัปโหลดแล้ว — ${formatDateTime(payment.payment_qr_updated_at)}`
+          ? `อัปโหลดแล้ว — ${formatDate(payment.payment_qr_updated_at)}`
           : "อัปโหลด QR แล้ว";
       }
     } else if (qrPreview) {
@@ -417,23 +607,53 @@
     hint.textContent = "ปิดการชำระเงิน — ลูกค้าไปเลือก layout ได้เลย";
   }
 
-  async function savePaymentMode() {
+  async function savePaymentSettings() {
     const err = $("#payment-admin-error");
     const success = $("#payment-admin-success");
-    const btn = $("#btn-save-payment-mode");
-    const mode = $("#payment-mode-select")?.value || "static_qr";
+    const btn = $("#btn-save-payment-settings");
+    const paymentEnabled = isPaymentEnabledInForm();
+    const mode = paymentEnabled ? $("#payment-mode-select")?.value || "static_qr" : "free";
+    const tiers = readPaymentTierFormValues();
 
     if (err) err.hidden = true;
     if (success) success.hidden = true;
-    if (btn) btn.disabled = true;
+
+    const minAmount = mode === "omise" ? 20 : 1;
+    if (
+      paymentEnabled &&
+      (tiers.length === 0 || tiers.some((tier) => !Number.isFinite(tier.amount) || tier.amount < minAmount))
+    ) {
+      if (err) {
+        err.textContent =
+          mode === "omise"
+            ? "กรอกราคาให้ถูกต้อง (ขั้นต่ำ 20 บาท สำหรับ Omise)"
+            : "กรอกราคาให้ถูกต้อง (ขั้นต่ำ 1 บาท)";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "กำลังบันทึก...";
+    }
 
     try {
+      const payload = { payment_mode: mode };
+      if (paymentEnabled) {
+        payload.payment_tiers = tiers;
+        lastPaidPaymentMode = mode === "omise" ? "omise" : "static_qr";
+      }
+
       await apiFetch("/payment", {
         method: "PATCH",
-        body: JSON.stringify({ payment_mode: mode }),
+        body: JSON.stringify(payload),
       });
+
       if (success) {
-        success.textContent = "บันทึกโหมดชำระเงินแล้ว — booth sync ภายใน ~15 วินาที";
+        success.textContent = paymentEnabled
+          ? "บันทึกการตั้งค่าแล้ว — booth sync ภายใน ~15 วินาที"
+          : "ปิดการเรียกเก็บเงินแล้ว — booth sync ภายใน ~15 วินาที";
         success.hidden = false;
       }
       await loadPaymentAdmin();
@@ -443,7 +663,10 @@
         err.hidden = false;
       }
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "บันทึก";
+      }
     }
   }
 
@@ -502,58 +725,6 @@
     }
   }
 
-  async function savePaymentAmount() {
-    const input = $("#payment-amount-input");
-    const err = $("#payment-admin-error");
-    const success = $("#payment-admin-success");
-    const btn = $("#btn-save-payment-amount");
-    const amount = Number(input?.value);
-
-    if (err) err.hidden = true;
-    if (success) success.hidden = true;
-
-    const mode = $("#payment-mode-select")?.value || "static_qr";
-    const minAmount = mode === "omise" ? 20 : 1;
-
-    if (!Number.isFinite(amount) || amount < minAmount) {
-      if (err) {
-        err.textContent =
-          mode === "omise"
-            ? "Enter a valid amount (minimum 20 baht for Omise PromptPay)"
-            : "Enter a valid amount (minimum 1 baht)";
-        err.hidden = false;
-      }
-      return;
-    }
-
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Saving...";
-    }
-
-    try {
-      await apiFetch("/payment", {
-        method: "PATCH",
-        body: JSON.stringify({ payment_amount: amount }),
-      });
-      if (success) {
-        success.textContent = "Saved — booth will sync within ~15 seconds";
-        success.hidden = false;
-      }
-      await loadPaymentAdmin();
-    } catch (saveErr) {
-      if (err) {
-        err.textContent = saveErr.message;
-        err.hidden = false;
-      }
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "บันทึกจำนวนเงิน";
-      }
-    }
-  }
-
   async function refresh() {
     if (state.view === "payment") {
       await loadPaymentAdmin();
@@ -575,11 +746,13 @@
   }
 
   async function handleLogin() {
-    const key = ($("#admin-key-input")?.value || "").trim();
+    const username = ($("#admin-username-input")?.value || "").trim();
+    const password = $("#admin-password-input")?.value || "";
     const errEl = $("#admin-login-error");
-    if (!key) {
+
+    if (!username || !password) {
       if (errEl) {
-        errEl.textContent = "Please enter your API key";
+        errEl.textContent = "กรอก username และ password";
         errEl.hidden = false;
       }
       return;
@@ -589,10 +762,10 @@
     if (errEl) errEl.hidden = true;
 
     try {
-      await apiFetch("/dashboard?period=today", {}, key);
-      await enterDashboard(key);
+      const token = await loginWithCredentials(username, password);
+      await enterDashboard(token);
     } catch (err) {
-      if (err.message !== "Unauthorized" && errEl) {
+      if (errEl) {
         errEl.textContent = err.message;
         errEl.hidden = false;
       }
@@ -602,17 +775,35 @@
   }
 
   function bindEvents() {
-    $("#admin-key-submit")?.addEventListener("click", handleLogin);
+    $("#admin-login-submit")?.addEventListener("click", handleLogin);
 
-    $("#admin-key-input")?.addEventListener("keydown", (e) => {
+    $("#admin-password-input")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") handleLogin();
     });
+
+    $("#admin-password-toggle")?.addEventListener("click", togglePasswordVisibility);
 
     $("#btn-logout")?.addEventListener("click", () => {
       clearApiKey();
       showLogin();
-      const input = $("#admin-key-input");
-      if (input) input.value = "";
+      const usernameInput = $("#admin-username-input");
+      const passwordInput = $("#admin-password-input");
+      if (usernameInput) usernameInput.value = "";
+      if (passwordInput) {
+        passwordInput.value = "";
+        if (passwordInput.type === "text") {
+          passwordInput.type = "password";
+          const toggleBtn = $("#admin-password-toggle");
+          const showIcon = toggleBtn?.querySelector(".admin-login__password-icon--show");
+          const hideIcon = toggleBtn?.querySelector(".admin-login__password-icon--hide");
+          if (toggleBtn) {
+            toggleBtn.setAttribute("aria-pressed", "false");
+            toggleBtn.setAttribute("aria-label", "แสดงรหัสผ่าน");
+          }
+          if (showIcon) showIcon.hidden = false;
+          if (hideIcon) hideIcon.hidden = true;
+        }
+      }
     });
 
     $("#period-tabs")?.addEventListener("click", (e) => {
@@ -658,12 +849,30 @@
       });
     });
 
-    $("#btn-save-payment-amount")?.addEventListener("click", () => {
-      savePaymentAmount().catch(console.error);
+    $("#btn-save-payment-settings")?.addEventListener("click", () => {
+      savePaymentSettings().catch(console.error);
     });
 
-    $("#btn-save-payment-mode")?.addEventListener("click", () => {
-      savePaymentMode().catch(console.error);
+    $("#btn-cancel-payment-settings")?.addEventListener("click", () => {
+      loadPaymentAdmin().catch(console.error);
+    });
+
+    $("#payment-enabled-toggle")?.addEventListener("change", () => {
+      updatePaymentFormAvailability();
+    });
+
+    document.querySelectorAll('input[name="pricing-mode"]').forEach((input) => {
+      input.addEventListener("change", updatePricingModePanels);
+    });
+
+    $("#payment-mode-select")?.addEventListener("change", () => {
+      const mode = $("#payment-mode-select")?.value || "static_qr";
+      const minHint = $("#payment-amount-min-hint");
+      if (minHint) {
+        minHint.textContent = mode === "omise" ? "ขั้นต่ำ 20 บาท (Omise PromptPay)" : "ขั้นต่ำ 1 บาท";
+      }
+      updatePaymentModeHint(mode, {});
+      updatePaymentFormAvailability();
     });
 
     $("#btn-upload-payment-qr")?.addEventListener("click", () => {

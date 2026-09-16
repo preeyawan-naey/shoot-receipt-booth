@@ -10,7 +10,7 @@ const LAYOUTS = [
     id: "Layout-1",
     photoCount: 1,
     imagePath: "img/Layout/frame/frame-select/layout1/TheBlumo.jpg",
-    selectImagePath: "img/Layout/layout1-theblumo.jpg",
+    selectImagePath: "img/Layout/Layout1-frame1.jpg",
     slots: [{ left: 6.65, top: 15.58, width: 86.4, height: 65.3 }],
   },
   {

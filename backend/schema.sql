@@ -40,6 +40,13 @@ INSERT INTO booth_settings (setting_key, setting_value)
 VALUES ('payment_mode', 'static_qr')
 ON CONFLICT (setting_key) DO NOTHING;
 
+INSERT INTO booth_settings (setting_key, setting_value)
+VALUES (
+  'payment_tiers',
+  '[{"prints":1,"amount":49},{"prints":2,"amount":90},{"prints":3,"amount":130}]'
+)
+ON CONFLICT (setting_key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id UUID PRIMARY KEY,
   amount INTEGER NOT NULL,

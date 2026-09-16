@@ -63,6 +63,28 @@ object PaymentNotifyDebug {
             .apply()
     }
 
+    fun recordListenerConnected(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_listener_connected_at", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun recordListenerDisconnected(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("last_listener_disconnected_at", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun recordRebindAttempt(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putLong("last_rebind_at", System.currentTimeMillis())
+            .putInt("rebind_count", prefs.getInt("rebind_count", 0) + 1)
+            .apply()
+    }
+
     fun recordResult(
         context: Context,
         sessionId: String,
@@ -108,6 +130,10 @@ object PaymentNotifyDebug {
             .put("last_scan_at", prefs.getLong("last_scan_at", 0))
             .put("last_active_bank_count", prefs.getInt("last_active_bank_count", 0))
             .put("last_active_total_count", prefs.getInt("last_active_total_count", 0))
+            .put("last_listener_connected_at", prefs.getLong("last_listener_connected_at", 0))
+            .put("last_listener_disconnected_at", prefs.getLong("last_listener_disconnected_at", 0))
+            .put("last_rebind_at", prefs.getLong("last_rebind_at", 0))
+            .put("rebind_count", prefs.getInt("rebind_count", 0))
             .put("listener_connected", PaymentNotificationListener.isConnected())
             .toString()
     }

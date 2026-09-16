@@ -8,6 +8,7 @@ class PaymentNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
+        PaymentNotifyDebug.recordListenerConnected(this)
         Log.i(TAG, "notification listener connected")
         scanActiveNotificationsSafely("on_connect")
     }
@@ -16,6 +17,7 @@ class PaymentNotificationListener : NotificationListenerService() {
         super.onListenerDisconnected()
         if (instance === this) {
             instance = null
+            PaymentNotifyDebug.recordListenerDisconnected(this)
         }
         Log.w(TAG, "notification listener disconnected — requesting rebind")
         try {

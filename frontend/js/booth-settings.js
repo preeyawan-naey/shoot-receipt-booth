@@ -6,6 +6,11 @@ const BOOTH_SETTINGS_POLL_MS = 15000;
 
 let boothSettingsState = {
   payment_amount: 59,
+  payment_tiers: [
+    { prints: 1, amount: 49 },
+    { prints: 2, amount: 90 },
+    { prints: 3, amount: 130 },
+  ],
   payment_qr_url: null,
   payment_mode: "static_qr",
   omise_enabled: false,
@@ -47,6 +52,9 @@ async function fetchBoothSettings() {
       ...boothSettingsState,
       ...data.settings,
     };
+    if (typeof renderPackageTierPicker === "function") {
+      renderPackageTierPicker();
+    }
     resyncNativePaymentNotifyAfterSettings();
   } catch (error) {
     console.warn("[booth-settings] fetch failed", error);
@@ -60,15 +68,15 @@ async function initBoothSettings() {
 
 async function goToBoothStart() {
   await fetchBoothSettings();
+  if (isBoothPaymentRequired()) {
+    goToPackageSelect();
+    return;
+  }
   goToNameEntry();
 }
 
 function goToBoothBack() {
-  goToNameEntry();
-}
-
-async function goToBoothLayoutBack() {
-  goToNameEntry();
+  goToHome();
 }
 
 async function recordBoothPhotoSession({ downloadId = null } = {}) {
@@ -83,6 +91,10 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
         layout_id: typeof getSelectedLayoutId === "function" ? getSelectedLayoutId() : null,
         frame_id: typeof getSelectedFrameId === "function" ? getSelectedFrameId() : null,
         print_count: typeof getPrintCopies === "function" ? getPrintCopies() : 1,
+        amount:
+          typeof getActivePaymentSessionAmount === "function"
+            ? getActivePaymentSessionAmount()
+            : boothSettingsState?.payment_amount ?? null,
         download_id: downloadId,
       }),
     });

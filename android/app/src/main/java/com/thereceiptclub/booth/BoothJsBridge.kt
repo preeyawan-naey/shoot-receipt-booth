@@ -1,13 +1,10 @@
 package com.thereceiptclub.booth
 
-import android.hardware.usb.UsbManager
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
 import com.shootreceipt.print.PrintEngine
-import com.shootreceipt.print.UsbEscPosPrinter
-import com.shootreceipt.print.UsbPermissionHelper
 import org.json.JSONObject
 
 /**
@@ -212,11 +209,7 @@ class BoothJsBridge(
     }
 
     private fun preflightUsbPermission() {
-        val usbManager = activity.getSystemService(UsbManager::class.java)
-        val device = UsbEscPosPrinter(activity).findPrinterDevice() ?: return
-        if (!usbManager.hasPermission(device)) {
-            UsbPermissionHelper.requestIfNeeded(activity)
-        }
+        UsbPrintPreflight.requestIfPrinterAttached(activity, showHints = false)
     }
 
     private fun dispatchPrintDone(jobId: String, status: String, message: String?) {

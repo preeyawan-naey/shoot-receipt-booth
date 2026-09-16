@@ -43,7 +43,25 @@ function runSqliteMigration() {
       .prepare(
         "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
       )
-      .run("payment_amount", "59");
+      .run("payment_amount", "49");
+  }
+
+  const defaultPaymentTiers = sqlite
+    .prepare("SELECT 1 FROM booth_settings WHERE setting_key = ?")
+    .get("payment_tiers");
+  if (!defaultPaymentTiers) {
+    sqlite
+      .prepare(
+        "INSERT INTO booth_settings (setting_key, setting_value) VALUES (?, ?)"
+      )
+      .run(
+        "payment_tiers",
+        JSON.stringify([
+          { prints: 1, amount: 49 },
+          { prints: 2, amount: 90 },
+          { prints: 3, amount: 130 },
+        ])
+      );
   }
 
   const defaultOmise = sqlite

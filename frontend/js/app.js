@@ -11,7 +11,7 @@ const appState = {
 };
 
 const MIN_PRINT_COPIES = 1;
-const MAX_PRINT_COPIES = 1;
+const MAX_PRINT_COPIES = 3;
 const DEFAULT_PRINT_COPIES = 1;
 const QR_HOME_COUNTDOWN_SEC = 40;
 let printCopies = DEFAULT_PRINT_COPIES;
@@ -21,10 +21,22 @@ function getPrintCopies() {
   return printCopies;
 }
 
+function setPrintCopies(count) {
+  printCopies = Math.max(
+    MIN_PRINT_COPIES,
+    Math.min(MAX_PRINT_COPIES, Math.round(Number(count) || DEFAULT_PRINT_COPIES))
+  );
+  updatePrintCopiesUI();
+}
+
 function resetPrintCopiesUI() {
   printCopies = DEFAULT_PRINT_COPIES;
   updatePrintCopiesUI();
 }
+
+window.setPrintCopies = setPrintCopies;
+window.getPrintCopies = getPrintCopies;
+window.resetPrintCopiesUI = resetPrintCopiesUI;
 
 function updatePrintCopiesUI() {
   const valueEl = document.getElementById("print-copies-value");
@@ -32,8 +44,8 @@ function updatePrintCopiesUI() {
   const btnPlus = document.getElementById("btn-print-plus");
 
   if (valueEl) valueEl.textContent = String(printCopies);
-  if (btnMinus) btnMinus.disabled = true;
-  if (btnPlus) btnPlus.disabled = true;
+  if (btnMinus) btnMinus.disabled = printCopies <= MIN_PRINT_COPIES;
+  if (btnPlus) btnPlus.disabled = printCopies >= MAX_PRINT_COPIES;
 }
 
 function handleNativePrintResumeOnInit() {
@@ -238,7 +250,6 @@ function navigateToCamera(layoutId) {
 function bindEvents() {
   const btnStartOverlay = document.getElementById("btn-start-overlay");
   const btnStart = document.getElementById("btn-start");
-  const btnLayoutBack = document.getElementById("btn-layout-back");
   const btnFrameBack = document.getElementById("btn-frame-back");
   const btnCameraBack = document.getElementById("btn-camera-back");
   const btnRetake = document.getElementById("btn-retake");
@@ -270,12 +281,6 @@ function bindEvents() {
   btnStart?.addEventListener("click", (event) => {
     event.stopPropagation();
     void goToBoothStart();
-  });
-
-  btnLayoutBack?.addEventListener("click", () => {
-    appState.selectedLayout = null;
-    clearBoothSelection();
-    void goToBoothLayoutBack();
   });
 
   btnFrameBack?.addEventListener("click", () => {

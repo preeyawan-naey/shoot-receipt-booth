@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const config = require("../config");
 const admin = require("../admin");
 const boothSettings = require("../boothSettings");
@@ -7,6 +8,15 @@ const paymentSessions = require("../paymentSessions");
 const omise = require("../omise");
 
 const router = express.Router();
+
+function safeEqualString(a, b) {
+  const left = Buffer.from(String(a ?? ""));
+  const right = Buffer.from(String(b ?? ""));
+  if (left.length !== right.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(left, right);
+}
 
 function requireAdminKey(req, res, next) {
   const key =
@@ -30,6 +40,40 @@ function requireAdminKey(req, res, next) {
 
   next();
 }
+
+router.post("/login", (req, res) => {
+  if (!config.adminApiKey) {
+    return res.status(503).json({
+      success: false,
+      message: "Admin login is not configured (set ADMIN_API_KEY in .env)",
+    });
+  }
+
+  if (!config.adminPassword) {
+    return res.status(503).json({
+      success: false,
+      message: "Admin login is not configured (set ADMIN_PASSWORD in .env)",
+    });
+  }
+
+  const username = String(req.body?.username ?? "").trim();
+  const password = String(req.body?.password ?? "");
+
+  if (
+    !safeEqualString(username, config.adminUsername) ||
+    !safeEqualString(password, config.adminPassword)
+  ) {
+    return res.status(401).json({
+      success: false,
+      message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+    });
+  }
+
+  return res.json({
+    success: true,
+    token: config.adminApiKey,
+  });
+});
 
 router.use(requireAdminKey);
 
@@ -148,17 +192,19 @@ router.get("/payment", async (_req, res) => {
 router.patch("/payment", async (req, res) => {
   try {
     const amount = req.body?.payment_amount;
+    const paymentTiersRaw = req.body?.payment_tiers;
     const omiseEnabledRaw = req.body?.omise_enabled;
     const paymentModeRaw = req.body?.payment_mode;
     const hasAmount = amount !== undefined && amount !== null && amount !== "";
+    const hasPaymentTiers = Array.isArray(paymentTiersRaw) && paymentTiersRaw.length > 0;
     const hasOmiseToggle = omiseEnabledRaw !== undefined && omiseEnabledRaw !== null;
     const hasPaymentMode =
       paymentModeRaw !== undefined && paymentModeRaw !== null && paymentModeRaw !== "";
 
-    if (!hasAmount && !hasOmiseToggle && !hasPaymentMode) {
+    if (!hasAmount && !hasPaymentTiers && !hasOmiseToggle && !hasPaymentMode) {
       return res.status(400).json({
         success: false,
-        message: "payment_amount, payment_mode, or omise_enabled is required",
+        message: "payment_amount, payment_tiers, payment_mode, or omise_enabled is required",
       });
     }
 
@@ -172,7 +218,22 @@ router.patch("/payment", async (req, res) => {
         : await paymentSettings.setPaymentMode("static_qr");
     }
 
-    if (hasAmount) {
+    if (hasPaymentTiers) {
+      const minAmount = paymentMode === "omise" ? 20 : 1;
+      for (const tier of paymentTiersRaw) {
+        const rounded = Math.round(Number(tier?.amount));
+        if (!Number.isFinite(rounded) || rounded < minAmount) {
+          return res.status(400).json({
+            success: false,
+            message:
+              paymentMode === "omise"
+                ? "Each tier amount must be at least 20 baht (Omise PromptPay)"
+                : "Each tier amount must be at least 1 baht",
+          });
+        }
+      }
+      await paymentSettings.setPaymentTiers(paymentTiersRaw);
+    } else if (hasAmount) {
       const rounded = Math.round(Number(amount));
       const minAmount = paymentMode === "omise" ? 20 : 1;
       if (!Number.isFinite(rounded) || rounded < minAmount) {

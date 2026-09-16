@@ -75,9 +75,11 @@ router.get("/payment-sessions/:id/qr-image", async (req, res) => {
   }
 });
 
-router.post("/payment-sessions", async (_req, res) => {
+router.post("/payment-sessions", async (req, res) => {
   try {
-    const session = await paymentSessions.createSession();
+    const session = await paymentSessions.createSession({
+      amount: req.body?.amount,
+    });
     return res.status(201).json({ success: true, session });
   } catch (error) {
     console.error("[booth/payment-sessions/create]", error);
@@ -135,6 +137,7 @@ router.post("/photo-sessions", async (req, res) => {
       layoutId: typeof req.body?.layout_id === "string" ? req.body.layout_id : null,
       frameId: typeof req.body?.frame_id === "string" ? req.body.frame_id : null,
       printCount: req.body?.print_count,
+      amount: req.body?.amount,
       downloadId: typeof req.body?.download_id === "string" ? req.body.download_id : null,
     });
     return res.status(201).json({ success: true, session });

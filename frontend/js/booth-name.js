@@ -93,11 +93,6 @@ async function submitNameAndContinue() {
   input?.blur();
   setBoothGuestName(name);
 
-  await fetchBoothSettings();
-  if (isBoothPaymentRequired()) {
-    goToPayment();
-    return;
-  }
   goToLayoutSelect();
 }
 

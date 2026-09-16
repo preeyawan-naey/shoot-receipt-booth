@@ -373,7 +373,11 @@ function finishCaptureSession() {
         }
         navigateTo("frame-select");
       } else {
-        navigateTo("layout-select");
+        if (typeof goToLayoutSelect === "function") {
+          goToLayoutSelect();
+        } else {
+          navigateTo("layout-select");
+        }
       }
     });
 }

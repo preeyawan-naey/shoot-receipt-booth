@@ -2,8 +2,12 @@ package com.thereceiptclub.booth
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -28,6 +32,16 @@ class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private var kioskMode = false
+    private var usbAttachReceiverRegistered = false
+
+    private val usbAttachReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
+                Log.i(TAG, "USB device attached — preflight printer permission")
+                UsbPrintPreflight.requestIfPrinterAttached(this@MainActivity)
+            }
+        }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -175,6 +189,31 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         PaymentNotifyAccess.requestRebind(this)
+        registerUsbAttachReceiver()
+        UsbPrintPreflight.requestIfPrinterAttached(this)
+    }
+
+    override fun onPause() {
+        unregisterUsbAttachReceiver()
+        super.onPause()
+    }
+
+    private fun registerUsbAttachReceiver() {
+        if (usbAttachReceiverRegistered) return
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbAttachReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(usbAttachReceiver, filter)
+        }
+        usbAttachReceiverRegistered = true
+    }
+
+    private fun unregisterUsbAttachReceiver() {
+        if (!usbAttachReceiverRegistered) return
+        unregisterReceiver(usbAttachReceiver)
+        usbAttachReceiverRegistered = false
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

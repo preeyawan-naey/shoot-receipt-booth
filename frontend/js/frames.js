@@ -39,19 +39,22 @@ function scalePreviewMockVerticalPct(pct) {
 const THE_BLUMO_PREVIEW_CONTENT_SHIFT_UP_PCT = 0;
 const THE_BLUMO_PREVIEW_QR_SHIFT_UP_PCT = 0;
 
-/** Guest name overlay — replaces baked-in "Mun" on TheBlumo artwork */
+/** Guest name overlay — Layout1-frame1: after "YOUR NAME :" on same line */
 const THE_BLUMO_GUEST_NAME_SLOT = {
   left: 4,
   top: 4.68,
-  previewTop: 3.65,
+  previewTop: 63.5,
+  previewLeft: 35,
+  previewWidth: 65,
   width: 88.5,
   height: 5.19,
-  previewHeight: 8.57,
+  previewHeight: 3.5,
   textOffsetPct: 0.55,
-  previewTextOffsetPct: 1.5,
-  padLeftPct: 0.4,
+  previewTextOffsetPct: 0,
+  padLeftPct: 0,
   /** Illustrator type size at 662px design width (TheBlumo exports at 2×) */
   fontSizePx: 72,
+  previewFontSizePx: 42,
   /** Print only — tight patch over "Mun" (preview mock has no large white wipe) */
   erase: { left: 5.5, top: 4.5, width: 88.5, height: 5.5 },
 };
@@ -59,7 +62,7 @@ const THE_BLUMO_GUEST_NAME_SLOT = {
 /** QR overlay on preview mock — centered in gray square below thank-you text */
 const THE_BLUMO_PREVIEW_QR_SCALE = 1.05;
 const THE_BLUMO_PREVIEW_QR_SLOT = {
-  "Layout-1": { left: 36.56, top: 80.86, width: 27.09, height: 11.03, scale: THE_BLUMO_PREVIEW_QR_SCALE },
+  "Layout-1": { left: 36.56, top: 90, width: 27.09, height: 11.03, scale: THE_BLUMO_PREVIEW_QR_SCALE },
   "Layout-2": { left: 36.48, top: 80.68, width: 27.03, height: 11.21, scale: THE_BLUMO_PREVIEW_QR_SCALE },
 };
 
@@ -72,12 +75,13 @@ const THE_BLUMO_FRAME_SLOTS = {
         top: 50,
         width: 87.321,
         height: 43.979,
-        previewLeft: 5.05,
-        previewTop: 16.41,
-        previewWidth: 89.9,
-        previewHeight: 44.59,
+        previewLeft: 4.79,
+        previewTop: 16.08,
+        previewWidth: 90.32,
+        previewHeight: 45.76,
         fit: "cover",
         noBleed: true,
+        previewNoBleed: false,
       },
     ],
   },

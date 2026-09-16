@@ -7,6 +7,7 @@ const pages = {};
 
 function initNavigation() {
   pages.home = document.getElementById("page-home");
+  pages.package = document.getElementById("page-package");
   pages["name-entry"] = document.getElementById("page-name-entry");
   pages.payment = document.getElementById("page-payment");
   pages["layout-select"] = document.getElementById("page-layout-select");
@@ -79,6 +80,12 @@ function goToHome() {
   }
   if (typeof clearBoothGuestName === "function") {
     clearBoothGuestName();
+  }
+  if (typeof clearSelectedPaymentTier === "function") {
+    clearSelectedPaymentTier();
+  }
+  if (typeof resetPrintCopiesUI === "function") {
+    resetPrintCopiesUI();
   }
   navigateTo("home");
 }

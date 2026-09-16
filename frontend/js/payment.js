@@ -15,14 +15,21 @@ let paymentNotifyAccessPrompted = false;
 let paymentBatteryPrompted = false;
 let paymentSessionStartedAt = 0;
 let paymentDebugTimer = null;
+let selectedPaymentTier = null;
+let completedPaymentAmount = null;
 const PAYMENT_DEBUG_POLL_MS = 3000;
-
 function getActivePaymentSessionId() {
   return paymentSessionId || "";
 }
 
 function getActivePaymentSessionAmount() {
-  return activePaymentSession?.amount ?? boothSettingsState?.payment_amount ?? 59;
+  return (
+    activePaymentSession?.amount ??
+    completedPaymentAmount ??
+    selectedPaymentTier?.amount ??
+    boothSettingsState?.payment_amount ??
+    59
+  );
 }
 
 function clearPaymentSessionState() {
@@ -30,6 +37,119 @@ function clearPaymentSessionState() {
   activePaymentSession = null;
   paymentSessionStartedAt = 0;
   syncNativePaymentNotify(null);
+}
+
+function clearSelectedPaymentTier() {
+  selectedPaymentTier = null;
+  completedPaymentAmount = null;
+}
+
+function getPaymentTiersFromSettings() {
+  const tiers = boothSettingsState?.payment_tiers;
+  if (Array.isArray(tiers) && tiers.length > 0) {
+    return tiers
+      .map((tier) => ({
+        prints: Math.max(1, Math.round(Number(tier.prints) || 1)),
+        amount: Math.max(1, Math.round(Number(tier.amount) || 0)),
+      }))
+      .filter((tier) => tier.amount > 0)
+      .sort((a, b) => a.prints - b.prints || a.amount - b.amount);
+  }
+
+  const fallbackAmount = Math.round(Number(boothSettingsState?.payment_amount) || 59);
+  return [{ prints: 1, amount: fallbackAmount }];
+}
+
+function resolvePaymentTierFromSelection({ prints, amount } = {}) {
+  const tiers = getPaymentTiersFromSettings();
+  const roundedPrints = Math.max(1, Math.round(Number(prints) || 0));
+  const roundedAmount = Math.round(Number(amount) || 0);
+
+  if (roundedPrints > 0) {
+    const byPrints = tiers.find((item) => item.prints === roundedPrints);
+    if (byPrints) return byPrints;
+  }
+
+  if (Number.isFinite(roundedAmount) && roundedAmount > 0) {
+    const byAmount = tiers.find((item) => item.amount === roundedAmount);
+    if (byAmount) return byAmount;
+  }
+
+  return null;
+}
+
+function formatTierCopyLabel(prints) {
+  const count = Math.max(1, Math.round(Number(prints) || 1));
+  return `Copies ${count}`;
+}
+
+function getPackageArtPath(prints) {
+  const count = Math.max(1, Math.min(3, Math.round(Number(prints) || 1)));
+  return `img/Package/Copies${count}.png`;
+}
+
+function isPopularPackageTier(tier, index, tiers) {
+  if (Math.round(Number(tier?.prints) || 0) === 2) return true;
+  return tiers.length >= 2 && index === 1;
+}
+
+function renderPackageTierPicker() {
+  const list = document.getElementById("package-tier-list");
+  if (!list) return;
+
+  const tiers = getPaymentTiersFromSettings();
+  list.replaceChildren();
+  tiers.forEach((tier, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "package-card";
+    button.dataset.amount = String(tier.amount);
+    button.dataset.prints = String(tier.prints);
+
+    const badge = isPopularPackageTier(tier, index, tiers)
+      ? `<span class="package-card__badge">Popular</span>`
+      : "";
+
+    button.innerHTML = `
+      ${badge}
+      <h2 class="package-card__title">${formatTierCopyLabel(tier.prints)}</h2>
+      <div class="package-card__art-wrap">
+        <img
+          class="package-card__art"
+          src="${getPackageArtPath(tier.prints)}"
+          alt="${formatTierCopyLabel(tier.prints)}"
+          loading="eager"
+          decoding="async"
+        />
+      </div>
+      <p class="package-card__price">
+        <span class="package-card__price-value">${formatPaymentAmount(tier.amount)}</span> Baht
+      </p>
+    `;
+
+    button.addEventListener("click", () => {
+      void selectPaymentTierAndPay({
+        prints: button.dataset.prints,
+        amount: button.dataset.amount,
+      });
+    });
+    list.appendChild(button);
+  });
+}
+
+function goToPackageSelect() {
+  renderPackageTierPicker();
+  navigateTo("package");
+}
+
+function applySessionPrintCount(session) {
+  const copies = Math.max(
+    1,
+    Math.round(Number(session?.print_count ?? selectedPaymentTier?.prints ?? 1))
+  );
+  if (typeof setPrintCopies === "function") {
+    setPrintCopies(copies);
+  }
 }
 
 function clearPaymentCountdown() {
@@ -260,10 +380,20 @@ function renderPaymentPage(sessionAmount, session = activePaymentSession) {
   setPaymentQrLoading(true, "กำลังเตรียม QR PromptPay...");
 }
 
-async function createPaymentSession() {
+async function createPaymentSession(amount) {
+  const payload = {};
+  const sessionAmount = Math.round(Number(amount ?? selectedPaymentTier?.amount));
+  if (Number.isFinite(sessionAmount) && sessionAmount > 0) {
+    payload.amount = sessionAmount;
+  }
+
   const response = await fetchWithTimeout(`${API_URL}/api/booth/payment-sessions`, {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
   const data = await readJsonResponse(response);
   if (!response.ok || !data.success || !data.session?.id) {
@@ -300,8 +430,11 @@ async function cancelPaymentSession() {
 }
 
 function proceedFromPayment() {
+  applySessionPrintCount(activePaymentSession);
+  completedPaymentAmount =
+    activePaymentSession?.amount ?? selectedPaymentTier?.amount ?? completedPaymentAmount;
   clearPaymentFlow();
-  goToLayoutSelect();
+  goToNameEntry();
 }
 
 async function pollPaymentSessionOnce() {
@@ -314,7 +447,7 @@ async function pollPaymentSessionOnce() {
     if (sessionId !== paymentSessionId) return;
 
     if (session.status === "paid") {
-      setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปเลือก layout...", true);
+      setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปกรอกชื่อ...", true);
       proceedFromPayment();
       return;
     }
@@ -520,7 +653,7 @@ function ensureNativeNotificationAccess() {
 window.__receiptClubOnBankNotifyResult = function onBankNotifyResult(result) {
   console.info("[payment] bank notify result", result);
   if (result?.matched) {
-    setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปเลือก layout...", true);
+    setPaymentStatus("paid", "ชำระเงินสำเร็จ — กำลังไปกรอกชื่อ...", true);
     void pollUntilPaymentConfirmed();
     return;
   }
@@ -534,16 +667,17 @@ function getPaymentWaitingMessage() {
   return "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ";
 }
 
-async function startAutoPaymentSession(flowId) {
+async function startAutoPaymentSession(flowId, paymentAmount) {
   try {
     await verifyPaymentBackend();
-    const session = await createPaymentSession();
+    const session = await createPaymentSession(paymentAmount);
     if (flowId !== paymentFlowGeneration) return;
 
     paymentSessionId = session.id;
     activePaymentSession = session;
     paymentSessionStartedAt = Date.now();
-    renderPaymentPage(session.amount, session);
+    applySessionPrintCount(session);
+    renderPaymentPage(session.amount ?? paymentAmount, session);
     syncNativePaymentNotify(session.id, session.amount);
     ensureNativeNotificationAccess();
 
@@ -556,17 +690,61 @@ async function startAutoPaymentSession(flowId) {
 
     console.warn("[payment] session failed:", error.message);
     clearPaymentSessionState();
-    renderPaymentPage();
+    renderPaymentPage(paymentAmount);
     setPaymentQrLoading(true, error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
     setPaymentStatus("error", error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
   }
 }
 
-function goToPayment() {
+async function selectPaymentTierAndPay(tier) {
+  const clickedPrints = Math.max(1, Math.round(Number(tier?.prints) || 1));
+  const clickedAmount = Math.max(1, Math.round(Number(tier?.amount) || 0));
+
+  await fetchBoothSettings();
+  if (!isBoothPaymentRequired()) {
+    goToNameEntry();
+    return;
+  }
+
+  const matchedTier = resolvePaymentTierFromSelection({
+    prints: clickedPrints,
+    amount: clickedAmount,
+  }) || {
+    prints: clickedPrints,
+    amount: clickedAmount,
+  };
+
+  selectedPaymentTier = matchedTier;
+  goToPayment(matchedTier.amount, matchedTier.prints);
+}
+
+function goToPayment(amount = selectedPaymentTier?.amount, prints = selectedPaymentTier?.prints) {
   void (async () => {
+    const requestedAmount = Math.round(Number(amount));
+    const requestedPrints = Math.max(1, Math.round(Number(prints) || 0));
+
     await fetchBoothSettings();
     if (!isBoothPaymentRequired()) {
-      goToLayoutSelect();
+      goToNameEntry();
+      return;
+    }
+
+    const matchedTier = resolvePaymentTierFromSelection({
+      prints: requestedPrints,
+      amount: requestedAmount,
+    });
+    if (matchedTier) {
+      selectedPaymentTier = matchedTier;
+    } else if (Number.isFinite(requestedAmount) && requestedAmount > 0) {
+      selectedPaymentTier = {
+        prints: requestedPrints || selectedPaymentTier?.prints || 1,
+        amount: requestedAmount,
+      };
+    }
+
+    const paymentAmount = selectedPaymentTier?.amount ?? requestedAmount;
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+      console.warn("[payment] missing tier amount");
       return;
     }
 
@@ -574,27 +752,38 @@ function goToPayment() {
     const flowId = paymentFlowGeneration;
 
     clearPaymentFlow();
-    renderPaymentPage();
+    renderPaymentPage(paymentAmount);
     navigateTo("payment");
     setPaymentStatus("idle", "", false);
     startPaymentCountdown(PAYMENT_TIMEOUT_SEC);
-    void startAutoPaymentSession(flowId);
+    void startAutoPaymentSession(flowId, paymentAmount);
   })();
 }
 
 function initPaymentModule() {
   const btnBack = document.getElementById("btn-payment-back");
-  const btnContinue = document.getElementById("btn-payment-continue");
-  const btnContinueOverlay = document.getElementById("btn-payment-continue-overlay");
 
   btnBack?.addEventListener("click", () => {
     clearPaymentFlow();
     void cancelPaymentSession();
-    goToBoothBack();
+    clearSelectedPaymentTier();
+    goToPackageSelect();
   });
 
-  btnContinue?.addEventListener("click", proceedFromPayment);
-  btnContinueOverlay?.addEventListener("click", proceedFromPayment);
+  document.getElementById("btn-package-back")?.addEventListener("click", () => {
+    clearSelectedPaymentTier();
+    goToHome();
+  });
+
 }
 
-document.addEventListener("DOMContentLoaded", initPaymentModule);
+document.addEventListener("DOMContentLoaded", () => {
+  initPaymentModule();
+  renderPackageTierPicker();
+});
+
+window.renderPackageTierPicker = renderPackageTierPicker;
+window.goToPackageSelect = goToPackageSelect;
+window.clearSelectedPaymentTier = clearSelectedPaymentTier;
+window.getSelectedPaymentTier = () => selectedPaymentTier;
+window.getActivePaymentSessionAmount = getActivePaymentSessionAmount;

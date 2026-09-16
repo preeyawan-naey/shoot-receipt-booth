@@ -7,7 +7,13 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>SHOOT Receipt BOOTH</title>
-    <link rel="stylesheet" href="css/styles.css?v=booth223" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css?v=booth251" />
   </head>
   <body>
     <div class="viewport">
@@ -20,7 +26,7 @@
 
           <div class="home-visual">
             <img
-              src="img/Frame-index(TheBlumo).png"
+              src="img/index-re&amp;play.gif"
               alt=""
               class="home-index-art"
             />
@@ -38,6 +44,22 @@
               <span class="start-btn__highlight">TAP</span> to START
             </button>
           </footer>
+        </section>
+
+        <!-- ==================== PACKAGE SELECTION PAGE ==================== -->
+        <section class="page" id="page-package" data-page="package">
+          <header class="frame-header">
+            <button class="back-btn back-btn--icon" id="btn-package-back" type="button" aria-label="กลับ">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div class="frame-title">
+              <h1 class="frame-title__heading frame-title__heading--package">PACKAGE</h1>
+            </div>
+          </header>
+
+          <div class="package-body">
+            <div class="package-tier-grid" id="package-tier-list"></div>
+          </div>
         </section>
 
         <!-- ==================== NAME ENTRY PAGE ==================== -->
@@ -111,15 +133,13 @@
             <p class="payment-body__countdown">
               กลับหน้าหลักภายใน <span id="payment-countdown">300</span> วินาที
             </p>
+
           </div>
         </section>
 
         <!-- ==================== LAYOUT SELECTION PAGE ==================== -->
         <section class="page" id="page-layout-select" data-page="layout-select">
           <header class="frame-header">
-            <button class="back-btn back-btn--icon" id="btn-layout-back" type="button" aria-label="กลับ">
-              <i data-lucide="chevron-left"></i>
-            </button>
             <div class="frame-title">
               <h1 class="frame-title__heading">Layout</h1>
             </div>
@@ -391,18 +411,18 @@
     <script src="js/qrcode.bundle.js?v=booth190"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-settings.js?v=booth237"></script>
+    <script src="js/booth-settings.js?v=booth238"></script>
     <script src="js/booth-storage.js?v=booth190"></script>
-    <script src="js/layouts.js?v=booth207"></script>
-    <script src="js/frames.js?v=booth229"></script>
+    <script src="js/layouts.js?v=booth243"></script>
+    <script src="js/frames.js?v=booth250"></script>
     <script src="js/navigation.js?v=booth190"></script>
     <script src="js/kiosk.js?v=booth200"></script>
-    <script src="js/payment.js?v=booth237"></script>
+    <script src="js/payment.js?v=booth251"></script>
     <script src="js/booth-name.js?v=booth201"></script>
     <script src="js/escpos.js"></script>
     <script src="js/thermer.js"></script>
     <script src="js/native-print.js?v=booth190"></script>
-    <script src="js/composite.js?v=booth231"></script>
+    <script src="js/composite.js?v=booth249"></script>
     <script src="js/camera.js?v=booth207"></script>
     <script src="js/app.js?v=booth190"></script>
   </body>

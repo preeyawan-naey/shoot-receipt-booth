@@ -50,7 +50,12 @@ async function expirePendingSessions() {
   );
 }
 
-function mapSession(row, paymentMode = "omise") {
+function resolvePrintCountForAmount(amount, tiers) {
+  const tier = paymentSettings.findPaymentTierByAmount(tiers, amount);
+  return tier?.prints || 1;
+}
+
+function mapSession(row, paymentMode = "omise", tiers = null) {
   if (!row) return null;
 
   let qrImageUrl = null;
@@ -63,6 +68,7 @@ function mapSession(row, paymentMode = "omise") {
   return {
     id: row.id,
     amount: Number(row.amount),
+    print_count: tiers ? resolvePrintCountForAmount(row.amount, tiers) : 1,
     status: row.status,
     created_at: row.created_at,
     expires_at: row.expires_at,
@@ -109,10 +115,11 @@ async function getSessionById(sessionId) {
   if (!row) return null;
 
   const paymentMode = await paymentSettings.getPaymentMode();
+  const tiers = await paymentSettings.getPaymentTiers();
   if (paymentMode === "omise") {
     row = await syncOmiseChargeStatus(row);
   }
-  return mapSession(row, paymentMode);
+  return mapSession(row, paymentMode, tiers);
 }
 
 async function cancelPendingSessions() {
@@ -124,18 +131,27 @@ async function cancelPendingSessions() {
   );
 }
 
-async function createSession() {
+async function createSession({ amount: requestedAmount } = {}) {
   await expirePendingSessions();
   await cancelPendingSessions();
 
   const payment = await paymentSettings.getPaymentSettings();
   const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode());
+  const tiers = payment.payment_tiers || (await paymentSettings.getPaymentTiers());
 
   if (paymentMode === "free") {
     throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
   }
 
-  const amount = Math.round(Number(payment.payment_amount) || 59);
+  let amount;
+  if (requestedAmount != null && requestedAmount !== "") {
+    amount = Math.round(Number(requestedAmount));
+    if (!paymentSettings.findPaymentTierByAmount(tiers, amount)) {
+      throw new Error(`ยอด ${amount} บาท ไม่ตรงกับแพ็กที่เปิดขาย`);
+    }
+  } else {
+    amount = Math.round(Number(tiers[0]?.amount || payment.payment_amount) || 59);
+  }
   const id = randomUUID();
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + SESSION_TTL_MS);
@@ -203,7 +219,8 @@ async function getLatestPendingSession() {
     []
   );
   const paymentMode = await paymentSettings.getPaymentMode();
-  return mapSession(row, paymentMode);
+  const tiers = await paymentSettings.getPaymentTiers();
+  return mapSession(row, paymentMode, tiers);
 }
 
 async function getPendingSessionById(sessionId) {
@@ -216,7 +233,8 @@ async function getPendingSessionById(sessionId) {
     [sessionId]
   );
   const paymentMode = await paymentSettings.getPaymentMode();
-  return mapSession(row, paymentMode);
+  const tiers = await paymentSettings.getPaymentTiers();
+  return mapSession(row, paymentMode, tiers);
 }
 
 async function markSessionPaidFromOmise(sessionId, charge) {
