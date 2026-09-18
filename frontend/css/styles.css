@@ -750,6 +750,16 @@ body {
 
 .payment-body__qr-wrap--loading {
   aspect-ratio: 402 / 566;
+  display: flex;
+  align-items: stretch;
+}
+
+.payment-body__qr-wrap--loading .payment-body__qr-slot {
+  flex: 1;
+  width: 100%;
+  min-height: 100%;
+  aspect-ratio: 402 / 566;
+  line-height: normal;
 }
 
 .payment-body__qr-slot {

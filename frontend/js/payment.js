@@ -609,12 +609,23 @@ function formatPaymentNotifyRejectReason(serverResult) {
   return `server ไม่ยืนยัน (${serverResult.reason})`;
 }
 
+function usesNativePaymentNotificationListener() {
+  if (!isStaticQrPaymentMode()) return false;
+  const bridge = window.ReceiptClubBridge;
+  if (!bridge?.isNotificationListenerEnabled) return false;
+  try {
+    return Boolean(bridge.isNotificationListenerEnabled());
+  } catch {
+    return false;
+  }
+}
+
 function formatPaymentNotifyDebugStatus(raw) {
   if (!raw || !paymentSessionId) return "";
   try {
     const status = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!status.listener_enabled) {
-      return "ยังไม่ได้เปิด Notification access ให้ The Receipt Club";
+      return "";
     }
     if (!status.config_ready) {
       return "แอpp ยัง sync secret ไม่ครบ — รอ server หรือเปิดหน้า QR ใหม่";
@@ -693,6 +704,7 @@ function triggerNativePaymentNotificationScan() {
 }
 
 function refreshPaymentNotifyDebugStatus() {
+  if (!usesNativePaymentNotificationListener()) return;
   const bridge = window.ReceiptClubBridge;
   if (!bridge?.getPaymentNotifyDebugStatus || !paymentSessionId) return;
 
@@ -709,7 +721,7 @@ function refreshPaymentNotifyDebugStatus() {
 
 function startPaymentDebugPolling() {
   clearPaymentDebugPolling();
-  if (!isStaticQrPaymentMode()) return;
+  if (!usesNativePaymentNotificationListener()) return;
 
   refreshPaymentNotifyDebugStatus();
   triggerNativePaymentNotificationScan();
@@ -722,7 +734,7 @@ function startPaymentDebugPolling() {
 
 function startPaymentWaitingHint() {
   clearPaymentWaitingHint();
-  if (!isStaticQrPaymentMode()) return;
+  if (!usesNativePaymentNotificationListener()) return;
 
   paymentWaitingHintTimer = setTimeout(() => {
     if (!paymentSessionId) return;
@@ -731,21 +743,12 @@ function startPaymentWaitingHint() {
 }
 
 function ensureNativeNotificationAccess() {
-  if (!isStaticQrPaymentMode()) return;
+  if (!usesNativePaymentNotificationListener()) return;
   const bridge = window.ReceiptClubBridge;
   if (!bridge?.isNotificationListenerEnabled) return;
 
   try {
     if (!bridge.isNotificationListenerEnabled()) {
-      if (!paymentNotifyAccessPrompted) {
-        paymentNotifyAccessPrompted = true;
-        setPaymentStatus(
-          "warning",
-          "เปิดสิทธิ์อ่านการแจ้งเตือนธนาคารในแอpp The Receipt Club",
-          true
-        );
-        bridge.openNotificationAccessSettings?.();
-      }
       return;
     }
     paymentNotifyAccessPrompted = false;
