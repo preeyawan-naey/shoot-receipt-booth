@@ -676,7 +676,7 @@ function formatPaymentNotifyDebugStatus(raw) {
     }
 
     if (!status.listener_connected) {
-      return "listener ยังไม่เชื่อม — กำลัง reconnect...";
+      return "";
     }
 
     if (forCurrentSession && status.last_active_bank_count > 0) {
@@ -687,7 +687,7 @@ function formatPaymentNotifyDebugStatus(raw) {
       return "อนุญาตแบตเตอรี่ไม่จำกัดให้ The Receipt Club — รอ noti SCB...";
     }
 
-    return getPaymentWaitingMessage();
+    return "";
   } catch {
     return "";
   }
@@ -711,9 +711,11 @@ function refreshPaymentNotifyDebugStatus() {
   try {
     const raw = bridge.getPaymentNotifyDebugStatus();
     const message = formatPaymentNotifyDebugStatus(raw);
-    if (message) {
-      setPaymentStatus("waiting", message, true);
+    if (!message) return;
+    if (message === getPaymentWaitingMessage()) {
+      return;
     }
+    setPaymentStatus("waiting", message, true);
   } catch (error) {
     console.warn("[payment] debug status failed:", error);
   }
