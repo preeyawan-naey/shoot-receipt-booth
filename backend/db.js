@@ -230,7 +230,7 @@ async function runPostgresMigration() {
     FROM payment_sessions
     WHERE status = 'paid'
       AND NOT EXISTS (
-        SELECT 1 FROM photo_sessions ps WHERE ps.payment_session_id = payment_sessions.id
+        SELECT 1 FROM photo_sessions ps WHERE ps.payment_session_id = payment_sessions.id::text
       )
   `);
 }
