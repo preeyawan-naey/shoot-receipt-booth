@@ -1,14 +1,41 @@
 /**
- * Decorative frame options — The Blumo booth (Layout-1 / Layout-2 only)
- * Assets: img/booths/the-receipt-club/Layout/frame/frame-select/layout{N}/TheBlumo.jpg
+ * Decorative frame options — per booth / layout
+ * Snap on Receipt: img/booths/snap-on-receipt/frame/frame-select/layout{N}/
  */
 const FRAME_ASSET_BASE = "img/booths/the-receipt-club/Layout/frame/frame-select";
+const SNAP_FRAME_ASSET_BASE = "img/booths/snap-on-receipt/frame/frame-select";
+const SNAP_FRAME_SELECT_ASPECT = "704 / 1433";
 const THE_BLUMO_FRAME_ID = "theblumo";
-/** Set true to show frame picker again */
-const BOOTH_SHOW_FRAME_SELECT = false;
 
-/** KiKi booth — no TheBlumo frame-select overlays */
+/** The Receipt Club (KiKi event theme) — no TheBlumo frame-select overlays */
 const LAYOUT_FRAME_DIR = {};
+
+/** Snap on Receipt — decorative frames per layout folder */
+const SNAP_LAYOUT_FRAME_CONFIG = {
+  "Layout-1": {
+    dir: "layout1",
+    files: ["layout1-1.jpg", "layout1-2.jpg", "layout1-3.jpg", "layout1-4.jpg", "layout1.jpg"],
+  },
+  "Layout-2": {
+    dir: "layout2",
+    files: [
+      "layout2-1.jpg",
+      "layout2-2.jpg",
+      "layout2-3.jpg",
+      "layout2-4.jpg",
+      "layout2-5.jpg",
+      "layout2-6.jpg",
+    ],
+  },
+  "Layout-3": {
+    dir: "layout3",
+    files: ["layout3-1.jpg", "layout3-2.jpg", "layout3-3.jpg", "layout3-4.jpg"],
+  },
+  "Layout-4": {
+    dir: "layout4",
+    files: ["layout4-1.jpg", "layout4-2.jpg", "layout4-3.jpg", "layout4-4.jpg"],
+  },
+};
 
 /** Crop full TheBlumo artwork to mockup height (layoutN-theblumo.jpg) */
 const THE_BLUMO_PRINT_CROP_BOTTOM_PCT = {
@@ -113,6 +140,23 @@ const THE_BLUMO_FRAME_SLOTS = {
   },
 };
 
+function isFrameSelectEnabled() {
+  return (
+    typeof isBoothFeatureEnabled === "function" &&
+    isBoothFeatureEnabled("frame_select")
+  );
+}
+
+function isSnapFrameSelectBooth() {
+  if (typeof getBoothId === "function" && getBoothId() === "snap-on-receipt") {
+    return true;
+  }
+  if (typeof resolveLayoutSetKey === "function") {
+    return resolveLayoutSetKey() === "snap-on-receipt";
+  }
+  return false;
+}
+
 function getTheBlumoAssetPath(layoutId) {
   const dir = LAYOUT_FRAME_DIR[layoutId];
   return dir ? `${FRAME_ASSET_BASE}/${dir}/TheBlumo.jpg` : null;
@@ -191,7 +235,7 @@ function getFrameSlots(layoutId, frameId) {
   return THE_BLUMO_FRAME_SLOTS[layoutId]?.[frameId] || [];
 }
 
-function buildFramesForLayout(layoutId) {
+function buildTheBlumoFramesForLayout(layoutId) {
   const assetDir = getFrameAssetDir(layoutId);
   if (!assetDir) return [];
 
@@ -207,12 +251,58 @@ function buildFramesForLayout(layoutId) {
   ];
 }
 
+function buildSnapFrameId(dir, file) {
+  return `snap-${dir}-${file.replace(/\.jpg$/i, "").replace(/[^a-z0-9]+/gi, "-")}`;
+}
+
+function buildSnapFramesForLayout(layoutId) {
+  const config = SNAP_LAYOUT_FRAME_CONFIG[layoutId];
+  if (!config) return [];
+
+  const layout =
+    typeof getLayoutById === "function" ? getLayoutById(layoutId) : null;
+  const slots = layout?.slots || [];
+
+  const frames = [
+    {
+      id: "none",
+      label: "ไม่เลือก Frame",
+      selectImagePath: null,
+      previewImagePath: null,
+      selectAspectRatio: SNAP_FRAME_SELECT_ASPECT,
+      slots,
+    },
+  ];
+
+  config.files.forEach((file, index) => {
+    const assetPath = `${SNAP_FRAME_ASSET_BASE}/${config.dir}/${file}`;
+    frames.push({
+      id: buildSnapFrameId(config.dir, file),
+      label: `Frame ${index + 1}`,
+      selectImagePath: assetPath,
+      previewImagePath: assetPath,
+      selectAspectRatio: SNAP_FRAME_SELECT_ASPECT,
+      slots,
+    });
+  });
+
+  return frames;
+}
+
+function buildFramesForLayout(layoutId) {
+  if (!isFrameSelectEnabled()) return [];
+  if (isSnapFrameSelectBooth()) {
+    return buildSnapFramesForLayout(layoutId);
+  }
+  return buildTheBlumoFramesForLayout(layoutId);
+}
+
 function layoutHasDecorativeFrames(layoutId) {
-  return getFramesForLayout(layoutId).length > 0;
+  return buildFramesForLayout(layoutId).some((frame) => frame.id !== "none");
 }
 
 function layoutHasFrames(layoutId) {
-  if (!BOOTH_SHOW_FRAME_SELECT) return false;
+  if (!isFrameSelectEnabled()) return false;
   return layoutHasDecorativeFrames(layoutId);
 }
 
@@ -233,6 +323,9 @@ function getFramesForLayout(layoutId) {
 }
 
 function getDefaultFrameId(layoutId) {
+  if (isFrameSelectEnabled() && isSnapFrameSelectBooth()) {
+    return "none";
+  }
   return layoutHasDecorativeFrames(layoutId) ? THE_BLUMO_FRAME_ID : "none";
 }
 
@@ -315,6 +408,7 @@ window.getDefaultFrameId = getDefaultFrameId;
 window.getTheBlumoAssetPath = getTheBlumoAssetPath;
 window.isTheBlumoLayout = isTheBlumoLayout;
 window.isTheBlumoBoothActive = isTheBlumoBoothActive;
+window.isFrameSelectEnabled = isFrameSelectEnabled;
 window.getTheBlumoPreviewBottomPct = getTheBlumoPreviewBottomPct;
 window.getTheBlumoPrintCropBottomPct = getTheBlumoPrintCropBottomPct;
 window.scalePreviewMockVerticalPct = scalePreviewMockVerticalPct;

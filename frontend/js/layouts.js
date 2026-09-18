@@ -1,5 +1,5 @@
 /**
- * Layout config — 4 receipt layouts (1–4 photos) — The Receipt Club (KiKi)
+ * Layout config — 4 receipt layouts (1–4 photos) — The Receipt Club (KiKi event theme)
  * Select page: img/booths/the-receipt-club/Layout/layout-2/layout-N.jpg
  * Preview / print: .../Layout/frame/frame-select/layoutN/layout-Nkiki.jpg
  */

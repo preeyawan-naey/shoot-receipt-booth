@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/css/admin.css?v=18" />
+    <link rel="stylesheet" href="/admin/css/admin.css?v=23" />
   </head>
   <body>
     <div class="admin-login" id="admin-login">
@@ -77,6 +77,10 @@
           <button class="admin-nav__item admin-nav__item--active" type="button" data-view="dashboard">
             <span class="admin-nav__icon">▣</span>
             Dashboard
+          </button>
+          <button class="admin-nav__item" type="button" data-view="booths">
+            <span class="admin-nav__icon">◫</span>
+            Booths
           </button>
           <button class="admin-nav__item" type="button" data-view="payment">
             <span class="admin-nav__icon">฿</span>
@@ -193,6 +197,107 @@
             </div>
           </div>
         </section>
+        </div>
+
+        <div id="view-booths" hidden>
+          <section class="admin-panel" id="booths-list-panel">
+            <div class="admin-panel__header">
+              <div>
+                <h2 class="admin-panel__title">Booth ทั้งหมด</h2>
+                <p class="admin-panel__subtitle">คลิกแต่ละตู้เพื่อดู flow และ features</p>
+              </div>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table admin-table--booths">
+                <thead>
+                  <tr>
+                    <th>Booth</th>
+                    <th>booth_id</th>
+                    <th>สถานะ</th>
+                    <th>Payment</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="booths-tbody">
+                  <tr>
+                    <td colspan="5" class="admin-table__empty">กำลังโหลด...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="admin-panel" id="booth-detail-panel" hidden>
+            <div class="admin-panel__header admin-panel__header--split">
+              <div>
+                <button class="admin-btn admin-btn--ghost admin-btn--back" id="btn-booth-detail-back" type="button">
+                  ← กลับ
+                </button>
+                <h2 class="admin-panel__title" id="booth-detail-name">—</h2>
+                <p class="admin-panel__subtitle" id="booth-detail-id">—</p>
+              </div>
+              <div class="booth-detail__badges" id="booth-detail-badges"></div>
+            </div>
+
+            <div class="booth-detail-grid">
+              <section class="settings-card booth-detail-grid__full">
+                <header class="settings-card__header">
+                  <h3 class="settings-card__title">Local links &amp; APK</h3>
+                  <p class="settings-card__subtitle">
+                    ลิงก์เปิดหน้าบูธ / backoffice / API — APK คือ Android shell (WebView) ที่ติดตั้งบนตู้
+                  </p>
+                </header>
+                <div class="settings-card__body settings-card__body--stack">
+                  <div class="booth-link-list" id="booth-detail-links"></div>
+                  <dl class="booth-meta-list booth-meta-list--compact" id="booth-detail-app-info"></dl>
+                </div>
+              </section>
+
+              <section class="settings-card">
+                <header class="settings-card__header">
+                  <h3 class="settings-card__title">Customer flow</h3>
+                  <p class="settings-card__subtitle">ลำดับหน้าที่ลูกค้าเห็นบนตู้นี้</p>
+                </header>
+                <div class="settings-card__body">
+                  <ol class="booth-flow" id="booth-detail-flow"></ol>
+                </div>
+              </section>
+
+              <section class="settings-card">
+                <header class="settings-card__header">
+                  <h3 class="settings-card__title">Features</h3>
+                  <p class="settings-card__subtitle">
+                    เปิด/ปิดขั้นตอนใน flow ของตู้ — กดบันทึกเมื่อแก้เสร็จ (หน้าบูธ refresh แล้วใช้ค่าใหม่)
+                  </p>
+                </header>
+                <div class="settings-card__body settings-card__body--stack">
+                  <div class="booth-feature-list" id="booth-detail-features"></div>
+                  <div class="booth-features-actions" id="booth-features-save-bar" hidden>
+                    <p class="booth-features-actions__hint">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</p>
+                    <div class="booth-features-actions__buttons">
+                      <button class="admin-btn admin-btn--ghost" id="btn-booth-features-cancel" type="button">
+                        ยกเลิก
+                      </button>
+                      <button class="admin-btn admin-btn--primary" id="btn-booth-features-save" type="button">
+                        บันทึก
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="settings-card">
+                <header class="settings-card__header">
+                  <h3 class="settings-card__title">Config</h3>
+                  <p class="settings-card__subtitle">ค่าพื้นฐานของตู้</p>
+                </header>
+                <div class="settings-card__body settings-card__body--stack">
+                  <div id="booth-detail-theme-note"></div>
+                  <dl class="booth-meta-list" id="booth-detail-meta"></dl>
+                </div>
+              </section>
+            </div>
+          </section>
         </div>
 
         <div id="view-payment" hidden>
@@ -407,6 +512,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=25"></script>
+    <script src="/admin/js/admin.js?v=30"></script>
   </body>
 </html>

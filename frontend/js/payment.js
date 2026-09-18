@@ -148,10 +148,17 @@ function formatTierCopyLabel(prints) {
   return `Copies ${count}`;
 }
 
+const DEFAULT_PACKAGE_ART_BOOTH_ID = "the-receipt-club";
+
 function getPackageArtBase() {
   const boothId =
-    typeof getBoothId === "function" ? getBoothId() : "the-receipt-club";
+    typeof getBoothId === "function" ? getBoothId() : DEFAULT_PACKAGE_ART_BOOTH_ID;
   return `img/booths/${boothId}/Package`;
+}
+
+function getPackageArtFallbackPath(prints) {
+  const count = Math.max(1, Math.min(3, Math.round(Number(prints) || 1)));
+  return `img/booths/${DEFAULT_PACKAGE_ART_BOOTH_ID}/Package/Copies${count}.png`;
 }
 
 function getPackageArtPath(prints) {
@@ -191,6 +198,7 @@ function renderPackageTierPicker() {
           alt="${formatTierCopyLabel(tier.prints)}"
           loading="eager"
           decoding="async"
+          onerror="this.onerror=null;this.src='${getPackageArtFallbackPath(tier.prints)}';"
         />
       </div>
       <p class="package-card__price">

@@ -2,14 +2,22 @@ const db = require("./db");
 const config = require("./config");
 
 const DEFAULT_BOOTH_ID = "the-receipt-club";
+/** Legacy booth_id aliases — same booth, old id only (e.g. kiki → the-receipt-club). */
 const LEGACY_BOOTH_IDS = {
   kiki: DEFAULT_BOOTH_ID,
 };
+
+function isLegacyBoothId(boothId) {
+  const id = String(boothId || "").trim().toLowerCase();
+  return Boolean(id && LEGACY_BOOTH_IDS[id] && LEGACY_BOOTH_IDS[id] !== id);
+}
 
 const DEFAULT_FEATURES = {
   receipt_download_qr: true,
   receipt_download_qr_print: true,
   guest_name: true,
+  hide_name_back_after_payment: false,
+  frame_select: false,
   discount_field: false,
 };
 
@@ -20,12 +28,13 @@ const DEFAULT_PROFILES = {
   [DEFAULT_BOOTH_ID]: {
     booth_id: DEFAULT_BOOTH_ID,
     name: "The Receipt Club",
+    /** Event skin (KiKi) — not a separate booth; swap home_image / layout_set per event. */
     theme: "kiki",
     home_image: "img/booths/the-receipt-club/index-kiki.png",
     home_logo: "img/booths/the-receipt-club/logo2.png",
     layout_set: "kiki",
     supabase_bucket: "the-receipt-club",
-    features: { ...DEFAULT_FEATURES },
+    features: { ...DEFAULT_FEATURES, hide_name_back_after_payment: true },
     is_active: true,
   },
   [SNAP_ON_RECEIPT_BOOTH_ID]: {
@@ -36,7 +45,7 @@ const DEFAULT_PROFILES = {
     home_logo: "img/booths/snap-on-receipt/logo.png",
     layout_set: "snap-on-receipt",
     supabase_bucket: "snap-on-receipt",
-    features: { ...DEFAULT_FEATURES },
+    features: { ...DEFAULT_FEATURES, guest_name: false, frame_select: true },
     is_active: true,
   },
 };
@@ -65,22 +74,26 @@ async function migrateLegacyBoothProfiles() {
     if (!legacyRow) continue;
 
     const targetRow = await getProfileRow(targetId);
-    if (targetRow) continue;
+    if (!targetRow) {
+      await upsertProfile({
+        booth_id: targetId,
+        name:
+          legacyRow.name === "KiKi Booth" || legacyRow.name === legacyId
+            ? DEFAULT_PROFILE.name
+            : legacyRow.name || DEFAULT_PROFILE.name,
+        theme: legacyRow.theme,
+        home_image: legacyRow.home_image,
+        home_logo: legacyRow.home_logo,
+        layout_set: legacyRow.layout_set,
+        supabase_bucket: legacyRow.supabase_bucket || defaultSupabaseBucketForBooth(targetId),
+        features: parseFeatures(legacyRow.features),
+        is_active: legacyRow.is_active !== false && legacyRow.is_active !== 0,
+      });
+    }
 
-    await upsertProfile({
-      booth_id: targetId,
-      name:
-        legacyRow.name === "KiKi Booth" || legacyRow.name === legacyId
-          ? DEFAULT_PROFILE.name
-          : legacyRow.name || DEFAULT_PROFILE.name,
-      theme: legacyRow.theme,
-      home_image: legacyRow.home_image,
-      home_logo: legacyRow.home_logo,
-      layout_set: legacyRow.layout_set,
-      supabase_bucket: legacyRow.supabase_bucket || defaultSupabaseBucketForBooth(targetId),
-      features: parseFeatures(legacyRow.features),
-      is_active: legacyRow.is_active !== false && legacyRow.is_active !== 0,
-    });
+    if (legacyRow.is_active !== false && legacyRow.is_active !== 0) {
+      await upsertProfile({ booth_id: legacyId, is_active: false });
+    }
   }
 }
 
@@ -174,10 +187,52 @@ async function migrateReceiptClubAssetPaths() {
   }
 }
 
+async function migrateSnapOnReceiptGuestNameDisabled() {
+  const row = await getProfileRow(SNAP_ON_RECEIPT_BOOTH_ID);
+  if (!row) return;
+
+  const features = parseFeatures(row.features);
+  if (features.guest_name === false) return;
+
+  await upsertProfile({
+    booth_id: SNAP_ON_RECEIPT_BOOTH_ID,
+    features: { ...features, guest_name: false },
+  });
+}
+
+async function migrateReceiptClubHideNameBackAfterPayment() {
+  const row = await getProfileRow(DEFAULT_BOOTH_ID);
+  if (!row) return;
+
+  const features = parseFeatures(row.features);
+  if (features.hide_name_back_after_payment === true) return;
+
+  await upsertProfile({
+    booth_id: DEFAULT_BOOTH_ID,
+    features: { ...features, hide_name_back_after_payment: true },
+  });
+}
+
+async function migrateSnapOnReceiptFrameSelectEnabled() {
+  const row = await getProfileRow(SNAP_ON_RECEIPT_BOOTH_ID);
+  if (!row) return;
+
+  const features = parseFeatures(row.features);
+  if (features.frame_select === true) return;
+
+  await upsertProfile({
+    booth_id: SNAP_ON_RECEIPT_BOOTH_ID,
+    features: { ...features, frame_select: true },
+  });
+}
+
 async function ensureDefaultProfiles() {
   await migrateLegacyBoothProfiles();
   await migrateSupabaseBucketDefaults();
   await migrateReceiptClubAssetPaths();
+  await migrateSnapOnReceiptGuestNameDisabled();
+  await migrateReceiptClubHideNameBackAfterPayment();
+  await migrateSnapOnReceiptFrameSelectEnabled();
   for (const profile of Object.values(DEFAULT_PROFILES)) {
     const existing = await getProfileRow(profile.booth_id);
     if (existing) continue;
@@ -203,7 +258,7 @@ async function listProfiles() {
   if (!rows.length) {
     return Object.values(DEFAULT_PROFILES).map((profile) => mergeWithBuiltinDefaults(profile, profile.booth_id));
   }
-  return rows.map((row) => profileFromRow(row));
+  return rows.filter((row) => !isLegacyBoothId(row.booth_id)).map((row) => profileFromRow(row));
 }
 
 async function upsertProfile(input) {
@@ -280,7 +335,9 @@ module.exports = {
   DEFAULT_BOOTH_ID,
   DEFAULT_FEATURES,
   DEFAULT_PROFILES,
+  LEGACY_BOOTH_IDS,
   normalizeBoothId,
+  isLegacyBoothId,
   parseFeatures,
   ensureDefaultProfiles,
   migrateLegacyBoothProfiles,

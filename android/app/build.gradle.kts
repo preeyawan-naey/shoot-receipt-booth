@@ -23,7 +23,7 @@ android {
         buildConfigField(
             "String",
             "BOOTH_ID",
-            "\"the-receipt-club\"",
+            "\"snap-on-receipt\"",
         )
     }
 

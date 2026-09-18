@@ -70,6 +70,33 @@ function updateNameEntrySubmitState() {
   submitBtn.disabled = !input.value.trim();
 }
 
+function shouldHideNameEntryBackAfterPayment() {
+  if (
+    typeof isBoothFeatureEnabled !== "function" ||
+    !isBoothFeatureEnabled("hide_name_back_after_payment")
+  ) {
+    return false;
+  }
+  if (typeof isBoothPaymentRequired === "function" && !isBoothPaymentRequired()) {
+    return false;
+  }
+  if (typeof getActivePaymentSessionId === "function") {
+    return Boolean(getActivePaymentSessionId());
+  }
+  return false;
+}
+
+function syncNameEntryBackButton() {
+  const btn = document.getElementById("btn-name-back");
+  if (!btn) return;
+  const hide = shouldHideNameEntryBackAfterPayment();
+  btn.hidden = hide;
+  btn.style.display = hide ? "none" : "";
+  btn.toggleAttribute("aria-hidden", hide);
+  if (hide) btn.disabled = true;
+  else btn.removeAttribute("disabled");
+}
+
 function goToNameEntry() {
   navigateTo("name-entry");
 
@@ -78,6 +105,11 @@ function goToNameEntry() {
     input.value = sanitizeBoothGuestNameInput(getBoothGuestName());
     updateNameEntrySubmitState();
   }
+
+  syncNameEntryBackButton();
+  window.requestAnimationFrame(() => {
+    syncNameEntryBackButton();
+  });
 }
 
 async function submitNameAndContinue() {
@@ -97,6 +129,7 @@ async function submitNameAndContinue() {
 }
 
 function goToBoothNameBack() {
+  if (shouldHideNameEntryBackAfterPayment()) return;
   clearBoothGuestName();
   goToHome();
 }
@@ -156,3 +189,4 @@ document.addEventListener("DOMContentLoaded", initBoothNameModule);
 
 window.getBoothGuestName = getBoothGuestName;
 window.clearBoothGuestName = clearBoothGuestName;
+window.syncNameEntryBackButton = syncNameEntryBackButton;

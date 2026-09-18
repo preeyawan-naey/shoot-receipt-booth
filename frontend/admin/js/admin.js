@@ -19,9 +19,69 @@
     view: "dashboard",
     paymentBoothId: "the-receipt-club",
     pathBoothId: null,
+    boothDetailId: null,
+    boothsCache: [],
+    appInfo: null,
+    appInfoError: null,
+    boothDetailFeatures: {},
+    boothFeaturesSaved: {},
+    boothFeaturesDraft: {},
+    boothDetailPayment: null,
   };
 
   let lastPaidPaymentMode = "static_qr";
+
+  const BOOTH_FEATURE_META = {
+    guest_name: {
+      label: "กรอกชื่อ",
+      hint: "หน้า Enter your name หลังชำระเงิน",
+    },
+    frame_select: {
+      label: "เลือก Frame",
+      hint: "หน้า Frame หลังเลือก Layout",
+    },
+    hide_name_back_after_payment: {
+      label: "ซ่อน Back หลังชำระ (หน้าชื่อ)",
+      hint: "ไม่ให้ย้อนกลับไป Payment หลังชำระสำเร็จ",
+    },
+    receipt_download_qr: {
+      label: "QR ดาวน์โหลดรูป",
+      hint: "หน้า QR Download หลังพิมพ์",
+    },
+    receipt_download_qr_print: {
+      label: "QR บนใบพิมพ์",
+      hint: "พิมพ์ QR ลงบน receipt",
+    },
+    discount_field: {
+      label: "ช่องส่วนลด",
+      hint: "ฟิลด์ discount (ถ้ามีในตู้)",
+    },
+  };
+
+  const BOOTH_FEATURE_ORDER = [
+    "guest_name",
+    "frame_select",
+    "hide_name_back_after_payment",
+    "receipt_download_qr",
+    "receipt_download_qr_print",
+    "discount_field",
+  ];
+
+  const BOOTH_FEATURE_DEFAULTS = {
+    guest_name: true,
+    frame_select: false,
+    hide_name_back_after_payment: false,
+    receipt_download_qr: true,
+    receipt_download_qr_print: true,
+    discount_field: false,
+  };
+
+  function resolveBoothFeature(features, key) {
+    if (features && Object.prototype.hasOwnProperty.call(features, key)) {
+      return Boolean(features[key]);
+    }
+    return Boolean(BOOTH_FEATURE_DEFAULTS[key]);
+  }
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -132,9 +192,9 @@
 
     if (!res.ok) {
       let message = data.message || `Request failed (${res.status})`;
-      if (res.status === 404 && path.startsWith("/payment")) {
+      if (res.status === 404 && (path.startsWith("/payment") || path === "/app-info")) {
         message =
-          "Payment API not found — restart backend server (npm start) or redeploy latest code";
+          "API not found — restart backend server (npm start) or deploy โค้ดล่าสุด";
       }
       if (res.status === 503) {
         showLogin(message);
@@ -179,6 +239,496 @@
   function buildPaymentApiPath(path) {
     const params = new URLSearchParams({ booth_id: getSelectedPaymentBoothId() });
     return `${path}?${params.toString()}`;
+  }
+
+  function buildPaymentApiPathForBooth(path, boothId) {
+    const params = new URLSearchParams({ booth_id: boothId });
+    return `${path}?${params.toString()}`;
+  }
+
+  function filterBoothsForSession(booths) {
+    const list = Array.isArray(booths) ? booths : [];
+    if (isBoothScopedAdmin()) {
+      const scopedId = getSessionBoothId();
+      return list.filter((booth) => booth.booth_id === scopedId);
+    }
+    if (state.pathBoothId) {
+      return list.filter((booth) => booth.booth_id === state.pathBoothId);
+    }
+    return list;
+  }
+
+  function buildBoothFlowSteps(booth, payment) {
+    const features = booth?.features || {};
+    const paymentEnabled =
+      payment?.payment_enabled ??
+      (payment?.payment_mode ? payment.payment_mode !== "free" : booth?.payment_enabled);
+    const steps = ["Home / START"];
+
+    if (paymentEnabled) {
+      steps.push("Package", "Payment");
+    }
+    if (resolveBoothFeature(features, "guest_name")) {
+      steps.push("Enter name");
+    }
+    steps.push("Layout");
+    if (resolveBoothFeature(features, "frame_select")) {
+      steps.push("Frame");
+    }
+    steps.push("Camera", "Preview / Print");
+    if (resolveBoothFeature(features, "receipt_download_qr")) {
+      steps.push("QR Download");
+    }
+    return steps;
+  }
+
+  function renderBoothFlowSteps(steps) {
+    return steps
+      .map((step, index) => {
+        const arrow =
+          index < steps.length - 1
+            ? '<span class="booth-flow__arrow" aria-hidden="true">→</span>'
+            : "";
+        return `<li class="booth-flow__step">${escapeHtml(step)}</li>${arrow}`;
+      })
+      .join("");
+  }
+
+  function canEditBoothFeatures(boothId) {
+    if (isSuperAdminSession()) return true;
+    if (isBoothScopedAdmin()) return getSessionBoothId() === boothId;
+    return true;
+  }
+
+  function renderBoothFeatureRows(features, boothId) {
+    const editable = canEditBoothFeatures(boothId);
+    return BOOTH_FEATURE_ORDER.map((key) => {
+      const meta = BOOTH_FEATURE_META[key] || { label: key, hint: "" };
+      const enabled = resolveBoothFeature(features, key);
+      const disabledAttr = editable ? "" : " disabled";
+      return `
+        <div class="booth-feature-row">
+          <div>
+            <p class="booth-feature-row__label">${escapeHtml(meta.label)}</p>
+            <p class="booth-feature-row__hint">${escapeHtml(meta.hint)}</p>
+          </div>
+          <label class="admin-toggle admin-toggle--compact booth-feature-toggle">
+            <input
+              type="checkbox"
+              data-booth-feature="${escapeHtml(key)}"
+              data-booth-id="${escapeHtml(boothId)}"
+              ${enabled ? "checked" : ""}${disabledAttr}
+            />
+            <span class="admin-toggle__track" aria-hidden="true"></span>
+            <span class="admin-toggle__text">
+              <span class="admin-toggle__label">${enabled ? "เปิด" : "ปิด"}</span>
+            </span>
+          </label>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function boothFeaturesAreDirty() {
+    return BOOTH_FEATURE_ORDER.some(
+      (key) =>
+        resolveBoothFeature(state.boothFeaturesDraft, key) !==
+        resolveBoothFeature(state.boothFeaturesSaved, key)
+    );
+  }
+
+  function setBoothFeaturesState(features) {
+    const next = { ...(features || {}) };
+    state.boothFeaturesSaved = { ...next };
+    state.boothFeaturesDraft = { ...next };
+    state.boothDetailFeatures = { ...next };
+  }
+
+  function updateBoothFeaturesSaveBar() {
+    const bar = $("#booth-features-save-bar");
+    if (!bar) return;
+    bar.hidden = !boothFeaturesAreDirty();
+  }
+
+  function updateBoothFlowPreview(features) {
+    const flowEl = $("#booth-detail-flow");
+    if (!flowEl) return;
+    const cached = state.boothsCache.find((booth) => booth.booth_id === state.boothDetailId) || {};
+    flowEl.innerHTML = renderBoothFlowSteps(
+      buildBoothFlowSteps({ features }, state.boothDetailPayment || cached)
+    );
+  }
+
+  function renderBoothFeatureToggles(boothId, features) {
+    const featuresEl = $("#booth-detail-features");
+    if (!featuresEl || !boothId) return;
+    featuresEl.innerHTML = renderBoothFeatureRows(features, boothId);
+    updateBoothFeaturesSaveBar();
+  }
+
+  async function saveBoothFeatures(boothId, features) {
+    const result = await apiFetch(`/booth-profiles/${encodeURIComponent(boothId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ features }),
+    });
+
+    const savedFeatures = result.profile?.features || features;
+    setBoothFeaturesState(savedFeatures);
+
+    const cached = state.boothsCache.find((booth) => booth.booth_id === boothId);
+    if (cached) {
+      cached.features = savedFeatures;
+    }
+
+    return savedFeatures;
+  }
+
+  function formatBoothThemeLabel(theme, boothId) {
+    const id = boothId || "";
+    if (theme === "kiki" || id === "the-receipt-club") {
+      return "KiKi (event theme) — ตู้เดียวกับ The Receipt Club";
+    }
+    if (theme === "snap" || id === "snap-on-receipt") {
+      return "Snap on Receipt";
+    }
+    return theme || "—";
+  }
+
+  function formatLayoutSetLabel(layoutSet, boothId) {
+    const set = layoutSet || "";
+    if (set === "kiki" || boothId === "the-receipt-club") {
+      return "KiKi — artwork/layout สำหรับ event (The Receipt Club)";
+    }
+    if (set === "snap-on-receipt") {
+      return "Snap on Receipt layouts";
+    }
+    return set || "—";
+  }
+
+  function renderBoothThemeNote(boothId, theme) {
+    if (boothId !== "the-receipt-club" && theme !== "kiki") return "";
+    return `
+      <p class="booth-meta-note">
+        KiKi ไม่ใช่ตู้แยก — เป็นแค่ธีม/รูป event ของ <strong>The Receipt Club</strong>
+        (<code>booth_id: the-receipt-club</code>) เปลี่ยน <code>theme</code>, <code>home_image</code>,
+        <code>layout_set</code> ตามงานได้
+      </p>
+    `;
+  }
+
+  function renderBoothMetaRows(booth, payment, profile) {
+    const boothId = booth.booth_id || profile?.booth_id || "";
+    const theme = booth.theme || profile?.theme || "";
+    const layoutSet = booth.layout_set || profile?.layout_set || "";
+    const rows = [
+      ["Layout set", formatLayoutSetLabel(layoutSet, boothId)],
+      ["Theme", formatBoothThemeLabel(theme, boothId)],
+      ["Payment mode", paymentModeLabel(payment?.payment_mode || booth.payment_mode)],
+      ["Supabase bucket", profile?.supabase_bucket || "—"],
+      ["Home image", profile?.home_image || "—"],
+      ["Home logo", profile?.home_logo || "—"],
+    ];
+    return rows
+      .map(
+        ([label, value]) =>
+          `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value || "—"))}</dd>`
+      )
+      .join("");
+  }
+
+  function getLocalOrigin() {
+    return window.location.origin || "http://localhost:3000";
+  }
+
+  function getBoothLocalLinks(boothId) {
+    const origin = getLocalOrigin();
+    const encodedBoothId = encodeURIComponent(boothId);
+    return [
+      {
+        label: "หน้าบูธ (Frontend)",
+        url: `${origin}/?booth=${encodedBoothId}`,
+      },
+      {
+        label: "Backoffice ตู้นี้",
+        url: `${origin}/admin/${encodedBoothId}`,
+      },
+      {
+        label: "API Booth settings",
+        url: `${origin}/api/booth/settings?booth_id=${encodedBoothId}`,
+      },
+      {
+        label: "API Admin payment",
+        url: `${origin}/api/admin/payment?booth_id=${encodedBoothId}`,
+      },
+    ];
+  }
+
+  function renderBoothLinkRows(boothId) {
+    return getBoothLocalLinks(boothId)
+      .map(
+        (link) => `
+          <div class="booth-link-row">
+            <span class="booth-link-row__label">${escapeHtml(link.label)}</span>
+            <code class="booth-link-row__url">${escapeHtml(link.url)}</code>
+            <div class="booth-link-row__actions">
+              <a class="booth-link-row__btn" href="${escapeHtml(link.url)}" target="_blank" rel="noopener">เปิด</a>
+              <button class="booth-link-row__btn" type="button" data-copy-url="${escapeHtml(link.url)}">Copy</button>
+            </div>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function renderBoothAppInfoRows(appInfo, boothId) {
+    const app = appInfo || {};
+    const hasVersion = Boolean(app.version_name || app.version_code != null);
+    const versionLabel = hasVersion
+      ? app.version_name && app.version_code != null
+        ? `${app.version_name} (${app.version_code})`
+        : app.version_name || String(app.version_code)
+      : state.appInfoError
+        ? `โหลดไม่ได้ — ${state.appInfoError}`
+        : "— (รีสตาร์ท backend แล้ว refresh)";
+
+    const sourceLabel =
+      app.source === "gradle"
+        ? "อ่านจาก build.gradle.kts"
+        : app.source === "fallback"
+          ? "จาก android-app-info.json (fallback)"
+          : app.source || "—";
+
+    const apkBoothId = app.booth_id || "—";
+    const boothMismatch =
+      boothId && app.booth_id && app.booth_id !== boothId
+        ? ` (APK build สำหรับ ${app.booth_id} — ไม่ตรง web booth นี้)`
+        : "";
+
+    const rows = [
+      ["APK version", versionLabel],
+      ["APK booth_id (build)", `${apkBoothId}${boothMismatch}`],
+      ["Application ID", app.application_id || "—"],
+      ["ที่มาข้อมูล", sourceLabel],
+      ["Gradle config", app.gradle_path || "android/app/build.gradle.kts"],
+    ];
+    return rows
+      .map(
+        ([label, value]) =>
+          `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value || "—"))}</dd>`
+      )
+      .join("");
+  }
+
+  async function loadAppInfo() {
+    try {
+      const data = await apiFetch("/app-info");
+      state.appInfo = data.app || null;
+      state.appInfoError = state.appInfo?.version_name ? null : "ไม่พบข้อมูลเวอร์ชัน";
+      return state.appInfo;
+    } catch (error) {
+      console.warn("[admin/app-info]", error);
+      state.appInfoError = error.message || "โหลดไม่สำเร็จ";
+      return state.appInfo;
+    }
+  }
+
+  async function fetchBoothsSummary() {
+    try {
+      const data = await apiFetch("/booths/summary");
+      if (Array.isArray(data.booths)) {
+        return data.booths;
+      }
+    } catch (error) {
+      console.warn("[admin/booths/summary]", error);
+    }
+
+    const profileData = await apiFetch("/booth-profiles");
+    const profiles = (Array.isArray(profileData.profiles) ? profileData.profiles : []).filter(
+      (profile) => profile.booth_id !== "kiki"
+    );
+    return Promise.all(
+      profiles.map(async (profile) => {
+        let paymentMode = "static_qr";
+        try {
+          const paymentData = await apiFetch(
+            buildPaymentApiPathForBooth("/payment", profile.booth_id)
+          );
+          paymentMode = paymentData.payment?.payment_mode || paymentMode;
+        } catch {
+          /* ignore per-booth payment errors */
+        }
+
+        return {
+          booth_id: profile.booth_id,
+          name: profile.name,
+          is_active: profile.is_active !== false,
+          theme: profile.theme,
+          layout_set: profile.layout_set,
+          features: profile.features || {},
+          payment_mode: paymentMode,
+          payment_enabled: paymentMode !== "free",
+        };
+      })
+    );
+  }
+
+  function showBoothsListPanel() {
+    state.boothDetailId = null;
+    const listPanel = $("#booths-list-panel");
+    const detailPanel = $("#booth-detail-panel");
+    if (listPanel) listPanel.hidden = false;
+    if (detailPanel) detailPanel.hidden = true;
+  }
+
+  async function showBoothDetail(boothId) {
+    state.boothDetailId = boothId;
+    const listPanel = $("#booths-list-panel");
+    const detailPanel = $("#booth-detail-panel");
+    if (listPanel) listPanel.hidden = true;
+    if (detailPanel) detailPanel.hidden = false;
+
+    const cached = state.boothsCache.find((booth) => booth.booth_id === boothId);
+    if (cached) {
+      renderBoothDetail(cached, null);
+    }
+
+    try {
+      await loadAppInfo();
+      const [profileData, paymentData] = await Promise.all([
+        apiFetch(`/booth-profiles/${encodeURIComponent(boothId)}`),
+        apiFetch(buildPaymentApiPathForBooth("/payment", boothId)),
+      ]);
+      const booth = {
+        ...(cached || {}),
+        ...(profileData.profile || {}),
+        booth_id: boothId,
+        name: profileData.profile?.name || cached?.name || boothId,
+        features: profileData.profile?.features || cached?.features || {},
+        payment_mode:
+          paymentData.payment?.payment_mode ||
+          cached?.payment_mode ||
+          "static_qr",
+        payment_enabled: (paymentData.payment?.payment_mode || cached?.payment_mode) !== "free",
+      };
+      renderBoothDetail(booth, paymentData.payment || {}, profileData.profile || {});
+    } catch (error) {
+      console.error("[admin/booth-detail]", error);
+      setText("booth-detail-name", boothId);
+      setText("booth-detail-id", `โหลดรายละเอียดไม่สำเร็จ: ${error.message}`);
+    }
+  }
+
+  function renderBoothDetail(booth, payment, profile) {
+    const boothId = booth.booth_id || state.boothDetailId;
+    const name = booth.name || boothId;
+    const isActive = booth.is_active !== false;
+
+    setText("booth-detail-name", name);
+    setText("booth-detail-id", `booth_id: ${boothId}`);
+
+    const badges = $("#booth-detail-badges");
+    if (badges) {
+      badges.innerHTML = `
+        <span class="status-badge ${isActive ? "status-badge--paid" : "status-badge--expired"}">
+          ${isActive ? "Active" : "Inactive"}
+        </span>
+        <span class="status-badge status-badge--${escapeHtml(booth.payment_mode || payment?.payment_mode || "static_qr")}">
+          ${escapeHtml(paymentModeLabel(booth.payment_mode || payment?.payment_mode))}
+        </span>
+      `;
+    }
+
+    if (payment) {
+      state.boothDetailPayment = payment;
+    }
+
+    const features = booth.features || state.boothDetailFeatures || {};
+    setBoothFeaturesState(features);
+    renderBoothFeatureToggles(boothId, state.boothFeaturesDraft);
+    updateBoothFlowPreview(state.boothFeaturesDraft);
+
+    const linksEl = $("#booth-detail-links");
+    if (linksEl && boothId) {
+      linksEl.innerHTML = renderBoothLinkRows(boothId);
+    }
+
+    const appInfoEl = $("#booth-detail-app-info");
+    if (appInfoEl) {
+      appInfoEl.innerHTML = renderBoothAppInfoRows(state.appInfo, boothId);
+    }
+
+    const themeNoteEl = $("#booth-detail-theme-note");
+    const boothIdForNote = booth.booth_id || profile?.booth_id || state.boothDetailId;
+    const themeForNote = booth.theme || profile?.theme || "";
+    if (themeNoteEl) {
+      themeNoteEl.innerHTML = renderBoothThemeNote(boothIdForNote, themeForNote);
+    }
+
+    const metaEl = $("#booth-detail-meta");
+    if (metaEl) {
+      metaEl.innerHTML = renderBoothMetaRows(booth, payment || booth, profile || booth);
+    }
+  }
+
+  function renderBoothsList(booths) {
+    const tbody = $("#booths-tbody");
+    if (!tbody) return;
+
+    const rows = filterBoothsForSession(booths);
+    if (!rows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" class="admin-table__empty">ไม่พบ booth</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map((booth) => {
+        const statusClass = booth.is_active !== false ? "status-badge--paid" : "status-badge--expired";
+        const statusLabel = booth.is_active !== false ? "Active" : "Inactive";
+        const paymentLabel = paymentModeLabel(booth.payment_mode);
+        return `
+          <tr data-booth-id="${escapeHtml(booth.booth_id)}">
+            <td><strong>${escapeHtml(booth.name || booth.booth_id)}</strong></td>
+            <td><code>${escapeHtml(booth.booth_id)}</code></td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td><span class="status-badge status-badge--${escapeHtml(booth.payment_mode || "static_qr")}">${escapeHtml(paymentLabel)}</span></td>
+            <td>
+              <button class="admin-table__action-btn" type="button" data-booth-open="${escapeHtml(booth.booth_id)}">
+                ดูรายละเอียด
+              </button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
+  async function loadBoothsAdmin() {
+    showBoothsListPanel();
+    const tbody = $("#booths-tbody");
+    if (tbody) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" class="admin-table__empty">กำลังโหลด...</td></tr>';
+    }
+
+    try {
+      await loadAppInfo();
+      state.boothsCache = await fetchBoothsSummary();
+      renderBoothsList(state.boothsCache);
+    } catch (error) {
+      console.error("[admin/booths]", error);
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="5" class="admin-table__empty">โหลดไม่สำเร็จ: ${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+  }
+
+  function openBoothDetailView(boothId) {
+    if (!boothId) return;
+    showAdminView("booths");
+    const title = $("#admin-topbar-title");
+    if (title) title.textContent = "Booth Detail";
+    showBoothDetail(boothId).catch(console.error);
   }
 
   function appendBoothScopeToQuery(params) {
@@ -502,6 +1052,7 @@
     state.view = viewName;
     const dashboardView = $("#view-dashboard");
     const paymentView = $("#view-payment");
+    const boothsView = $("#view-booths");
 
     document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {
       item.classList.toggle("admin-nav__item--active", item.dataset.view === viewName);
@@ -509,12 +1060,16 @@
 
     if (dashboardView) dashboardView.hidden = viewName !== "dashboard";
     if (paymentView) paymentView.hidden = viewName !== "payment";
+    if (boothsView) boothsView.hidden = viewName !== "booths";
 
     const eyebrow = $("#admin-topbar-eyebrow");
     const title = $("#admin-topbar-title");
     if (viewName === "payment") {
       if (eyebrow) eyebrow.textContent = "Backoffice / Payment";
       if (title) title.textContent = "Payment Settings";
+    } else if (viewName === "booths") {
+      if (eyebrow) eyebrow.textContent = "Backoffice / Booths";
+      if (title) title.textContent = state.boothDetailId ? "Booth Detail" : "Booth Overview";
     } else {
       if (eyebrow) eyebrow.textContent = "Backoffice / Dashboard";
       if (title) title.textContent = "Control Tower";
@@ -970,6 +1525,14 @@
       await loadPaymentAdmin();
       return;
     }
+    if (state.view === "booths") {
+      if (state.boothDetailId) {
+        await showBoothDetail(state.boothDetailId);
+      } else {
+        await loadBoothsAdmin();
+      }
+      return;
+    }
     await Promise.all([loadDashboard(), loadPayments()]);
   }
 
@@ -1096,6 +1659,9 @@
       item.addEventListener("click", () => {
         const viewName = item.dataset.view;
         if (!viewName) return;
+        if (viewName === "booths") {
+          state.boothDetailId = null;
+        }
         showAdminView(viewName);
         refresh().catch(console.error);
       });
@@ -1134,6 +1700,88 @@
     $("#payment-booth-select")?.addEventListener("change", () => {
       state.paymentBoothId = getSelectedPaymentBoothId();
       loadPaymentAdmin().catch(console.error);
+    });
+
+    $("#booths-tbody")?.addEventListener("click", (event) => {
+      const actionBtn = event.target.closest("[data-booth-open]");
+      const row = event.target.closest("tr[data-booth-id]");
+      const boothId = actionBtn?.dataset.boothOpen || row?.dataset.boothId;
+      if (!boothId) return;
+      openBoothDetailView(boothId);
+    });
+
+    $("#booth-detail-links")?.addEventListener("click", async (event) => {
+      const copyBtn = event.target.closest("[data-copy-url]");
+      if (!copyBtn) return;
+      const url = copyBtn.getAttribute("data-copy-url");
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        copyBtn.textContent = "Copied";
+        window.setTimeout(() => {
+          copyBtn.textContent = "Copy";
+        }, 1200);
+      } catch (error) {
+        console.warn("[admin/copy-url]", error);
+      }
+    });
+
+    $("#booth-detail-features")?.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-booth-feature]");
+      if (!input || input.disabled) return;
+
+      const featureKey = input.dataset.boothFeature;
+      if (!featureKey) return;
+
+      const enabled = input.checked;
+      state.boothFeaturesDraft = {
+        ...state.boothFeaturesDraft,
+        [featureKey]: enabled,
+      };
+
+      const labelEl = input.closest(".admin-toggle")?.querySelector(".admin-toggle__label");
+      if (labelEl) labelEl.textContent = enabled ? "เปิด" : "ปิด";
+
+      updateBoothFeaturesSaveBar();
+      updateBoothFlowPreview(state.boothFeaturesDraft);
+    });
+
+    $("#btn-booth-features-save")?.addEventListener("click", async () => {
+      const boothId = state.boothDetailId;
+      if (!boothId || !boothFeaturesAreDirty()) return;
+
+      const saveBtn = $("#btn-booth-features-save");
+      const cancelBtn = $("#btn-booth-features-cancel");
+      if (saveBtn) saveBtn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+
+      try {
+        await saveBoothFeatures(boothId, state.boothFeaturesDraft);
+        renderBoothFeatureToggles(boothId, state.boothFeaturesDraft);
+        updateBoothFlowPreview(state.boothFeaturesDraft);
+      } catch (error) {
+        console.error("[admin/booth-features-save]", error);
+        window.alert(`บันทึกไม่สำเร็จ: ${error.message}`);
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+    });
+
+    $("#btn-booth-features-cancel")?.addEventListener("click", () => {
+      const boothId = state.boothDetailId;
+      if (!boothId) return;
+
+      state.boothFeaturesDraft = { ...state.boothFeaturesSaved };
+      renderBoothFeatureToggles(boothId, state.boothFeaturesDraft);
+      updateBoothFlowPreview(state.boothFeaturesDraft);
+    });
+
+    $("#btn-booth-detail-back")?.addEventListener("click", () => {
+      showBoothsListPanel();
+      const title = $("#admin-topbar-title");
+      if (title) title.textContent = "Booth Overview";
+      loadBoothsAdmin().catch(console.error);
     });
   }
 

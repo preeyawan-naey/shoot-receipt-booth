@@ -109,6 +109,20 @@ function getBoothFeatures() {
   return boothProfileState?.features || {};
 }
 
+function getBoothFeatureDefault(name) {
+  const boothId = normalizeBoothId(getBoothId());
+  if (name === "guest_name" && boothId === "snap-on-receipt") {
+    return false;
+  }
+  if (name === "hide_name_back_after_payment") {
+    return boothId === "the-receipt-club";
+  }
+  if (name === "frame_select") {
+    return boothId === "snap-on-receipt";
+  }
+  return true;
+}
+
 function getBoothFeature(name, fallback = false) {
   const features = getBoothFeatures();
   if (features && Object.prototype.hasOwnProperty.call(features, name)) {
@@ -118,7 +132,8 @@ function getBoothFeature(name, fallback = false) {
 }
 
 function isBoothFeatureEnabled(name, fallback = true) {
-  return getBoothFeature(name, fallback);
+  const resolvedFallback = fallback === true ? getBoothFeatureDefault(name) : fallback;
+  return getBoothFeature(name, resolvedFallback);
 }
 
 const BOOTH_THEME_CLASS_PREFIX = "booth-theme--";

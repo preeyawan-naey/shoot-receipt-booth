@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const config = require("../config");
+const { getAndroidAppInfo } = require("../androidAppInfo");
 const admin = require("../admin");
 const boothSettings = require("../boothSettings");
 const boothProfiles = require("../boothProfiles");
@@ -380,6 +381,41 @@ router.get("/booth-profiles", async (_req, res) => {
     return res.json({ success: true, profiles });
   } catch (error) {
     console.error("[admin/booth-profiles/list]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/app-info", (_req, res) => {
+  return res.json({
+    success: true,
+    app: getAndroidAppInfo(),
+    server_origin: config.publicUrl || null,
+  });
+});
+
+router.get("/booths/summary", async (_req, res) => {
+  try {
+    const profiles = (await boothProfiles.listProfiles()).filter(
+      (profile) => !boothProfiles.isLegacyBoothId(profile.booth_id)
+    );
+    const booths = await Promise.all(
+      profiles.map(async (profile) => {
+        const paymentMode = await paymentSettings.getPaymentMode(profile.booth_id);
+        return {
+          booth_id: profile.booth_id,
+          name: profile.name,
+          is_active: profile.is_active !== false,
+          theme: profile.theme,
+          layout_set: profile.layout_set,
+          features: profile.features || boothProfiles.DEFAULT_FEATURES,
+          payment_mode: paymentMode,
+          payment_enabled: paymentMode !== "free",
+        };
+      })
+    );
+    return res.json({ success: true, booths });
+  } catch (error) {
+    console.error("[admin/booths/summary]", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

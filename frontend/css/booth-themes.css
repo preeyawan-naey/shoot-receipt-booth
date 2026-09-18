@@ -1,6 +1,6 @@
 /**
  * Per-booth theme tokens — home, layout select, frame select, preview.
- * Frame select page is currently hidden (BOOTH_SHOW_FRAME_SELECT = false).
+ * Frame select page — enabled per booth via features.frame_select.
  * Scoped by .booth-theme--{booth_id} on #booth-screen.
  */
 
@@ -38,6 +38,11 @@
 }
 
 .booth-theme--snap-on-receipt {
+  /* Accent — matches START pill (#343434) */
+  --booth-accent: #343434;
+  --color-red: var(--booth-accent);
+  --color-brown: var(--booth-accent);
+
   /* Home */
   --booth-home-padding-top: clamp(48px, 8vh, 80px);
   --booth-home-padding-bottom: clamp(48px, 7vh, 80px);
@@ -62,7 +67,7 @@
   --booth-frame-card-shadow: 0 5px 18px rgba(0, 0, 0, 0.09);
   --booth-frame-selected-outline-width: 3px;
   --booth-frame-selected-outline-offset: 3px;
-  --booth-frame-selected-shadow: 0 8px 24px rgba(214, 40, 40, 0.14);
+  --booth-frame-selected-shadow: 0 8px 24px rgba(52, 52, 52, 0.14);
   --booth-frame-title-size: clamp(28px, 5vw, 36px);
   --booth-frame-header-margin-bottom: clamp(6px, 1.2vh, 14px);
 
@@ -71,6 +76,23 @@
   --booth-preview-receipt-width: clamp(140px, 36vw, 280px);
   --booth-preview-layout4-scale: 1;
   --booth-preview-layout4-width: clamp(140px, 36vw, 280px);
+}
+
+/* Hardcoded reds in styles.css — tie to booth accent */
+.booth-theme--snap-on-receipt .package-card__badge {
+  background: var(--booth-accent);
+}
+
+.booth-theme--snap-on-receipt .frame-card--style.frame-card--selected .frame-card__preview {
+  box-shadow: 0 8px 28px rgba(52, 52, 52, 0.18);
+}
+
+.booth-theme--snap-on-receipt .payment-body__qr-spinner {
+  border-color: rgba(52, 52, 52, 0.2);
+}
+
+.booth-theme--snap-on-receipt .payment-body__dev-accept {
+  background: rgba(52, 52, 52, 0.08);
 }
 
 @media (min-width: 680px) and (max-width: 860px) and (min-height: 1050px) and (max-height: 1200px) {

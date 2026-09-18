@@ -275,6 +275,7 @@ function navigateToCamera(layoutId) {
 function bindEvents() {
   const btnStartOverlay = document.getElementById("btn-start-overlay");
   const btnStart = document.getElementById("btn-start");
+  const btnLayoutBack = document.getElementById("btn-layout-back");
   const btnFrameBack = document.getElementById("btn-frame-back");
   const btnCameraBack = document.getElementById("btn-camera-back");
   const btnRetake = document.getElementById("btn-retake");
@@ -292,6 +293,12 @@ function bindEvents() {
   btnStart?.addEventListener("click", (event) => {
     event.stopPropagation();
     void goToBoothStart();
+  });
+
+  btnLayoutBack?.addEventListener("click", () => {
+    appState.selectedLayout = null;
+    clearBoothSelection();
+    void goToBoothLayoutBack();
   });
 
   btnFrameBack?.addEventListener("click", () => {

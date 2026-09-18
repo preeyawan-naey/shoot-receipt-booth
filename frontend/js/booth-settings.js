@@ -100,6 +100,21 @@ async function goToBoothStart() {
 }
 
 function goToBoothBack() {
+  goToNameEntry();
+}
+
+function goToBoothLayoutBack() {
+  if (
+    typeof isBoothFeatureEnabled === "function" &&
+    isBoothFeatureEnabled("guest_name", true)
+  ) {
+    goToNameEntry();
+    return;
+  }
+  if (isBoothPaymentRequired()) {
+    goToPackageSelect();
+    return;
+  }
   goToHome();
 }
 
@@ -163,6 +178,7 @@ function syncNativePaymentNotify(sessionId = null, sessionAmount = null) {
 }
 
 window.goToPostPaymentOrNameStep = goToPostPaymentOrNameStep;
+window.goToBoothLayoutBack = goToBoothLayoutBack;
 
 function resyncNativePaymentNotifyAfterSettings() {
   if (!isStaticQrPaymentMode()) return;
