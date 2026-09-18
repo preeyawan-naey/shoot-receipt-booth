@@ -52,13 +52,25 @@ function buildCreatedAtFilter(range, paramStartIndex = 1) {
   };
 }
 
-async function getDashboardMetrics(period, from, to) {
+function appendBoothFilter(boothId, whereParts, params) {
+  if (!boothId) return;
+  const idx = params.length + 1;
+  whereParts.push(`booth_id = $${idx}`);
+  params.push(boothId);
+}
+
+async function getDashboardMetrics(period, from, to, boothId = null) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
     return { ok: false, status: 400, message: "Invalid custom date range" };
   }
 
-  const { clause, params } = buildCreatedAtFilter(range);
+  const whereParts = [];
+  const params = [];
+  const { clause, params: dateParams } = buildCreatedAtFilter(range, 1);
+  whereParts.push(clause);
+  params.push(...dateParams);
+  appendBoothFilter(boothId, whereParts, params);
 
   const aggregate = await db.queryOne(
     `SELECT
@@ -66,7 +78,7 @@ async function getDashboardMetrics(period, from, to) {
        COALESCE(SUM(amount), 0) AS total_revenue,
        COALESCE(SUM(print_count), 0) AS total_prints
      FROM photo_sessions
-     WHERE ${clause}`,
+     WHERE ${whereParts.join(" AND ")}`,
     params
   );
 
@@ -101,6 +113,7 @@ async function listPhotoHistory({
   search = "",
   page = 1,
   limit = 10,
+  boothId = null,
 }) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
@@ -130,6 +143,12 @@ async function listPhotoHistory({
     params.push(`%${trimmedSearch}%`);
   }
 
+  if (boothId) {
+    const idx = params.length + 1;
+    where.push(`booth_id = $${idx}`);
+    params.push(boothId);
+  }
+
   const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const countRow = await db.queryOne(
@@ -143,7 +162,7 @@ async function listPhotoHistory({
   const offsetIdx = params.length + 2;
 
   const rows = await db.queryAll(
-    `SELECT id, created_at, layout_id, frame_id, print_count, amount, payment_mode, download_id
+    `SELECT id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode, download_id
      FROM photo_sessions
      ${whereClause}
      ORDER BY created_at DESC
@@ -167,6 +186,7 @@ function formatPhotoRow(row) {
   return {
     id: row.id,
     created_at: row.created_at,
+    booth_id: row.booth_id || "—",
     layout_id: row.layout_id || "—",
     frame_id: row.frame_id || "—",
     print_count: Number(row.print_count || 0),

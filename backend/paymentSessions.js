@@ -1,12 +1,17 @@
 const { randomUUID } = require("crypto");
 const db = require("./db");
 const paymentSettings = require("./paymentSettings");
+const boothProfiles = require("./boothProfiles");
 const omise = require("./omise");
 
 const SESSION_TTL_MS = Number(process.env.PAYMENT_SESSION_TTL_MS) || 5 * 60 * 1000;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function resolveBoothId(boothIdRaw) {
+  return boothProfiles.normalizeBoothId(boothIdRaw);
 }
 
 function parseAmountFromNotification(text, expectedAmount) {
@@ -55,18 +60,20 @@ function resolvePrintCountForAmount(amount, tiers) {
   return tier?.prints || 1;
 }
 
-function mapSession(row, paymentMode = "omise", tiers = null) {
+function mapSession(row, paymentMode = "omise", tiers = null, boothId = null) {
   if (!row) return null;
 
+  const resolvedBoothId = resolveBoothId(row.booth_id || boothId);
   let qrImageUrl = null;
   if (paymentMode === "static_qr") {
-    qrImageUrl = "/api/booth/payment-qr";
+    qrImageUrl = paymentSettings.buildPaymentQrUrl(resolvedBoothId);
   } else if (row.omise_charge_id) {
     qrImageUrl = `/api/booth/payment-sessions/${row.id}/qr-image`;
   }
 
   return {
     id: row.id,
+    booth_id: resolvedBoothId,
     amount: Number(row.amount),
     print_count: tiers ? resolvePrintCountForAmount(row.amount, tiers) : 1,
     status: row.status,
@@ -83,12 +90,19 @@ function mapSession(row, paymentMode = "omise", tiers = null) {
 
 async function getSessionRowById(sessionId) {
   return db.queryOne(
-    `SELECT id, amount, status, created_at, expires_at, paid_at,
+    `SELECT id, booth_id, amount, status, created_at, expires_at, paid_at,
             raw_notification, omise_source_id, omise_charge_id
      FROM payment_sessions
      WHERE id = $1`,
     [sessionId]
   );
+}
+
+async function getPaymentContextForRow(row) {
+  const boothId = resolveBoothId(row?.booth_id);
+  const paymentMode = await paymentSettings.getPaymentMode(boothId);
+  const tiers = await paymentSettings.getPaymentTiers(boothId);
+  return { boothId, paymentMode, tiers };
 }
 
 async function syncOmiseChargeStatus(row) {
@@ -114,15 +128,25 @@ async function getSessionById(sessionId) {
   let row = await getSessionRowById(sessionId);
   if (!row) return null;
 
-  const paymentMode = await paymentSettings.getPaymentMode();
-  const tiers = await paymentSettings.getPaymentTiers();
+  const { boothId, paymentMode, tiers } = await getPaymentContextForRow(row);
   if (paymentMode === "omise") {
     row = await syncOmiseChargeStatus(row);
   }
-  return mapSession(row, paymentMode, tiers);
+  return mapSession(row, paymentMode, tiers, boothId);
 }
 
-async function cancelPendingSessions() {
+async function cancelPendingSessions(boothIdRaw = null) {
+  const boothId = boothIdRaw ? resolveBoothId(boothIdRaw) : null;
+  if (boothId) {
+    await db.execute(
+      `UPDATE payment_sessions
+       SET status = 'cancelled'
+       WHERE status = 'pending' AND booth_id = $1`,
+      [boothId]
+    );
+    return;
+  }
+
   await db.execute(
     `UPDATE payment_sessions
      SET status = 'cancelled'
@@ -131,13 +155,15 @@ async function cancelPendingSessions() {
   );
 }
 
-async function createSession({ amount: requestedAmount } = {}) {
+async function createSession({ amount: requestedAmount, boothId: boothIdRaw } = {}) {
   await expirePendingSessions();
-  await cancelPendingSessions();
 
-  const payment = await paymentSettings.getPaymentSettings();
-  const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode());
-  const tiers = payment.payment_tiers || (await paymentSettings.getPaymentTiers());
+  const boothId = resolveBoothId(boothIdRaw);
+  await cancelPendingSessions(boothId);
+
+  const payment = await paymentSettings.getPaymentSettings(boothId);
+  const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode(boothId));
+  const tiers = payment.payment_tiers || (await paymentSettings.getPaymentTiers(boothId));
 
   if (paymentMode === "free") {
     throw new Error("ระบบชำระเงินถูกปิดจากหลังบ้าน");
@@ -157,9 +183,9 @@ async function createSession({ amount: requestedAmount } = {}) {
   const expiresAt = new Date(createdAt.getTime() + SESSION_TTL_MS);
 
   await db.execute(
-    `INSERT INTO payment_sessions (id, amount, status, created_at, expires_at)
-     VALUES ($1, $2, 'pending', $3, $4)`,
-    [id, amount, createdAt.toISOString(), expiresAt.toISOString()]
+    `INSERT INTO payment_sessions (id, booth_id, amount, status, created_at, expires_at)
+     VALUES ($1, $2, $3, 'pending', $4, $5)`,
+    [id, boothId, amount, createdAt.toISOString(), expiresAt.toISOString()]
   );
 
   if (paymentMode === "static_qr") {
@@ -207,34 +233,46 @@ async function cancelSession(sessionId) {
   return getSessionById(sessionId);
 }
 
-async function getLatestPendingSession() {
+async function getLatestPendingSession(boothIdRaw = null) {
   await expirePendingSessions();
-  const row = await db.queryOne(
-    `SELECT id, amount, status, created_at, expires_at, paid_at,
-            raw_notification, omise_source_id, omise_charge_id
-     FROM payment_sessions
-     WHERE status = 'pending'
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    []
-  );
-  const paymentMode = await paymentSettings.getPaymentMode();
-  const tiers = await paymentSettings.getPaymentTiers();
-  return mapSession(row, paymentMode, tiers);
+  const boothId = boothIdRaw ? resolveBoothId(boothIdRaw) : null;
+  const row = boothId
+    ? await db.queryOne(
+        `SELECT id, booth_id, amount, status, created_at, expires_at, paid_at,
+                raw_notification, omise_source_id, omise_charge_id
+         FROM payment_sessions
+         WHERE status = 'pending' AND booth_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [boothId]
+      )
+    : await db.queryOne(
+        `SELECT id, booth_id, amount, status, created_at, expires_at, paid_at,
+                raw_notification, omise_source_id, omise_charge_id
+         FROM payment_sessions
+         WHERE status = 'pending'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        []
+      );
+
+  if (!row) return null;
+  const { boothId: resolvedBoothId, paymentMode, tiers } = await getPaymentContextForRow(row);
+  return mapSession(row, paymentMode, tiers, resolvedBoothId);
 }
 
 async function getPendingSessionById(sessionId) {
   await expirePendingSessions();
   const row = await db.queryOne(
-    `SELECT id, amount, status, created_at, expires_at, paid_at,
+    `SELECT id, booth_id, amount, status, created_at, expires_at, paid_at,
             raw_notification, omise_source_id, omise_charge_id
      FROM payment_sessions
      WHERE id = $1 AND status = 'pending'`,
     [sessionId]
   );
-  const paymentMode = await paymentSettings.getPaymentMode();
-  const tiers = await paymentSettings.getPaymentTiers();
-  return mapSession(row, paymentMode, tiers);
+  if (!row) return null;
+  const { boothId, paymentMode, tiers } = await getPaymentContextForRow(row);
+  return mapSession(row, paymentMode, tiers, boothId);
 }
 
 async function markSessionPaidFromOmise(sessionId, charge) {
@@ -315,39 +353,41 @@ async function confirmFromBankNotification({
   packageName = null,
   sessionId = null,
   source = "bank_notify",
-}) {
+  boothId: boothIdRaw = null,
+} = {}) {
   await expirePendingSessions();
 
-  let pending = sessionId ? await getPendingSessionById(sessionId) : null;
-  if (!pending) {
-    pending = await getLatestPendingSession();
+  let session = null;
+  if (sessionId) {
+    session = await getPendingSessionById(sessionId);
+  } else {
+    session = await getLatestPendingSession(boothIdRaw);
   }
 
-  if (!pending) {
-    return {
-      matched: false,
-      reason: sessionId ? "session_not_found_or_not_pending" : "no_pending_session",
-      session_id: sessionId || null,
-    };
+  if (!session) {
+    return { matched: false, reason: "no_pending_session" };
   }
 
-  const parsedAmount = parseAmountFromNotification(text, pending.amount);
-  if (parsedAmount !== pending.amount) {
+  const parsedAmount = parseAmountFromNotification(text, session.amount);
+  if (parsedAmount == null) {
     return {
       matched: false,
-      reason: "amount_mismatch",
-      expected: pending.amount,
-      parsed: parsedAmount,
-      session_id: pending.id,
+      reason: "amount_not_matched",
+      session_id: session.id,
+      expected_amount: session.amount,
+      text_preview: String(text || "").slice(0, 120),
+      package_name: packageName || null,
+      source,
     };
   }
 
   const paidAt = nowIso();
   const raw = JSON.stringify({
-    provider: source,
-    text: String(text || ""),
-    package: packageName || null,
-    session_id: pending.id,
+    provider: "bank_notify",
+    source,
+    package_name: packageName || null,
+    text: String(text || "").slice(0, 2000),
+    parsed_amount: parsedAmount,
     received_at: paidAt,
   });
 
@@ -355,27 +395,30 @@ async function confirmFromBankNotification({
     `UPDATE payment_sessions
      SET status = 'paid', paid_at = $1, raw_notification = $2
      WHERE id = $3 AND status = 'pending'`,
-    [paidAt, raw, pending.id]
+    [paidAt, raw, session.id]
   );
 
   if (!changes) {
-    return { matched: false, reason: "session_already_closed", session_id: pending.id };
+    return { matched: false, reason: "session_already_closed", session_id: session.id };
   }
 
   return {
     matched: true,
-    session_id: pending.id,
-    amount: pending.amount,
+    session_id: session.id,
+    booth_id: session.booth_id,
+    amount: parsedAmount,
     paid_at: paidAt,
   };
 }
 
 module.exports = {
+  SESSION_TTL_MS,
   createSession,
   getSessionById,
   cancelSession,
+  getLatestPendingSession,
+  getPendingSessionById,
   confirmFromBankNotification,
   confirmFromOmiseCharge,
   parseAmountFromNotification,
-  SESSION_TTL_MS,
 };

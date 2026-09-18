@@ -1,14 +1,20 @@
 const config = require("./config");
 const paymentSettings = require("./paymentSettings");
 const omise = require("./omise");
+const boothProfiles = require("./boothProfiles");
 
-async function getSettings() {
-  const payment = await paymentSettings.getPaymentSettings();
+async function getSettings(boothIdRaw) {
+  const boothId = boothProfiles.normalizeBoothId(boothIdRaw);
+  const profile = await boothProfiles.getProfile(boothId);
+  const payment = await paymentSettings.getPaymentSettings(boothId);
   const omiseConfigured = omise.isConfigured();
   const paymentMode = payment.payment_mode || "static_qr";
   const omiseActive = paymentMode === "omise" && omiseConfigured;
 
   const settings = {
+    booth_id: boothId,
+    profile,
+    features: profile.features,
     omise_configured: omiseConfigured,
     omise_enabled: paymentMode === "omise",
     omise_payment_active: omiseActive,

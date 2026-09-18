@@ -1,12 +1,14 @@
 const { randomUUID } = require("crypto");
 const db = require("./db");
 const paymentSettings = require("./paymentSettings");
+const boothProfiles = require("./boothProfiles");
 
 function mapSession(row) {
   if (!row) return null;
   return {
     id: row.id,
     created_at: row.created_at,
+    booth_id: row.booth_id || null,
     layout_id: row.layout_id || null,
     frame_id: row.frame_id || null,
     print_count: Number(row.print_count || 0),
@@ -17,13 +19,15 @@ function mapSession(row) {
 }
 
 async function recordSession({
+  boothId = null,
   layoutId = null,
   frameId = null,
   printCount = 1,
   downloadId = null,
   amount: requestedAmount = null,
 } = {}) {
-  const payment = await paymentSettings.getPaymentSettings();
+  const normalizedBoothId = boothId ? boothProfiles.normalizeBoothId(boothId) : null;
+  const payment = await paymentSettings.getPaymentSettings(normalizedBoothId);
   const amount = Math.round(
     Number(requestedAmount ?? payment.payment_amount) || payment.payment_tiers?.[0]?.amount || 59
   );
@@ -34,11 +38,12 @@ async function recordSession({
 
   await db.execute(
     `INSERT INTO photo_sessions
-       (id, created_at, layout_id, frame_id, print_count, amount, payment_mode, download_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       (id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode, download_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       id,
       createdAt,
+      normalizedBoothId,
       layoutId || null,
       frameId || null,
       copies,
@@ -51,6 +56,7 @@ async function recordSession({
   return mapSession({
     id,
     created_at: createdAt,
+    booth_id: normalizedBoothId,
     layout_id: layoutId || null,
     frame_id: frameId || null,
     print_count: copies,
