@@ -407,7 +407,7 @@
           <td>${escapeHtml(String(row.print_count ?? 0))}</td>
           <td>${formatMoney(row.amount)}</td>
           <td><span class="status-badge status-badge--${escapeHtml(row.payment_mode || "omise")}">${escapeHtml(paymentModeLabel(row.payment_mode))}</span></td>
-          <td>${renderPrintStatusCell(row)}</td>
+          <td class="admin-table__cell-print-status">${renderPrintStatusCell(row)}</td>
         </tr>`
         )
         .join("");
@@ -536,11 +536,11 @@
   function renderPrintStatusCell(row) {
     const status = row.print_status || "printed";
     const label = printStatusLabel(status);
-    const note =
-      status === "failed" && row.print_note
-        ? `<span class="admin-table__note">${escapeHtml(row.print_note)}</span>`
-        : "";
-    return `<span class="status-badge status-badge--print-${escapeHtml(status)}">${escapeHtml(label)}</span>${note}`;
+    const note = row.print_note ? String(row.print_note).trim() : "";
+    const tooltipAttrs = note
+      ? ` class="print-status-tip print-status-tip--has-note" data-tooltip="${escapeHtml(note)}" tabindex="0" aria-label="${escapeHtml(note)}"`
+      : ` class="print-status-tip"`;
+    return `<span${tooltipAttrs}><span class="status-badge status-badge--print status-badge--print-${escapeHtml(status)}">${escapeHtml(label)}</span></span>`;
   }
 
   function defaultPaymentTiers() {
