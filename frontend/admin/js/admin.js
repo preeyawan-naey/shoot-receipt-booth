@@ -413,6 +413,8 @@
         .join("");
     }
 
+    bindPrintStatusTooltips(tbody);
+
     const pagination = data.pagination || { page: 1, limit: state.limit, total: 0 };
     renderPagination({
       page: pagination.page,
@@ -538,9 +540,62 @@
     const label = printStatusLabel(status);
     const note = row.print_note ? String(row.print_note).trim() : "";
     const tooltipAttrs = note
-      ? ` class="print-status-tip print-status-tip--has-note" data-tooltip="${escapeHtml(note)}" tabindex="0" aria-label="${escapeHtml(note)}"`
+      ? ` class="print-status-tip print-status-tip--has-note" data-tooltip="${escapeHtml(note)}" title="${escapeHtml(note)}" tabindex="0" aria-label="${escapeHtml(note)}"`
       : ` class="print-status-tip"`;
     return `<span${tooltipAttrs}><span class="status-badge status-badge--print status-badge--print-${escapeHtml(status)}">${escapeHtml(label)}</span></span>`;
+  }
+
+  let activePrintStatusTooltip = null;
+
+  function removePrintStatusTooltip() {
+    if (activePrintStatusTooltip) {
+      activePrintStatusTooltip.remove();
+      activePrintStatusTooltip = null;
+    }
+  }
+
+  function positionPrintStatusTooltip(anchor, tooltip) {
+    const rect = anchor.getBoundingClientRect();
+    const margin = 8;
+    tooltip.style.visibility = "hidden";
+    tooltip.style.display = "block";
+    const tooltipRect = tooltip.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+
+    let top = rect.bottom + margin;
+    if (top + tooltipRect.height > window.innerHeight - margin) {
+      top = rect.top - tooltipRect.height - margin;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    tooltip.style.visibility = "visible";
+  }
+
+  function showPrintStatusTooltip(anchor) {
+    const text = anchor.getAttribute("data-tooltip");
+    if (!text) return;
+
+    removePrintStatusTooltip();
+    const tooltip = document.createElement("div");
+    tooltip.className = "print-status-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    tooltip.textContent = text;
+    document.body.appendChild(tooltip);
+    positionPrintStatusTooltip(anchor, tooltip);
+    activePrintStatusTooltip = tooltip;
+  }
+
+  function bindPrintStatusTooltips(container) {
+    if (!container) return;
+
+    container.querySelectorAll(".print-status-tip--has-note").forEach((anchor) => {
+      anchor.addEventListener("mouseenter", () => showPrintStatusTooltip(anchor));
+      anchor.addEventListener("mouseleave", removePrintStatusTooltip);
+      anchor.addEventListener("focus", () => showPrintStatusTooltip(anchor));
+      anchor.addEventListener("blur", removePrintStatusTooltip);
+    });
   }
 
   function defaultPaymentTiers() {

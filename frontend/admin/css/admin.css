@@ -603,6 +603,10 @@ body {
   text-overflow: ellipsis;
 }
 
+.admin-table td.admin-table__cell-print-status {
+  overflow: visible;
+}
+
 .admin-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -684,15 +688,9 @@ body {
   cursor: help;
 }
 
-.print-status-tip--has-note::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  left: auto;
-  transform: none;
-  z-index: 30;
-  width: max-content;
+.print-status-tooltip {
+  position: fixed;
+  z-index: 10000;
   max-width: min(360px, 72vw);
   padding: 0.55rem 0.75rem;
   border-radius: 8px;
@@ -704,33 +702,7 @@ body {
   white-space: normal;
   text-align: left;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
-  opacity: 0;
-  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
-}
-
-.print-status-tip--has-note::before {
-  content: "";
-  position: absolute;
-  bottom: calc(100% + 2px);
-  right: 12px;
-  left: auto;
-  transform: none;
-  border: 6px solid transparent;
-  border-top-color: #1f2937;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
-}
-
-.print-status-tip--has-note:hover::after,
-.print-status-tip--has-note:hover::before,
-.print-status-tip--has-note:focus-visible::after,
-.print-status-tip--has-note:focus-visible::before {
-  opacity: 1;
-  visibility: visible;
 }
 
 /* Pagination */
