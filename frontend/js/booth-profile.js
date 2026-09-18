@@ -123,6 +123,24 @@ function isBoothFeatureEnabled(name, fallback = true) {
 
 const BOOTH_THEME_CLASS_PREFIX = "booth-theme--";
 
+function applyHomeStartButton(boothId) {
+  const btn = document.getElementById("btn-start");
+  const overlay = document.getElementById("btn-start-overlay");
+  if (!btn) return;
+
+  const normalized = normalizeBoothId(boothId);
+  if (normalized === "snap-on-receipt") {
+    btn.classList.remove("start-btn--blink");
+    btn.innerHTML = 'START <span class="start-btn__chevron" aria-hidden="true">&gt;</span>';
+    if (overlay) overlay.setAttribute("aria-label", "START");
+    return;
+  }
+
+  btn.classList.add("start-btn--blink");
+  btn.innerHTML = '<span class="start-btn__highlight">TAP</span> to START';
+  if (overlay) overlay.setAttribute("aria-label", "Tap to START");
+}
+
 function applyBoothThemeToDom(boothId) {
   const screen = document.getElementById("booth-screen");
   if (!screen) return;
@@ -134,6 +152,7 @@ function applyBoothThemeToDom(boothId) {
     }
   }
   screen.classList.add(`${BOOTH_THEME_CLASS_PREFIX}${normalized}`);
+  applyHomeStartButton(normalized);
 }
 
 function applyBoothProfileToDom(profile) {

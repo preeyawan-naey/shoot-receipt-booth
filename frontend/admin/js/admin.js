@@ -377,12 +377,10 @@
     const m = data.metrics || {};
 
     setText("kpi-revenue", formatMoney(m.totalRevenue));
-    setText(
-      "kpi-revenue-hint",
-      `${m.totalSessions || 0} ครั้ง × ฿${m.ticketPrice || 59}`
-    );
+    setText("kpi-cafe-label", "Cafe Share (40%)");
+    setText("kpi-receipt-club-label", "The Receipt Club (60%)");
     setText("kpi-cafe", formatMoney(m.cafeShare));
-    setText("kpi-noey", formatMoney(m.noeyShare));
+    setText("kpi-receipt-club", formatMoney(m.receiptClubShare ?? m.noeyShare));
     setText("kpi-sessions", String(m.totalSessions ?? "—"));
     setText("kpi-prints", String(m.totalPrints ?? "—"));
     setText("table-period-label", data.periodLabel || state.period);
@@ -397,7 +395,7 @@
     const items = data.photos || [];
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="admin-table__empty">ยังไม่มีประวัติการถ่ายรูป</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="admin-table__empty">ยังไม่มีประวัติการถ่ายรูป</td></tr>`;
     } else {
       tbody.innerHTML = items
         .map(
@@ -409,6 +407,7 @@
           <td>${escapeHtml(String(row.print_count ?? 0))}</td>
           <td>${formatMoney(row.amount)}</td>
           <td><span class="status-badge status-badge--${escapeHtml(row.payment_mode || "omise")}">${escapeHtml(paymentModeLabel(row.payment_mode))}</span></td>
+          <td>${renderPrintStatusCell(row)}</td>
         </tr>`
         )
         .join("");
@@ -428,7 +427,12 @@
     const start = total === 0 ? 0 : (page - 1) * limit + 1;
     const end = Math.min(page * limit, total);
 
-    setText("pagination-info", `Showing ${start} to ${end} of ${total} entries`);
+    setText(
+      "pagination-info",
+      total === 0
+        ? "แสดง 0 จากทั้งหมด 0"
+        : `แสดง ${start} - ${end} จากทั้งหมด ${total}`
+    );
 
     const controls = $("#pagination-controls");
     if (!controls) return;
@@ -519,8 +523,24 @@
     if (mode === "static_qr") return "Static QR";
     if (mode === "omise") return "Omise";
     if (mode === "free") return "Free";
-    if (mode === "manual") return "Manual";
+    if (mode === "manual") return "Static QR";
     return mode || "—";
+  }
+
+  function printStatusLabel(status) {
+    if (status === "pending") return "รอปริ้น";
+    if (status === "failed") return "ปริ้นไม่สำเร็จ";
+    return "สำเร็จ";
+  }
+
+  function renderPrintStatusCell(row) {
+    const status = row.print_status || "printed";
+    const label = printStatusLabel(status);
+    const note =
+      status === "failed" && row.print_note
+        ? `<span class="admin-table__note">${escapeHtml(row.print_note)}</span>`
+        : "";
+    return `<span class="status-badge status-badge--print-${escapeHtml(status)}">${escapeHtml(label)}</span>${note}`;
   }
 
   function defaultPaymentTiers() {

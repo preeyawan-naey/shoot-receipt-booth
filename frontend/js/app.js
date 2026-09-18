@@ -354,7 +354,10 @@ function bindEvents() {
       }
 
       showPrintOverlay("Done!");
-      void recordBoothPhotoSession();
+      await recordBoothPhotoSession({ printStatus: "printed" });
+      if (typeof clearCompletedPaymentSessionId === "function") {
+        clearCompletedPaymentSessionId();
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       hidePrintOverlay();
       showQrDownloadPage();
@@ -367,6 +370,10 @@ function bindEvents() {
           : error?.message
             ? `เตรียมใบพิมพ์ไม่สำเร็จ: ${error.message}`
             : "ไม่สามารถเตรียมรูปสำหรับปริ้นได้ กรุณาตรวจสอบว่า backend เปิดอยู่";
+      void recordBoothPhotoSession({
+        printStatus: "failed",
+        printNote: `ปริ้นไม่สำเร็จ: ${msg}`,
+      });
       alert(msg);
     } finally {
       btn.disabled = false;

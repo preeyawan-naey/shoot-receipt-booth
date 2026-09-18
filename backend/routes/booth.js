@@ -158,7 +158,17 @@ router.post("/payment-sessions/:id/cancel", async (req, res) => {
 
 router.post("/photo-sessions", async (req, res) => {
   try {
-    const session = await photoSessions.recordSession({
+    const printStatusRaw =
+      typeof req.body?.print_status === "string" ? req.body.print_status.trim() : "printed";
+    const printStatus = ["pending", "printed", "failed"].includes(printStatusRaw)
+      ? printStatusRaw
+      : "printed";
+
+    const session = await photoSessions.finalizeSession({
+      paymentSessionId:
+        typeof req.body?.payment_session_id === "string"
+          ? req.body.payment_session_id
+          : null,
       boothId:
         typeof req.body?.booth_id === "string"
           ? req.body.booth_id
@@ -168,6 +178,8 @@ router.post("/photo-sessions", async (req, res) => {
       printCount: req.body?.print_count,
       amount: req.body?.amount,
       downloadId: typeof req.body?.download_id === "string" ? req.body.download_id : null,
+      printStatus,
+      printNote: typeof req.body?.print_note === "string" ? req.body.print_note : null,
     });
     return res.status(201).json({ success: true, session });
   } catch (error) {

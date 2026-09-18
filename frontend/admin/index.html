@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/css/admin.css?v=14" />
+    <link rel="stylesheet" href="/admin/css/admin.css?v=16" />
   </head>
   <body>
     <div class="admin-login" id="admin-login">
@@ -121,15 +121,14 @@
           <article class="kpi-card kpi-card--primary">
             <p class="kpi-card__label">Total Revenue</p>
             <p class="kpi-card__value" id="kpi-revenue">—</p>
-            <p class="kpi-card__hint" id="kpi-revenue-hint">sessions × price</p>
           </article>
           <article class="kpi-card">
-            <p class="kpi-card__label">Cafe Share (30%)</p>
+            <p class="kpi-card__label" id="kpi-cafe-label">Cafe Share (40%)</p>
             <p class="kpi-card__value" id="kpi-cafe">—</p>
           </article>
           <article class="kpi-card">
-            <p class="kpi-card__label">Noey Share (70%)</p>
-            <p class="kpi-card__value" id="kpi-noey">—</p>
+            <p class="kpi-card__label" id="kpi-receipt-club-label">The Receipt Club (60%)</p>
+            <p class="kpi-card__value" id="kpi-receipt-club">—</p>
           </article>
           <article class="kpi-card">
             <p class="kpi-card__label">Total Sessions</p>
@@ -159,27 +158,30 @@
             </div>
           </div>
 
-          <div class="admin-table-wrap">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>เวลา</th>
-                  <th>Layout</th>
-                  <th>Frame</th>
-                  <th>พิมพ์</th>
-                  <th>ราคา</th>
-                  <th>ชำระ</th>
-                </tr>
-              </thead>
-              <tbody id="payments-tbody">
-                <tr><td colspan="6" class="admin-table__empty">Loading...</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <div class="admin-table-card">
+            <div class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>Layout</th>
+                    <th>Frame</th>
+                    <th>พิมพ์</th>
+                    <th>ราคา</th>
+                    <th>ชำระ</th>
+                    <th>สถานะปริ้น</th>
+                  </tr>
+                </thead>
+                <tbody id="payments-tbody">
+                  <tr><td colspan="7" class="admin-table__empty">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
 
-          <div class="admin-pagination">
-            <p class="admin-pagination__info" id="pagination-info">—</p>
-            <div class="admin-pagination__controls" id="pagination-controls"></div>
+            <div class="admin-pagination">
+              <p class="admin-pagination__info" id="pagination-info">—</p>
+              <div class="admin-pagination__controls" id="pagination-controls"></div>
+            </div>
           </div>
         </section>
         </div>
@@ -396,6 +398,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=19"></script>
+    <script src="/admin/js/admin.js?v=23"></script>
   </body>
 </html>

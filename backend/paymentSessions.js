@@ -2,6 +2,7 @@ const { randomUUID } = require("crypto");
 const db = require("./db");
 const paymentSettings = require("./paymentSettings");
 const boothProfiles = require("./boothProfiles");
+const photoSessions = require("./photoSessions");
 const omise = require("./omise");
 
 const SESSION_TTL_MS = Number(process.env.PAYMENT_SESSION_TTL_MS) || 150 * 1000;
@@ -275,6 +276,17 @@ async function getPendingSessionById(sessionId) {
   return mapSession(row, paymentMode, tiers, boothId);
 }
 
+async function createPhotoSessionForPaidPayment(sessionId) {
+  const row = await db.queryOne(
+    `SELECT id, booth_id, amount, paid_at, created_at, omise_charge_id
+     FROM payment_sessions
+     WHERE id = $1 AND status = 'paid'`,
+    [sessionId]
+  );
+  if (!row) return null;
+  return photoSessions.ensurePendingFromPaymentSession(row);
+}
+
 async function markSessionPaidFromOmise(sessionId, charge) {
   const paidAt = nowIso();
   const raw = JSON.stringify({
@@ -291,6 +303,10 @@ async function markSessionPaidFromOmise(sessionId, charge) {
      WHERE id = $3 AND status = 'pending'`,
     [paidAt, raw, sessionId]
   );
+
+  if (changes) {
+    await createPhotoSessionForPaidPayment(sessionId);
+  }
 
   return Boolean(changes);
 }
@@ -401,6 +417,8 @@ async function confirmFromBankNotification({
   if (!changes) {
     return { matched: false, reason: "session_already_closed", session_id: session.id };
   }
+
+  await createPhotoSessionForPaidPayment(session.id);
 
   return {
     matched: true,

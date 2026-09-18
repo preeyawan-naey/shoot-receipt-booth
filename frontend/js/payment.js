@@ -7,6 +7,8 @@ const PAYMENT_POLL_MS = 2500;
 
 let paymentCountdownTimer = null;
 let paymentPollTimer = null;
+const COMPLETED_PAYMENT_SESSION_STORAGE_KEY = "completedPaymentSessionId";
+
 let paymentSessionId = null;
 let activePaymentSession = null;
 let paymentFlowGeneration = 0;
@@ -63,8 +65,26 @@ function acceptPaymentDevBypass() {
   proceedFromPayment();
 }
 
+function persistCompletedPaymentSessionId() {
+  if (!paymentSessionId) return;
+  try {
+    sessionStorage.setItem(COMPLETED_PAYMENT_SESSION_STORAGE_KEY, paymentSessionId);
+  } catch {}
+}
+
+function clearCompletedPaymentSessionId() {
+  try {
+    sessionStorage.removeItem(COMPLETED_PAYMENT_SESSION_STORAGE_KEY);
+  } catch {}
+}
+
 function getActivePaymentSessionId() {
-  return paymentSessionId || "";
+  if (paymentSessionId) return paymentSessionId;
+  try {
+    return sessionStorage.getItem(COMPLETED_PAYMENT_SESSION_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
 }
 
 function getActivePaymentSessionAmount() {
@@ -488,6 +508,7 @@ function proceedFromPayment() {
   applySessionPrintCount(activePaymentSession);
   completedPaymentAmount =
     activePaymentSession?.amount ?? selectedPaymentTier?.amount ?? completedPaymentAmount;
+  persistCompletedPaymentSessionId();
   clearPaymentFlow();
   if (typeof goToPostPaymentOrNameStep === "function") {
     goToPostPaymentOrNameStep();

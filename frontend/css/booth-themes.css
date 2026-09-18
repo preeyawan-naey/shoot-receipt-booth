@@ -40,9 +40,12 @@
 .booth-theme--snap-on-receipt {
   /* Home */
   --booth-home-padding-top: clamp(48px, 8vh, 80px);
-  --booth-home-padding-bottom: clamp(40px, 6vh, 72px);
+  --booth-home-padding-bottom: clamp(48px, 7vh, 80px);
   --booth-home-logo-width: 55%;
   --booth-home-art-width: 100%;
+  --booth-home-start-bg: #343434;
+  --booth-home-start-color: #ffffff;
+  --booth-home-start-min-width: clamp(220px, 58vw, 340px);
 
   /* Layout select */
   --booth-layout-grid-column-gap: clamp(24px, 6.5vw, 48px);
@@ -81,9 +84,43 @@
 
   .booth-theme--snap-on-receipt {
     --booth-home-logo-width: 38%;
+    --booth-home-start-min-width: clamp(200px, 52vw, 300px);
     --booth-frame-grid-gap: 12px;
     --booth-preview-dispenser-width: min(100%, clamp(180px, 48vw, 340px));
     --booth-preview-receipt-width: clamp(130px, 34vw, 260px);
     --booth-preview-layout4-width: clamp(130px, 34vw, 260px);
   }
+}
+
+.booth-theme--snap-on-receipt .start-btn {
+  min-width: var(--booth-home-start-min-width);
+  padding: clamp(14px, 2.4vh, 18px) clamp(36px, 8vw, 52px);
+  border-radius: 999px;
+  background: var(--booth-home-start-bg);
+  color: var(--booth-home-start-color);
+  font-size: clamp(18px, 3.8vw, 24px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.booth-theme--snap-on-receipt .start-btn__highlight,
+.booth-theme--snap-on-receipt .start-btn__chevron {
+  color: inherit;
+  font-weight: inherit;
+}
+
+.booth-theme--snap-on-receipt .start-btn__chevron {
+  margin-left: 0.2em;
+}
+
+.booth-theme--snap-on-receipt .start-btn--blink {
+  animation: none;
+}
+
+.booth-theme--snap-on-receipt .home-footer:active .start-btn,
+.booth-theme--snap-on-receipt .start-btn:active {
+  transform: scale(0.98);
+  opacity: 0.94;
 }

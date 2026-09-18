@@ -75,6 +75,9 @@ function goToHome() {
   if (typeof clearQrCountdown === "function") {
     clearQrCountdown();
   }
+  if (typeof clearCompletedPaymentSessionId === "function") {
+    clearCompletedPaymentSessionId();
+  }
   if (typeof clearPaymentCountdown === "function") {
     clearPaymentCountdown();
   }

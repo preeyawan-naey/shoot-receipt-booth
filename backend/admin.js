@@ -1,7 +1,7 @@
 const db = require("./db");
 
-const CAFE_SHARE_RATE = 0.3;
-const NOEY_SHARE_RATE = 0.7;
+const CAFE_SHARE_RATE = 0.4;
+const RECEIPT_CLUB_SHARE_RATE = 0.6;
 
 function parsePeriod(period, from, to) {
   const now = new Date();
@@ -87,7 +87,7 @@ async function getDashboardMetrics(period, from, to, boothId = null) {
   const totalPrints = Number(aggregate?.total_prints || 0);
   const ticketPrice = totalSessions > 0 ? Math.round(totalRevenue / totalSessions) : 59;
   const cafeShare = Math.round(totalRevenue * CAFE_SHARE_RATE);
-  const noeyShare = Math.round(totalRevenue * NOEY_SHARE_RATE);
+  const receiptClubShare = Math.round(totalRevenue * RECEIPT_CLUB_SHARE_RATE);
 
   return {
     ok: true,
@@ -97,9 +97,9 @@ async function getDashboardMetrics(period, from, to, boothId = null) {
       totalRevenue,
       ticketPrice,
       cafeShare,
-      noeyShare,
+      receiptClubShare,
       cafeShareRate: CAFE_SHARE_RATE,
-      noeyShareRate: NOEY_SHARE_RATE,
+      receiptClubShareRate: RECEIPT_CLUB_SHARE_RATE,
       totalSessions,
       totalPrints,
     },
@@ -162,7 +162,8 @@ async function listPhotoHistory({
   const offsetIdx = params.length + 2;
 
   const rows = await db.queryAll(
-    `SELECT id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode, download_id
+    `SELECT id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode,
+            download_id, print_status, print_note
      FROM photo_sessions
      ${whereClause}
      ORDER BY created_at DESC
@@ -183,6 +184,7 @@ async function listPhotoHistory({
 }
 
 function formatPhotoRow(row) {
+  const printStatus = row.print_status || "printed";
   return {
     id: row.id,
     created_at: row.created_at,
@@ -192,6 +194,8 @@ function formatPhotoRow(row) {
     print_count: Number(row.print_count || 0),
     amount: Number(row.amount || 0),
     payment_mode: row.payment_mode || "omise",
+    print_status: printStatus,
+    print_note: row.print_note || null,
   };
 }
 

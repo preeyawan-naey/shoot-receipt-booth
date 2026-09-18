@@ -103,8 +103,15 @@ function goToBoothBack() {
   goToHome();
 }
 
-async function recordBoothPhotoSession({ downloadId = null } = {}) {
+async function recordBoothPhotoSession({
+  downloadId = null,
+  printStatus = "printed",
+  printNote = null,
+} = {}) {
   try {
+    const paymentSessionId =
+      typeof getActivePaymentSessionId === "function" ? getActivePaymentSessionId() : "";
+
     await fetch(`${API_URL}/api/booth/photo-sessions`, {
       method: "POST",
       headers: {
@@ -112,6 +119,7 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        payment_session_id: paymentSessionId || null,
         booth_id: typeof getBoothId === "function" ? getBoothId() : null,
         layout_id: typeof getSelectedLayoutId === "function" ? getSelectedLayoutId() : null,
         frame_id: typeof getSelectedFrameId === "function" ? getSelectedFrameId() : null,
@@ -121,6 +129,8 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
             ? getActivePaymentSessionAmount()
             : boothSettingsState?.payment_amount ?? null,
         download_id: downloadId,
+        print_status: printStatus,
+        print_note: printNote,
       }),
     });
   } catch (error) {

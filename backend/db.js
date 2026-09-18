@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("crypto");
 const config = require("./config");
 
 let mode = null;
@@ -162,23 +163,157 @@ function runSqliteMigration() {
   if (!photoColumns.some((col) => col.name === "booth_id")) {
     sqlite.exec("ALTER TABLE photo_sessions ADD COLUMN booth_id TEXT");
   }
+  if (!photoColumns.some((col) => col.name === "print_status")) {
+    sqlite.exec(
+      "ALTER TABLE photo_sessions ADD COLUMN print_status TEXT NOT NULL DEFAULT 'printed'"
+    );
+  }
+  if (!photoColumns.some((col) => col.name === "print_note")) {
+    sqlite.exec("ALTER TABLE photo_sessions ADD COLUMN print_note TEXT");
+  }
   sqlite.exec(
     "CREATE INDEX IF NOT EXISTS idx_photo_sessions_booth_id ON photo_sessions (booth_id)"
   );
+  sqlite.exec(
+    "CREATE INDEX IF NOT EXISTS idx_photo_sessions_payment_session_id ON photo_sessions (payment_session_id)"
+  );
 
+  runSqlitePhotoSessionConsolidation();
+}
+
+function runSqlitePhotoSessionConsolidation() {
+  const stubs = sqlite
+    .prepare(
+      `SELECT id, payment_session_id, amount, booth_id, created_at
+       FROM photo_sessions
+       WHERE payment_session_id IS NOT NULL
+         AND (layout_id IS NULL OR layout_id = '')`
+    )
+    .all();
+
+  const findPrintRow = sqlite.prepare(
+    `SELECT id, layout_id, frame_id, print_count, download_id, payment_mode
+     FROM photo_sessions
+     WHERE payment_session_id IS NULL
+       AND layout_id IS NOT NULL AND layout_id != ''
+       AND amount = ?
+       AND (booth_id = ? OR booth_id IS NULL OR ? IS NULL)
+       AND ABS(strftime('%s', created_at) - strftime('%s', ?)) <= 600
+     ORDER BY created_at DESC
+     LIMIT 1`
+  );
+
+  const mergeStub = sqlite.prepare(
+    `UPDATE photo_sessions
+     SET layout_id = ?,
+         frame_id = ?,
+         print_count = ?,
+         download_id = COALESCE(?, download_id),
+         payment_mode = ?,
+         print_status = 'printed',
+         print_note = NULL
+     WHERE id = ?`
+  );
+
+  const deleteRow = sqlite.prepare("DELETE FROM photo_sessions WHERE id = ?");
+
+  for (const stub of stubs) {
+    const printRow = findPrintRow.get(
+      stub.amount,
+      stub.booth_id,
+      stub.booth_id,
+      stub.created_at
+    );
+    if (!printRow) continue;
+
+    const paymentMode =
+      printRow.payment_mode === "manual" ? "static_qr" : printRow.payment_mode;
+    mergeStub.run(
+      printRow.layout_id,
+      printRow.frame_id,
+      printRow.print_count,
+      printRow.download_id,
+      paymentMode,
+      stub.id
+    );
+    deleteRow.run(printRow.id);
+  }
+
+  sqlite.exec("UPDATE photo_sessions SET payment_mode = 'static_qr' WHERE payment_mode = 'manual'");
   sqlite.exec(`
-    INSERT INTO photo_sessions (id, created_at, print_count, amount, payment_mode, payment_session_id)
-    SELECT
-      id,
-      COALESCE(paid_at, created_at),
-      1,
-      amount,
-      CASE WHEN omise_charge_id IS NOT NULL THEN 'omise' ELSE 'manual' END,
-      id
-    FROM payment_sessions
-    WHERE status = 'paid'
-      AND id NOT IN (SELECT payment_session_id FROM photo_sessions WHERE payment_session_id IS NOT NULL)
+    UPDATE photo_sessions
+    SET print_status = 'pending'
+    WHERE payment_session_id IS NOT NULL
+      AND (layout_id IS NULL OR layout_id = '')
+      AND print_status = 'printed'
   `);
+  sqlite.exec(`
+    UPDATE photo_sessions
+    SET print_status = 'printed'
+    WHERE print_status IS NULL OR print_status = ''
+  `);
+
+  linkPaidSessionsWithoutPhotoHistory();
+}
+
+function linkPaidSessionsWithoutPhotoHistory() {
+  const paidSessions = sqlite
+    .prepare(
+      `SELECT id, booth_id, amount, paid_at, created_at, omise_charge_id
+       FROM payment_sessions
+       WHERE status = 'paid'
+         AND id NOT IN (
+           SELECT payment_session_id FROM photo_sessions WHERE payment_session_id IS NOT NULL
+         )`
+    )
+    .all();
+
+  const findPrintRow = sqlite.prepare(
+    `SELECT id
+     FROM photo_sessions
+     WHERE payment_session_id IS NULL
+       AND layout_id IS NOT NULL AND layout_id != ''
+       AND amount = ?
+       AND (booth_id = ? OR booth_id IS NULL OR ? IS NULL)
+       AND ABS(strftime('%s', created_at) - strftime('%s', ?)) <= 600
+     ORDER BY created_at DESC
+     LIMIT 1`
+  );
+
+  const linkPrintRow = sqlite.prepare(
+    `UPDATE photo_sessions
+     SET payment_session_id = ?,
+         payment_mode = CASE WHEN payment_mode = 'manual' THEN 'static_qr' ELSE payment_mode END,
+         print_status = 'printed'
+     WHERE id = ?`
+  );
+
+  const insertPending = sqlite.prepare(
+    `INSERT INTO photo_sessions
+       (id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode,
+        payment_session_id, print_status, print_note)
+     VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?, 'pending', NULL)`
+  );
+
+  for (const session of paidSessions) {
+    const eventAt = session.paid_at || session.created_at;
+    const printRow = findPrintRow.get(session.amount, session.booth_id, session.booth_id, eventAt);
+    const paymentMode = session.omise_charge_id ? "omise" : "static_qr";
+
+    if (printRow) {
+      linkPrintRow.run(session.id, printRow.id);
+      continue;
+    }
+
+    insertPending.run(
+      randomUUID(),
+      eventAt,
+      session.booth_id || null,
+      session.amount,
+      paymentMode,
+      session.id
+    );
+  }
 }
 
 async function runPostgresMigration() {
@@ -213,26 +348,148 @@ async function runPostgresMigration() {
       amount INTEGER NOT NULL,
       payment_mode TEXT NOT NULL DEFAULT 'omise',
       download_id TEXT,
-      payment_session_id TEXT
+      payment_session_id TEXT,
+      print_status TEXT NOT NULL DEFAULT 'printed',
+      print_note TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);
   `);
 
   await pgPool.query(`
-    INSERT INTO photo_sessions (id, created_at, print_count, amount, payment_mode, payment_session_id)
-    SELECT
-      id,
-      COALESCE(paid_at, created_at),
-      1,
-      amount,
-      CASE WHEN omise_charge_id IS NOT NULL THEN 'omise' ELSE 'manual' END,
-      id
-    FROM payment_sessions
-    WHERE status = 'paid'
-      AND NOT EXISTS (
-        SELECT 1 FROM photo_sessions ps WHERE ps.payment_session_id = payment_sessions.id::text
-      )
+    ALTER TABLE photo_sessions
+      ADD COLUMN IF NOT EXISTS print_status TEXT NOT NULL DEFAULT 'printed',
+      ADD COLUMN IF NOT EXISTS print_note TEXT;
   `);
+
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS idx_photo_sessions_payment_session_id
+      ON photo_sessions (payment_session_id);
+  `);
+
+  await runPostgresPhotoSessionConsolidation();
+}
+
+async function runPostgresPhotoSessionConsolidation() {
+  const stubs = await pgPool.query(
+    `SELECT id, payment_session_id, amount, booth_id, created_at
+     FROM photo_sessions
+     WHERE payment_session_id IS NOT NULL
+       AND (layout_id IS NULL OR layout_id = '')`
+  );
+
+  for (const stub of stubs.rows) {
+    const printResult = await pgPool.query(
+      `SELECT id, layout_id, frame_id, print_count, download_id, payment_mode
+       FROM photo_sessions
+       WHERE payment_session_id IS NULL
+         AND layout_id IS NOT NULL AND layout_id <> ''
+         AND amount = $1
+         AND (booth_id = $2 OR booth_id IS NULL OR $2 IS NULL)
+         AND ABS(EXTRACT(EPOCH FROM (created_at - $3::timestamptz))) <= 600
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [stub.amount, stub.booth_id, stub.created_at]
+    );
+
+    const printRow = printResult.rows[0];
+    if (!printRow) continue;
+
+    const paymentMode =
+      printRow.payment_mode === "manual" ? "static_qr" : printRow.payment_mode;
+
+    await pgPool.query(
+      `UPDATE photo_sessions
+       SET layout_id = $2,
+           frame_id = $3,
+           print_count = $4,
+           download_id = COALESCE($5, download_id),
+           payment_mode = $6,
+           print_status = 'printed',
+           print_note = NULL
+       WHERE id = $1`,
+      [
+        stub.id,
+        printRow.layout_id,
+        printRow.frame_id,
+        printRow.print_count,
+        printRow.download_id,
+        paymentMode,
+      ]
+    );
+
+    await pgPool.query(`DELETE FROM photo_sessions WHERE id = $1`, [printRow.id]);
+  }
+
+  await pgPool.query(`
+    UPDATE photo_sessions
+    SET payment_mode = 'static_qr'
+    WHERE payment_mode = 'manual'
+  `);
+
+  await pgPool.query(`
+    UPDATE photo_sessions
+    SET print_status = 'pending'
+    WHERE payment_session_id IS NOT NULL
+      AND (layout_id IS NULL OR layout_id = '')
+      AND print_status = 'printed'
+  `);
+
+  await pgPool.query(`
+    UPDATE photo_sessions
+    SET print_status = 'printed'
+    WHERE print_status IS NULL OR print_status = ''
+  `);
+
+  await linkPostgresPaidSessionsWithoutPhotoHistory();
+}
+
+async function linkPostgresPaidSessionsWithoutPhotoHistory() {
+  const paidSessions = await pgPool.query(
+    `SELECT id, booth_id, amount, paid_at, created_at, omise_charge_id
+     FROM payment_sessions
+     WHERE status = 'paid'
+       AND NOT EXISTS (
+         SELECT 1 FROM photo_sessions ph WHERE ph.payment_session_id = payment_sessions.id::text
+       )`
+  );
+
+  for (const session of paidSessions.rows) {
+    const eventAt = session.paid_at || session.created_at;
+    const printResult = await pgPool.query(
+      `SELECT id
+       FROM photo_sessions
+       WHERE payment_session_id IS NULL
+         AND layout_id IS NOT NULL AND layout_id <> ''
+         AND amount = $1
+         AND (booth_id = $2 OR booth_id IS NULL OR $2 IS NULL)
+         AND ABS(EXTRACT(EPOCH FROM (created_at - $3::timestamptz))) <= 600
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [session.amount, session.booth_id, eventAt]
+    );
+
+    const paymentMode = session.omise_charge_id ? "omise" : "static_qr";
+
+    if (printResult.rows[0]) {
+      await pgPool.query(
+        `UPDATE photo_sessions
+         SET payment_session_id = $1,
+             payment_mode = CASE WHEN payment_mode = 'manual' THEN 'static_qr' ELSE payment_mode END,
+             print_status = 'printed'
+         WHERE id = $2`,
+        [session.id, printResult.rows[0].id]
+      );
+      continue;
+    }
+
+    await pgPool.query(
+      `INSERT INTO photo_sessions
+         (id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode,
+          payment_session_id, print_status, print_note)
+       VALUES ($1, $2, $3, NULL, NULL, 0, $4, $5, $6, 'pending', NULL)`,
+      [randomUUID(), eventAt, session.booth_id || null, session.amount, paymentMode, session.id]
+    );
+  }
 }
 
 async function initDb() {

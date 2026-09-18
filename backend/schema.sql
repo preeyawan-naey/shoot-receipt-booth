@@ -100,12 +100,17 @@ CREATE TABLE IF NOT EXISTS photo_sessions (
   amount INTEGER NOT NULL,
   payment_mode TEXT NOT NULL DEFAULT 'omise',
   download_id TEXT,
-  payment_session_id TEXT
+  payment_session_id TEXT,
+  print_status TEXT NOT NULL DEFAULT 'printed',
+  print_note TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);
 CREATE INDEX IF NOT EXISTS idx_photo_sessions_booth_id ON photo_sessions (booth_id);
+CREATE INDEX IF NOT EXISTS idx_photo_sessions_payment_session_id ON photo_sessions (payment_session_id);
 
 ALTER TABLE photo_sessions ADD COLUMN IF NOT EXISTS booth_id TEXT;
+ALTER TABLE photo_sessions ADD COLUMN IF NOT EXISTS print_status TEXT NOT NULL DEFAULT 'printed';
+ALTER TABLE photo_sessions ADD COLUMN IF NOT EXISTS print_note TEXT;
 
 ALTER TABLE booth_profiles ADD COLUMN IF NOT EXISTS supabase_bucket TEXT;

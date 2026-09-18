@@ -519,6 +519,15 @@ body {
   border-color: var(--red);
 }
 
+.admin-table-card {
+  margin: 0 1.5rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+
 .admin-table-wrap {
   overflow-x: auto;
 }
@@ -526,29 +535,35 @@ body {
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  background: var(--surface);
 }
 
 .admin-table thead {
-  background: #f9fafb;
+  background: var(--red-light);
 }
 
 .admin-table th {
   text-align: left;
-  padding: 0.85rem 1rem;
+  padding: 0.95rem 1.1rem;
   font-weight: 600;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--border);
+  color: var(--red-dark);
+  font-size: 0.88rem;
+  letter-spacing: normal;
+  text-transform: none;
+  border-bottom: 1px solid #fecaca;
   white-space: nowrap;
 }
 
 .admin-table td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.95rem 1.1rem;
+  border-bottom: 1px solid #f3f4f6;
   vertical-align: middle;
+  color: var(--text);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .admin-table tbody tr:hover {
@@ -569,24 +584,53 @@ body {
 
 .status-badge {
   display: inline-block;
-  padding: 0.2rem 0.55rem;
+  padding: 0.18rem 0.65rem;
   border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: none;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .status-badge--used,
-.status-badge--omise {
-  background: rgba(34, 197, 94, 0.15);
+.status-badge--omise,
+.status-badge--print-printed {
+  background: #ecfdf3;
   color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 
 .status-badge--unused,
 .status-badge--free,
-.status-badge--manual {
-  background: rgba(107, 114, 128, 0.15);
+.status-badge--manual,
+.status-badge--static_qr {
+  background: #f3f4f6;
   color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.status-badge--print-pending {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.status-badge--print-failed {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.admin-table__note {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #6b7280;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* Pagination */
@@ -594,48 +638,51 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1.1rem;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 0.75rem;
+  background: #fafafa;
 }
 
 .admin-pagination__info {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  font-size: 0.88rem;
+  color: #6b7280;
 }
 
 .admin-pagination__controls {
   display: flex;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .page-btn {
-  min-width: 36px;
-  height: 36px;
-  padding: 0 0.5rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 8px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.45rem;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-family: inherit;
+  color: #374151;
 }
 
-.page-btn:hover:not(:disabled) {
-  border-color: var(--red);
-  color: var(--red);
+.page-btn:hover:not(:disabled):not(.page-btn--active) {
+  background: var(--red-light);
+  color: var(--red-dark);
 }
 
 .page-btn--active {
   background: var(--red);
-  border-color: var(--red);
   color: #fff;
+  font-weight: 600;
 }
 
 .page-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
