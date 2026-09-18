@@ -4,7 +4,7 @@ const paymentSettings = require("./paymentSettings");
 const boothProfiles = require("./boothProfiles");
 const omise = require("./omise");
 
-const SESSION_TTL_MS = Number(process.env.PAYMENT_SESSION_TTL_MS) || 5 * 60 * 1000;
+const SESSION_TTL_MS = Number(process.env.PAYMENT_SESSION_TTL_MS) || 150 * 1000;
 
 function nowIso() {
   return new Date().toISOString();
@@ -176,7 +176,7 @@ async function createSession({ amount: requestedAmount, boothId: boothIdRaw } = 
       throw new Error(`ยอด ${amount} บาท ไม่ตรงกับแพ็กที่เปิดขาย`);
     }
   } else {
-    amount = Math.round(Number(tiers[0]?.amount || payment.payment_amount) || 59);
+    amount = Math.round(Number(tiers[0]?.amount || payment.payment_amount) || 49);
   }
   const id = randomUUID();
   const createdAt = new Date();

@@ -290,8 +290,14 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
   const layoutConfig = getLayoutById(selectedLayoutId);
   const canvas = document.getElementById("receipt-canvas");
   const dispenser = document.querySelector(".preview-dispenser");
+  const previewPage = document.querySelector(".preview-page");
 
   if (!layoutConfig || !canvas) return;
+
+  previewPage?.classList.toggle(
+    "preview-page--layout-4",
+    selectedLayoutId === "Layout-4" || layoutConfig.photoCount >= 4
+  );
 
   dispenser?.classList.add("preview-dispenser--preparing");
 
@@ -318,7 +324,9 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
       `${canvas.width} / ${canvas.height}`
     );
   }
-  resetPrintCopiesUI();
+  if (typeof syncPrintCopiesFromPackage === "function") {
+    syncPrintCopiesFromPackage();
+  }
 
   dispenser?.classList.remove("preview-dispenser--preparing");
   playReceiptPrintAnimation();

@@ -20,6 +20,11 @@ android {
             "BOOTH_URL",
             "\"https://shoot-receipt-boot.onrender.com\"",
         )
+        buildConfigField(
+            "String",
+            "BOOTH_ID",
+            "\"the-receipt-club\"",
+        )
     }
 
     buildFeatures {

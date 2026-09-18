@@ -5,7 +5,7 @@
 const BOOTH_SETTINGS_POLL_MS = 15000;
 
 let boothSettingsState = {
-  payment_amount: 59,
+  payment_amount: 49,
   payment_tiers: [
     { prints: 1, amount: 49 },
     { prints: 2, amount: 90 },

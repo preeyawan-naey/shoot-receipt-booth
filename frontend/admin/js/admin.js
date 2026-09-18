@@ -1,8 +1,14 @@
 (function () {
   const STORAGE_KEY = "shoot_admin_session_token";
+  const BOOTH_STORAGE_KEY = "shoot_admin_booth_id";
+  const ROLE_STORAGE_KEY = "shoot_admin_role";
+  const BOOTH_NAME_STORAGE_KEY = "shoot_admin_booth_name";
   const API_BASE = "/api/admin";
 
   let memoryApiKey = "";
+  let memoryBoothId = "";
+  let memoryRole = "";
+  let memoryBoothName = "";
   let state = {
     period: "today",
     from: "",
@@ -11,6 +17,8 @@
     page: 1,
     limit: 20,
     view: "dashboard",
+    paymentBoothId: "the-receipt-club",
+    pathBoothId: null,
   };
 
   let lastPaidPaymentMode = "static_qr";
@@ -26,31 +34,87 @@
     }
   }
 
-  function setApiKey(key) {
-    memoryApiKey = key;
+  function readBoothIdFromPath() {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const adminIndex = parts.indexOf("admin");
+    if (adminIndex === -1) return null;
+    const candidate = parts[adminIndex + 1];
+    if (!candidate || candidate === "css" || candidate === "js") return null;
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(candidate)) return null;
+    return candidate;
+  }
+
+  function getSessionBoothId() {
+    if (memoryBoothId) return memoryBoothId;
     try {
-      sessionStorage.setItem(STORAGE_KEY, key);
+      return sessionStorage.getItem(BOOTH_STORAGE_KEY) || "";
     } catch {
-      /* private mode — memory only */
+      return "";
     }
   }
 
-  function clearApiKey() {
-    memoryApiKey = "";
+  function getSessionRole() {
+    if (memoryRole) return memoryRole;
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      return sessionStorage.getItem(ROLE_STORAGE_KEY) || "";
     } catch {
-      /* ignore */
+      return "";
     }
+  }
+
+  function isSuperAdminSession() {
+    return getSessionRole() === "super";
+  }
+
+  function isBoothScopedAdmin() {
+    return getSessionRole() === "booth" && Boolean(getSessionBoothId());
+  }
+
+  function getActiveBoothId() {
+    if (isBoothScopedAdmin()) return getSessionBoothId();
+    if (state.pathBoothId) return state.pathBoothId;
+    return getSelectedPaymentBoothId();
+  }
+
+  function setAdminSession({ token, role = "", boothId = "", boothName = "" } = {}) {
+    memoryApiKey = token || "";
+    memoryRole = role || "";
+    memoryBoothId = boothId || "";
+    memoryBoothName = boothName || "";
+    try {
+      if (token) sessionStorage.setItem(STORAGE_KEY, token);
+      else sessionStorage.removeItem(STORAGE_KEY);
+      if (boothId) sessionStorage.setItem(BOOTH_STORAGE_KEY, boothId);
+      else sessionStorage.removeItem(BOOTH_STORAGE_KEY);
+      if (role) sessionStorage.setItem(ROLE_STORAGE_KEY, role);
+      else sessionStorage.removeItem(ROLE_STORAGE_KEY);
+      if (boothName) sessionStorage.setItem(BOOTH_NAME_STORAGE_KEY, boothName);
+      else sessionStorage.removeItem(BOOTH_NAME_STORAGE_KEY);
+    } catch {
+      /* private mode — memory only */
+    }
+    if (boothId) {
+      state.paymentBoothId = boothId;
+    }
+  }
+
+  function setApiKey(key) {
+    setAdminSession({ token: key, role: getSessionRole(), boothId: getSessionBoothId() });
+  }
+
+  function clearApiKey() {
+    setAdminSession({});
   }
 
   async function apiFetch(path, options = {}, keyOverride) {
     const key = keyOverride ?? getApiKey();
+    const scopedBoothId = isBoothScopedAdmin() ? getSessionBoothId() : "";
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
         "x-admin-key": key,
+        ...(scopedBoothId ? { "x-admin-booth-id": scopedBoothId } : {}),
         ...(options.headers || {}),
       },
     });
@@ -98,6 +162,88 @@
     });
   }
 
+  function getSelectedPaymentBoothId() {
+    if (isBoothScopedAdmin()) {
+      return getSessionBoothId();
+    }
+    if (state.pathBoothId) {
+      state.paymentBoothId = state.pathBoothId;
+      return state.pathBoothId;
+    }
+    const select = $("#payment-booth-select");
+    const value = select?.value || state.paymentBoothId || "the-receipt-club";
+    state.paymentBoothId = value;
+    return value;
+  }
+
+  function buildPaymentApiPath(path) {
+    const params = new URLSearchParams({ booth_id: getSelectedPaymentBoothId() });
+    return `${path}?${params.toString()}`;
+  }
+
+  function appendBoothScopeToQuery(params) {
+    const boothId = getActiveBoothId();
+    if (boothId && (isBoothScopedAdmin() || state.pathBoothId)) {
+      params.set("booth_id", boothId);
+    }
+  }
+
+  function updateBoothScopeUi() {
+    const boothCard = $("#payment-booth-card");
+    const scoped = isBoothScopedAdmin() || Boolean(state.pathBoothId);
+    if (boothCard) boothCard.hidden = scoped;
+
+    const usernameInput = $("#admin-username-input");
+    if (usernameInput && state.pathBoothId && !getApiKey()) {
+      usernameInput.value = state.pathBoothId;
+      usernameInput.readOnly = true;
+    } else if (usernameInput) {
+      usernameInput.readOnly = false;
+    }
+
+    const loginDesc = $("#admin-login-desc");
+    if (loginDesc) {
+      loginDesc.textContent = state.pathBoothId
+        ? `เข้าสู่ระบบ booth: ${state.pathBoothId} (username = booth id)`
+        : "เข้าสู่ระบบด้วย booth id หรือ admin (super)";
+    }
+
+    const brandSubtitle = $("#admin-sidebar-booth");
+    const boothLabel = memoryBoothName || getActiveBoothId();
+    if (brandSubtitle) {
+      brandSubtitle.textContent = boothLabel ? `Booth: ${boothLabel}` : "Receipt Booth";
+    }
+  }
+
+  async function loadPaymentBoothOptions() {
+    const select = $("#payment-booth-select");
+    if (!select || isBoothScopedAdmin() || state.pathBoothId) return;
+
+    try {
+      const data = await apiFetch("/booth-profiles");
+      const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+      if (!profiles.length) return;
+
+      select.innerHTML = profiles
+        .map((profile) => {
+          const boothId = profile.booth_id || "";
+          const label = profile.name || boothId;
+          return `<option value="${escapeHtml(boothId)}">${escapeHtml(label)}</option>`;
+        })
+        .join("");
+
+      const preferred = state.paymentBoothId;
+      if (preferred && profiles.some((profile) => profile.booth_id === preferred)) {
+        select.value = preferred;
+      } else {
+        select.value = profiles[0].booth_id;
+        state.paymentBoothId = profiles[0].booth_id;
+      }
+    } catch (error) {
+      console.warn("[admin/payment-booths]", error);
+    }
+  }
+
   function buildQuery(extra = {}) {
     const params = new URLSearchParams();
     params.set("period", state.period);
@@ -106,6 +252,7 @@
       if (state.to) params.set("to", state.to);
     }
     if (state.search) params.set("search", state.search);
+    appendBoothScopeToQuery(params);
     if (extra.page) params.set("page", String(extra.page));
     if (extra.limit) params.set("limit", String(extra.limit));
     return params.toString();
@@ -180,7 +327,11 @@
     const res = await fetch(`${API_BASE}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username,
+        password,
+        path_booth_id: state.pathBoothId || null,
+      }),
     });
     const data = await res.json().catch(() => ({}));
 
@@ -188,6 +339,12 @@
       if (!data.token) {
         throw new Error("Server did not return a session token");
       }
+      setAdminSession({
+        token: data.token,
+        role: data.role || "",
+        boothId: data.booth_id || "",
+        boothName: data.booth_name || "",
+      });
       return data.token;
     }
 
@@ -479,7 +636,12 @@
   }
 
   async function loadPaymentAdmin() {
-    const paymentData = await apiFetch("/payment");
+    await loadPaymentBoothOptions();
+    updateBoothScopeUi();
+    const boothId = getSelectedPaymentBoothId();
+    setText("payment-booth-hint", `booth_id: ${boothId}`);
+
+    const paymentData = await apiFetch(buildPaymentApiPath("/payment"));
     const payment = paymentData.payment || {};
     const tiers = normalizePaymentTiers(payment.payment_tiers);
     const mode = payment.payment_mode || payment.payment_provider || "static_qr";
@@ -645,9 +807,9 @@
         lastPaidPaymentMode = mode === "omise" ? "omise" : "static_qr";
       }
 
-      await apiFetch("/payment", {
+      await apiFetch(buildPaymentApiPath("/payment"), {
         method: "PATCH",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, booth_id: getSelectedPaymentBoothId() }),
       });
 
       if (success) {
@@ -701,9 +863,12 @@
         reader.readAsDataURL(file);
       });
 
-      await apiFetch("/payment/qr", {
+      await apiFetch(buildPaymentApiPath("/payment/qr"), {
         method: "POST",
-        body: JSON.stringify({ image_base64: base64 }),
+        body: JSON.stringify({
+          image_base64: base64,
+          booth_id: getSelectedPaymentBoothId(),
+        }),
       });
 
       if (success) {
@@ -734,7 +899,19 @@
   }
 
   async function enterDashboard(key) {
-    setApiKey(key);
+    setAdminSession({
+      token: key,
+      role: getSessionRole(),
+      boothId: getSessionBoothId(),
+      boothName: memoryBoothName || (() => {
+        try {
+          return sessionStorage.getItem(BOOTH_NAME_STORAGE_KEY) || "";
+        } catch {
+          return "";
+        }
+      })(),
+    });
+    updateBoothScopeUi();
     showApp();
     showAdminView("dashboard");
     try {
@@ -878,9 +1055,19 @@
     $("#btn-upload-payment-qr")?.addEventListener("click", () => {
       uploadPaymentQr().catch(console.error);
     });
+
+    $("#payment-booth-select")?.addEventListener("change", () => {
+      state.paymentBoothId = getSelectedPaymentBoothId();
+      loadPaymentAdmin().catch(console.error);
+    });
   }
 
   async function init() {
+    state.pathBoothId = readBoothIdFromPath();
+    if (state.pathBoothId) {
+      state.paymentBoothId = state.pathBoothId;
+    }
+    updateBoothScopeUi();
     bindEvents();
 
     const key = getApiKey();
@@ -889,9 +1076,21 @@
       return;
     }
 
+    if (
+      isBoothScopedAdmin() &&
+      state.pathBoothId &&
+      getSessionBoothId() !== state.pathBoothId
+    ) {
+      clearApiKey();
+      showLogin("กรุณา login ใหม่สำหรับ booth นี้");
+      return;
+    }
+
     setLoginLoading(true);
     try {
-      await apiFetch("/dashboard?period=today", {}, key);
+      const params = new URLSearchParams({ period: "today" });
+      appendBoothScopeToQuery(params);
+      await apiFetch(`/dashboard?${params.toString()}`, {}, key);
       await enterDashboard(key);
     } catch (err) {
       if (err.message === "Unauthorized") {

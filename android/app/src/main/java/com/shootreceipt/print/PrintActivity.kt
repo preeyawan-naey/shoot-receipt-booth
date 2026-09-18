@@ -66,7 +66,7 @@ private fun Bundle.summary(): String {
 object PrintEngine {
     private const val TAG = "ShootPrint"
     /** Match booth upload width (80mm @ ~203dpi) */
-    private const val TARGET_WIDTH_PX = 576
+    private const val TARGET_WIDTH_PX = 640
 
     fun resolvePrintUrl(intent: android.content.Intent?): String? {
         val raw =

@@ -19,7 +19,7 @@ const PAYMENT_SETTING_KEYS = [
   PAYMENT_MODE_KEY,
 ];
 
-const DEFAULT_AMOUNT = 59;
+const DEFAULT_AMOUNT = 49;
 const DEFAULT_PAYMENT_TIERS = [
   { prints: 1, amount: 49 },
   { prints: 2, amount: 90 },

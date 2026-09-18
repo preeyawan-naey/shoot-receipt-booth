@@ -121,13 +121,29 @@ function isBoothFeatureEnabled(name, fallback = true) {
   return getBoothFeature(name, fallback);
 }
 
+const BOOTH_THEME_CLASS_PREFIX = "booth-theme--";
+
+function applyBoothThemeToDom(boothId) {
+  const screen = document.getElementById("booth-screen");
+  if (!screen) return;
+
+  const normalized = normalizeBoothId(boothId);
+  for (const cls of [...screen.classList]) {
+    if (cls.startsWith(BOOTH_THEME_CLASS_PREFIX)) {
+      screen.classList.remove(cls);
+    }
+  }
+  screen.classList.add(`${BOOTH_THEME_CLASS_PREFIX}${normalized}`);
+}
+
 function applyBoothProfileToDom(profile) {
   if (!profile) return;
+
+  applyBoothThemeToDom(profile.booth_id || getBoothId());
 
   const art = document.querySelector(".home-index-art");
   if (art && profile.home_image) {
     art.src = profile.home_image;
-    art.classList.toggle("home-index-art--kiki", profile.theme === "kiki");
   }
 
   const logo = document.querySelector(".home-header__logo");
@@ -144,6 +160,7 @@ function setBoothProfileState(settings) {
   if (!settings) return;
   if (settings.booth_id) {
     resolvedBoothId = persistBoothId(settings.booth_id);
+    applyBoothThemeToDom(resolvedBoothId);
   }
   if (settings.profile) {
     const prevLayoutSet = boothProfileState?.layout_set;
@@ -166,6 +183,7 @@ function setBoothProfileState(settings) {
 
 function initBoothProfile() {
   resolvedBoothId = resolveBoothId();
+  applyBoothThemeToDom(resolvedBoothId);
   console.info(`[booth] id=${getBoothId()}`);
 }
 
@@ -174,6 +192,7 @@ window.getBoothProfile = getBoothProfile;
 window.getBoothFeature = getBoothFeature;
 window.isBoothFeatureEnabled = isBoothFeatureEnabled;
 window.setBoothProfileState = setBoothProfileState;
+window.applyBoothThemeToDom = applyBoothThemeToDom;
 window.applyBoothProfileToDom = applyBoothProfileToDom;
 window.initBoothProfile = initBoothProfile;
 

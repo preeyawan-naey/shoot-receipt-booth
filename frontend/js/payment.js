@@ -2,7 +2,7 @@
  * Payment page — Omise PromptPay or Static QR + bank notification auto-advance
  */
 
-const PAYMENT_TIMEOUT_SEC = 300;
+const PAYMENT_TIMEOUT_SEC = 150;
 const PAYMENT_POLL_MS = 2500;
 
 let paymentCountdownTimer = null;
@@ -73,7 +73,7 @@ function getActivePaymentSessionAmount() {
     completedPaymentAmount ??
     selectedPaymentTier?.amount ??
     boothSettingsState?.payment_amount ??
-    59
+    49
   );
 }
 
@@ -101,7 +101,7 @@ function getPaymentTiersFromSettings() {
       .sort((a, b) => a.prints - b.prints || a.amount - b.amount);
   }
 
-  const fallbackAmount = Math.round(Number(boothSettingsState?.payment_amount) || 59);
+  const fallbackAmount = Math.round(Number(boothSettingsState?.payment_amount) || 49);
   return [{ prints: 1, amount: fallbackAmount }];
 }
 
@@ -343,7 +343,7 @@ function startPaymentCountdown(seconds = PAYMENT_TIMEOUT_SEC) {
 }
 
 function formatPaymentAmount(amount) {
-  const value = Number(amount) || 59;
+  const value = Number(amount) || 49;
   return value.toLocaleString("th-TH", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -403,7 +403,7 @@ function loadPaymentQrImage(qrImage, qrUrl) {
 }
 
 function renderPaymentPage(sessionAmount, session = activePaymentSession) {
-  const amount = sessionAmount ?? session?.amount ?? boothSettingsState?.payment_amount ?? 59;
+  const amount = sessionAmount ?? session?.amount ?? boothSettingsState?.payment_amount ?? 49;
   const amountEl = document.getElementById("payment-amount-text");
   const qrImage = document.getElementById("payment-qr-image");
   const qrWrap = document.getElementById("payment-qr-wrap");
@@ -568,6 +568,47 @@ function isCurrentPaymentDebugEvent(status) {
   return true;
 }
 
+function parsePaymentNotifyServerResult(body) {
+  if (!body) return null;
+  try {
+    const data = typeof body === "string" ? JSON.parse(body) : body;
+    return {
+      matched: Boolean(data.matched),
+      reason: data.reason || null,
+      expected:
+        data.expected_amount ??
+        data.expected ??
+        activePaymentSession?.amount ??
+        selectedPaymentTier?.amount ??
+        null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatPaymentNotifyRejectReason(serverResult) {
+  if (!serverResult?.reason) return null;
+
+  if (serverResult.reason === "amount_not_matched") {
+    const expected = serverResult.expected;
+    if (expected != null) {
+      return `ยอดไม่ตรง — ต้องโอน ${formatPaymentAmount(expected)} บาทพอดี`;
+    }
+    return "ยอดไม่ตรง — โอนให้ตรงกับที่เลือกในแพ็ก";
+  }
+
+  if (serverResult.reason === "no_pending_session") {
+    return "session หมดอายุแล้ว — กลับเลือกแพ็กใหม่";
+  }
+
+  if (serverResult.reason === "session_not_pending") {
+    return "รอบชำระเงินนี้ปิดแล้ว — กลับเลือกแพ็กใหม่";
+  }
+
+  return `server ไม่ยืนยัน (${serverResult.reason})`;
+}
+
 function formatPaymentNotifyDebugStatus(raw) {
   if (!raw || !paymentSessionId) return "";
   try {
@@ -590,11 +631,25 @@ function formatPaymentNotifyDebugStatus(raw) {
     }
 
     if (forCurrentSession && status.last_http_code && status.last_http_code !== 200) {
+      if (status.last_http_code === 401) {
+        return "ส่ง webhook ไม่สำเร็จ (401) — secret ไม่ตรง ลองเปิดหน้า QR ใหม่";
+      }
+      if (status.last_http_code < 0) {
+        return "ส่ง webhook ไม่สำเร็จ — server ไม่ตอบ (Render อาจกำลัง cold start)";
+      }
       return `ส่ง webhook ไม่สำเร็จ (HTTP ${status.last_http_code})`;
     }
 
     if (forCurrentSession && status.last_forward_at > 0) {
-      return "อ่าน noti แล้ว — รอ server ยืนยัน...";
+      const serverResult = parsePaymentNotifyServerResult(status.last_http_body);
+      if (serverResult && !serverResult.matched) {
+        const rejectReason = formatPaymentNotifyRejectReason(serverResult);
+        if (rejectReason) return rejectReason;
+      }
+      if (status.last_result_at > status.last_forward_at) {
+        return "อ่าน noti แล้ว — รอ server ยืนยัน...";
+      }
+      return "อ่าน noti แล้ว — กำลังส่งไป server...";
     }
 
     if (
@@ -716,12 +771,20 @@ window.__receiptClubOnBankNotifyResult = function onBankNotifyResult(result) {
     void pollUntilPaymentConfirmed();
     return;
   }
+
+  const serverResult = parsePaymentNotifyServerResult(result?.body);
+  const rejectReason = formatPaymentNotifyRejectReason(serverResult);
+  if (rejectReason) {
+    setPaymentStatus("warning", rejectReason, true);
+    return;
+  }
+
   refreshPaymentNotifyDebugStatus();
 };
 
 function getPaymentWaitingMessage() {
   if (isStaticQrPaymentMode()) {
-    return "สแกน QR แล้วโอนให้ตรงยอด — รอแจ้งเตือน SCB/แม่มณีบน tablet นี้";
+    return "กรุณากรอกยอดเงินให้ตรงกับราคาที่ระบุ";
   }
   return "สแกน QR PromptPay — ระบบจะไปขั้นถัดไปอัตโนมัติเมื่อชำระสำเร็จ";
 }

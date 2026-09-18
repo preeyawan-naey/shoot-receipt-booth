@@ -25,6 +25,9 @@ class BoothJsBridge(
     fun getBoothUrl(): String = BuildConfig.BOOTH_URL
 
     @JavascriptInterface
+    fun getBoothId(): String = BuildConfig.BOOTH_ID
+
+    @JavascriptInterface
     fun setKioskMode(enabled: Boolean) {
         activity.runOnUiThread {
             activity.setKioskMode(enabled)

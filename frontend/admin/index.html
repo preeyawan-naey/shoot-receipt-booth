@@ -16,14 +16,14 @@
     <div class="admin-login" id="admin-login">
       <div class="admin-login__card">
         <h1 class="admin-login__title">SHOOT <span>Backoffice</span></h1>
-        <p class="admin-login__desc">เข้าสู่ระบบด้วย username และ password</p>
+        <p class="admin-login__desc" id="admin-login-desc">เข้าสู่ระบบด้วย booth id หรือ admin</p>
         <label class="admin-login__field">
           <span class="admin-login__label">Username</span>
           <input
             class="admin-login__input"
             id="admin-username-input"
             type="text"
-            placeholder="admin"
+            placeholder="the-receipt-club"
             autocomplete="username"
             autocapitalize="none"
             autocorrect="off"
@@ -71,7 +71,7 @@
       <aside class="admin-sidebar">
         <div class="admin-sidebar__brand">
           <span class="admin-sidebar__logo">SHOOT</span>
-          <span class="admin-sidebar__subtitle">Receipt Booth</span>
+          <span class="admin-sidebar__subtitle" id="admin-sidebar-booth">Receipt Booth</span>
         </div>
         <nav class="admin-nav">
           <button class="admin-nav__item admin-nav__item--active" type="button" data-view="dashboard">
@@ -199,6 +199,22 @@
           </section>
 
           <div class="payment-settings">
+            <section class="settings-card" id="payment-booth-card">
+              <header class="settings-card__header">
+                <h3 class="settings-card__title">Booth</h3>
+                <p class="settings-card__subtitle">ตั้งค่า Payment แยกตามตู้ — แต่ละ booth_id มี QR / ราคาเป็นของตัวเอง</p>
+              </header>
+              <div class="settings-card__body">
+                <label class="payment-admin-field">
+                  <span class="payment-admin-field__label">เลือก Booth</span>
+                  <select class="admin-login__input" id="payment-booth-select">
+                    <option value="the-receipt-club">The Receipt Club</option>
+                  </select>
+                </label>
+                <p class="payment-webhook-info__hint" id="payment-booth-hint">booth_id: the-receipt-club</p>
+              </div>
+            </section>
+
             <div class="payment-settings__alert" id="payment-settings-alert">
               ตรวจสอบราคาและสถานะการเรียกเก็บเงินก่อนบันทึก — booth จะ sync ภายใน ~15 วินาที
             </div>
@@ -380,6 +396,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=18"></script>
+    <script src="/admin/js/admin.js?v=19"></script>
   </body>
 </html>

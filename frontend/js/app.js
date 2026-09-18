@@ -17,6 +17,18 @@ const QR_HOME_COUNTDOWN_SEC = 40;
 let printCopies = DEFAULT_PRINT_COPIES;
 let qrCountdownTimer = null;
 
+function getPackagePrintCopies() {
+  if (typeof getSelectedPaymentTier === "function") {
+    const tier = getSelectedPaymentTier();
+    const tierPrints = Math.round(Number(tier?.prints));
+    if (Number.isFinite(tierPrints) && tierPrints > 0) {
+      return Math.max(MIN_PRINT_COPIES, Math.min(MAX_PRINT_COPIES, tierPrints));
+    }
+  }
+
+  return DEFAULT_PRINT_COPIES;
+}
+
 function getPrintCopies() {
   return printCopies;
 }
@@ -29,6 +41,10 @@ function setPrintCopies(count) {
   updatePrintCopiesUI();
 }
 
+function syncPrintCopiesFromPackage() {
+  setPrintCopies(getPackagePrintCopies());
+}
+
 function resetPrintCopiesUI() {
   printCopies = DEFAULT_PRINT_COPIES;
   updatePrintCopiesUI();
@@ -36,6 +52,8 @@ function resetPrintCopiesUI() {
 
 window.setPrintCopies = setPrintCopies;
 window.getPrintCopies = getPrintCopies;
+window.getPackagePrintCopies = getPackagePrintCopies;
+window.syncPrintCopiesFromPackage = syncPrintCopiesFromPackage;
 window.resetPrintCopiesUI = resetPrintCopiesUI;
 
 function updatePrintCopiesUI() {
@@ -261,25 +279,11 @@ function bindEvents() {
   const btnCameraBack = document.getElementById("btn-camera-back");
   const btnRetake = document.getElementById("btn-retake");
   const btnPrint = document.getElementById("btn-print");
-  const btnPrintMinus = document.getElementById("btn-print-minus");
-  const btnPrintPlus = document.getElementById("btn-print-plus");
   const btnQrHome = document.getElementById("btn-qr-home");
 
   resetPrintCopiesUI();
 
   btnQrHome?.addEventListener("click", finishQrDownloadSession);
-
-  btnPrintMinus?.addEventListener("click", () => {
-    if (printCopies <= MIN_PRINT_COPIES) return;
-    printCopies -= 1;
-    updatePrintCopiesUI();
-  });
-
-  btnPrintPlus?.addEventListener("click", () => {
-    if (printCopies >= MAX_PRINT_COPIES) return;
-    printCopies += 1;
-    updatePrintCopiesUI();
-  });
 
   btnStartOverlay?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -318,7 +322,7 @@ function bindEvents() {
 
     sessionStorage.removeItem("capturedPhotos");
     sessionStorage.removeItem("downloadQR");
-    resetPrintCopiesUI();
+    syncPrintCopiesFromPackage();
     navigateToCamera(layoutId);
   });
 

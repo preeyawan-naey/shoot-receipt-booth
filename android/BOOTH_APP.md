@@ -7,6 +7,7 @@ WebView kiosk app สำหรับ tablet — โหลด booth UI จาก 
 | ชื่อแอpp | **The Receipt Club** |
 | Package | `com.thereceiptclub.booth` |
 | Booth URL (default) | `https://shoot-receipt-boot.onrender.com` |
+| Booth ID (default) | `the-receipt-club` |
 | APK version | **1.1.5** (109) — Static QR + active notification polling (MIUI) |
 
 ---
@@ -78,7 +79,7 @@ Release (ต้อง sign เอง):
 
 ---
 
-## เปลี่ยน URL booth
+## เปลี่ยน URL / Booth ID
 
 แก้ใน `android/app/build.gradle.kts`:
 
@@ -88,7 +89,14 @@ buildConfigField(
     "BOOTH_URL",
     "\"https://your-app.up.railway.app\"",
 )
+buildConfigField(
+    "String",
+    "BOOTH_ID",
+    "\"the-receipt-club\"",
+)
 ```
+
+`BOOTH_ID` ใช้โหลด booth profile จาก server (home, QR, ฟีเจอร์ต่อตู้) — ดู `GET /api/booth/settings?booth_id=...`
 
 แล้ว build APK ใหม่
 

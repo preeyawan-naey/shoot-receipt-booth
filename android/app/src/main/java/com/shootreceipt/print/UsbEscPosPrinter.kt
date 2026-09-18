@@ -329,7 +329,11 @@ class UsbEscPosPrinter(private val context: Context) {
         const val BAND_HEIGHT_PX = 256
         private const val MAX_CHUNK = 16_384
         private const val TIMEOUT_MS = 30_000
-        private val INIT = byteArrayOf(0x1B, 0x40)
+        private val INIT = byteArrayOf(
+            0x1B, 0x40, // ESC @ reset
+            0x1B, 0x61, 0x00, // ESC a 0 — left align
+            0x1D, 0x4C, 0x00, 0x00, // GS L — left margin 0
+        )
         private val FEED_AND_CUT = byteArrayOf(
             0x0A,
             0x1D, 0x56, 0x42, 0x00,
