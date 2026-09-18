@@ -107,8 +107,38 @@ function runSqliteMigration() {
   if (!paymentColumns.some((col) => col.name === "omise_charge_id")) {
     sqlite.exec("ALTER TABLE payment_sessions ADD COLUMN omise_charge_id TEXT");
   }
+  if (!paymentColumns.some((col) => col.name === "booth_id")) {
+    sqlite.exec("ALTER TABLE payment_sessions ADD COLUMN booth_id TEXT");
+  }
+  sqlite.exec(
+    "CREATE INDEX IF NOT EXISTS idx_payment_sessions_booth_id ON payment_sessions (booth_id)"
+  );
 
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS booth_payment_settings (
+      booth_id TEXT NOT NULL,
+      setting_key TEXT NOT NULL,
+      setting_value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (booth_id, setting_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_booth_payment_settings_booth_id ON booth_payment_settings (booth_id);
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS booth_profiles (
+      booth_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      theme TEXT NOT NULL DEFAULT 'kiki',
+      home_image TEXT,
+      home_logo TEXT,
+      layout_set TEXT NOT NULL DEFAULT 'kiki',
+      features TEXT NOT NULL DEFAULT '{}',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS photo_sessions (
       id TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,
@@ -122,6 +152,19 @@ function runSqliteMigration() {
     );
     CREATE INDEX IF NOT EXISTS idx_photo_sessions_created_at ON photo_sessions (created_at);
   `);
+
+  const profileColumns = sqlite.prepare("PRAGMA table_info(booth_profiles)").all();
+  if (!profileColumns.some((col) => col.name === "supabase_bucket")) {
+    sqlite.exec("ALTER TABLE booth_profiles ADD COLUMN supabase_bucket TEXT");
+  }
+
+  const photoColumns = sqlite.prepare("PRAGMA table_info(photo_sessions)").all();
+  if (!photoColumns.some((col) => col.name === "booth_id")) {
+    sqlite.exec("ALTER TABLE photo_sessions ADD COLUMN booth_id TEXT");
+  }
+  sqlite.exec(
+    "CREATE INDEX IF NOT EXISTS idx_photo_sessions_booth_id ON photo_sessions (booth_id)"
+  );
 
   sqlite.exec(`
     INSERT INTO photo_sessions (id, created_at, print_count, amount, payment_mode, payment_session_id)
@@ -146,7 +189,12 @@ async function runPostgresMigration() {
   await pgPool.query(`
     ALTER TABLE payment_sessions
       ADD COLUMN IF NOT EXISTS omise_source_id TEXT,
-      ADD COLUMN IF NOT EXISTS omise_charge_id TEXT;
+      ADD COLUMN IF NOT EXISTS omise_charge_id TEXT,
+      ADD COLUMN IF NOT EXISTS booth_id TEXT;
+  `);
+
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS idx_payment_sessions_booth_id ON payment_sessions (booth_id);
   `);
 
   await pgPool.query(`

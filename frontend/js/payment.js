@@ -18,6 +18,51 @@ let paymentDebugTimer = null;
 let selectedPaymentTier = null;
 let completedPaymentAmount = null;
 const PAYMENT_DEBUG_POLL_MS = 3000;
+const PAYMENT_DEV_BYPASS_KEY = "boothPaymentDevBypass";
+
+function isPrivateDevHost(hostname = window.location.hostname) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^192\.168\.\d+\.\d+$/.test(hostname) ||
+    /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname)
+  );
+}
+
+function isPaymentDevBypassEnabled() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryFlag = params.get("paymentDev");
+    if (queryFlag === "1") {
+      localStorage.setItem(PAYMENT_DEV_BYPASS_KEY, "1");
+      return true;
+    }
+    if (queryFlag === "0") {
+      localStorage.removeItem(PAYMENT_DEV_BYPASS_KEY);
+      return false;
+    }
+    if (localStorage.getItem(PAYMENT_DEV_BYPASS_KEY) === "1") {
+      return true;
+    }
+  } catch {
+    /* private mode */
+  }
+  return isPrivateDevHost();
+}
+
+function syncPaymentDevAcceptButton() {
+  const btn = document.getElementById("btn-payment-dev-accept");
+  if (!btn) return;
+  btn.hidden = !isPaymentDevBypassEnabled();
+}
+
+function acceptPaymentDevBypass() {
+  if (!isPaymentDevBypassEnabled()) return;
+  setPaymentStatus("paid", "Dev — ข้ามการชำระเงิน", true);
+  proceedFromPayment();
+}
+
 function getActivePaymentSessionId() {
   return paymentSessionId || "";
 }
@@ -83,9 +128,15 @@ function formatTierCopyLabel(prints) {
   return `Copies ${count}`;
 }
 
+function getPackageArtBase() {
+  const boothId =
+    typeof getBoothId === "function" ? getBoothId() : "the-receipt-club";
+  return `img/booths/${boothId}/Package`;
+}
+
 function getPackageArtPath(prints) {
   const count = Math.max(1, Math.min(3, Math.round(Number(prints) || 1)));
-  return `img/Package/Copies${count}.png`;
+  return `${getPackageArtBase()}/Copies${count}.png`;
 }
 
 function isPopularPackageTier(tier, index, tiers) {
@@ -226,7 +277,7 @@ async function verifyPaymentBackend() {
     if (!boothSettingsState?.payment_qr_configured && !boothSettingsState?.payment_qr_url) {
       throw new Error("ยังไม่ได้อัปโหลด QR PromptPay — ตั้งค่าใน Admin → Payment");
     }
-    if (!boothSettingsState?.bank_webhook_secret_configured) {
+    if (!boothSettingsState?.bank_webhook_secret_configured && !isPaymentDevBypassEnabled()) {
       throw new Error(
         "ยังไม่ได้ตั้ง BANK_WEBHOOK_SECRET บน server — ตั้งใน Render env แล้ว redeploy"
       );
@@ -387,6 +438,10 @@ async function createPaymentSession(amount) {
     payload.amount = sessionAmount;
   }
 
+  if (typeof getBoothId === "function") {
+    payload.booth_id = getBoothId();
+  }
+
   const response = await fetchWithTimeout(`${API_URL}/api/booth/payment-sessions`, {
     method: "POST",
     headers: {
@@ -434,7 +489,11 @@ function proceedFromPayment() {
   completedPaymentAmount =
     activePaymentSession?.amount ?? selectedPaymentTier?.amount ?? completedPaymentAmount;
   clearPaymentFlow();
-  goToNameEntry();
+  if (typeof goToPostPaymentOrNameStep === "function") {
+    goToPostPaymentOrNameStep();
+  } else {
+    goToNameEntry();
+  }
 }
 
 async function pollPaymentSessionOnce() {
@@ -682,6 +741,7 @@ async function startAutoPaymentSession(flowId, paymentAmount) {
     ensureNativeNotificationAccess();
 
     setPaymentStatus("waiting", getPaymentWaitingMessage(), true);
+    syncPaymentDevAcceptButton();
     startPaymentWaitingHint();
     startPaymentDebugPolling();
     startPaymentPolling();
@@ -693,6 +753,7 @@ async function startAutoPaymentSession(flowId, paymentAmount) {
     renderPaymentPage(paymentAmount);
     setPaymentQrLoading(true, error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
     setPaymentStatus("error", error.message || "ไม่สามารถสร้าง QR ชำระเงินได้", true);
+    syncPaymentDevAcceptButton();
   }
 }
 
@@ -702,7 +763,11 @@ async function selectPaymentTierAndPay(tier) {
 
   await fetchBoothSettings();
   if (!isBoothPaymentRequired()) {
-    goToNameEntry();
+    if (typeof goToPostPaymentOrNameStep === "function") {
+      goToPostPaymentOrNameStep();
+    } else {
+      goToNameEntry();
+    }
     return;
   }
 
@@ -725,7 +790,11 @@ function goToPayment(amount = selectedPaymentTier?.amount, prints = selectedPaym
 
     await fetchBoothSettings();
     if (!isBoothPaymentRequired()) {
-      goToNameEntry();
+      if (typeof goToPostPaymentOrNameStep === "function") {
+        goToPostPaymentOrNameStep();
+      } else {
+        goToNameEntry();
+      }
       return;
     }
 
@@ -754,6 +823,7 @@ function goToPayment(amount = selectedPaymentTier?.amount, prints = selectedPaym
     clearPaymentFlow();
     renderPaymentPage(paymentAmount);
     navigateTo("payment");
+    syncPaymentDevAcceptButton();
     setPaymentStatus("idle", "", false);
     startPaymentCountdown(PAYMENT_TIMEOUT_SEC);
     void startAutoPaymentSession(flowId, paymentAmount);
@@ -762,6 +832,7 @@ function goToPayment(amount = selectedPaymentTier?.amount, prints = selectedPaym
 
 function initPaymentModule() {
   const btnBack = document.getElementById("btn-payment-back");
+  const btnDevAccept = document.getElementById("btn-payment-dev-accept");
 
   btnBack?.addEventListener("click", () => {
     clearPaymentFlow();
@@ -775,6 +846,8 @@ function initPaymentModule() {
     goToHome();
   });
 
+  btnDevAccept?.addEventListener("click", acceptPaymentDevBypass);
+  syncPaymentDevAcceptButton();
 }
 
 document.addEventListener("DOMContentLoaded", () => {

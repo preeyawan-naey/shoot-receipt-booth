@@ -13,10 +13,24 @@ const PRINT_GUEST_NAME_FONT_SIZE = 18;
 const PRINT_GUEST_NAME_GAP = 10;
 /** Hide thank-you tagline + guest name under QR on thermal print (temporary). */
 const PRINT_FOOTER_UNDER_QR_ENABLED = false;
-/** Hide QR code on thermal print receipt (temporary). Download QR page unchanged. */
+/** Hide QR code on thermal print receipt (fallback when profile unavailable). */
 const PRINT_QR_ON_RECEIPT_ENABLED = false;
-/** Draw QR on TheBlumo preview mock (gray square). */
+/** Draw QR on receipt preview/print (fallback when profile unavailable). */
 const PREVIEW_QR_ON_RECEIPT_ENABLED = true;
+
+function isReceiptDownloadQrEnabled() {
+  if (typeof getBoothFeature === "function") {
+    return getBoothFeature("receipt_download_qr", PREVIEW_QR_ON_RECEIPT_ENABLED);
+  }
+  return PREVIEW_QR_ON_RECEIPT_ENABLED;
+}
+
+function isReceiptDownloadQrPrintEnabled() {
+  if (typeof getBoothFeature === "function") {
+    return getBoothFeature("receipt_download_qr_print", PRINT_QR_ON_RECEIPT_ENABLED);
+  }
+  return PRINT_QR_ON_RECEIPT_ENABLED;
+}
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -116,6 +130,15 @@ function slotToDrawRect(
   let w = (slot.width / 100) * refW;
   let h = (slot.height / 100) * refH;
   y = Math.max(0, y);
+
+  if (slot.expandPct) {
+    const padX = w * (slot.expandPct / 100);
+    const padY = h * (slot.expandPct / 100);
+    x -= padX;
+    y -= padY;
+    w += padX * 2;
+    h += padY * 2;
+  }
 
   const canBleed = slot.fit !== "contain" && !slot.noBleed;
   if (canBleed) {
@@ -391,9 +414,11 @@ async function drawPhotosInSlots(
   options = {}
 ) {
   const slots =
-    typeof getActivePhotoSlots === "function"
-      ? getActivePhotoSlots(frameConfig)
-      : frameConfig.slots;
+    options.layoutSelectPreview && frameConfig.selectSlots?.length
+      ? frameConfig.selectSlots
+      : typeof getActivePhotoSlots === "function"
+        ? getActivePhotoSlots(frameConfig)
+        : frameConfig.slots;
   const frameId =
     typeof resolveDecorativeFrameId === "function"
       ? resolveDecorativeFrameId()
@@ -466,6 +491,118 @@ function getTheBlumoPhotoFrameBounds(frameConfig, refW, previewMode = false) {
     x: (drawSlot.left / 100) * refW,
     w: (drawSlot.width / 100) * refW,
   };
+}
+
+let schoolbellFontLoadPromise = null;
+
+function getSchoolbellFontUrls() {
+  const links = document.querySelectorAll('link[rel="stylesheet"]');
+  for (const link of links) {
+    const href = link.getAttribute("href") || "";
+    if (href.includes("styles.css")) {
+      try {
+        const base = new URL(href, window.location.href);
+        return [
+          new URL("fonts/Schoolbell.ttf", base).href,
+          "https://fonts.gstatic.com/s/schoolbell/v18/92zQtBZWOrcgoe-fgnJIVxI.ttf",
+        ];
+      } catch {
+        break;
+      }
+    }
+  }
+  return [
+    "css/fonts/Schoolbell.ttf",
+    "https://fonts.gstatic.com/s/schoolbell/v18/92zQtBZWOrcgoe-fgnJIVxI.ttf",
+  ];
+}
+
+async function ensureSchoolbellFontLoaded(fontSizePx) {
+  if (!document.fonts) return;
+
+  if (!schoolbellFontLoadPromise) {
+    schoolbellFontLoadPromise = (async () => {
+      if (document.fonts.check('12px "Schoolbell"')) return;
+
+      for (const url of getSchoolbellFontUrls()) {
+        try {
+          const face = new FontFace("Schoolbell", `url("${url}")`);
+          const loaded = await face.load();
+          document.fonts.add(loaded);
+          return;
+        } catch {
+          /* try next source */
+        }
+      }
+    })();
+  }
+
+  await schoolbellFontLoadPromise;
+
+  const size = Math.max(12, Math.round(fontSizePx));
+  try {
+    await document.fonts.load(`${size}px "Schoolbell"`);
+    await document.fonts.ready;
+  } catch {
+    /* fallback to cursive */
+  }
+}
+
+function getKikiGuestNameFontSize(_canvasWidth, slot, bandHeightPx = 0) {
+  const px = Number(slot?.fontSizePx);
+  const bandPct = Number(slot?.fontSizeBandPct);
+  const fromPx = Number.isFinite(px) && px > 0 ? px : 72;
+  const fromBand =
+    Number.isFinite(bandPct) && bandPct > 0 && bandHeightPx > 0
+      ? bandHeightPx * bandPct
+      : 0;
+  return Math.max(fromPx, fromBand);
+}
+
+async function drawKikiGuestName(ctx, frameConfig, canvasWidth, canvasHeight, options = {}) {
+  if (options.layoutSelectPreview || options.skipGuestName) return;
+  if (typeof isKikiFrameSelectLayout === "function" && !isKikiFrameSelectLayout(frameConfig)) {
+    return;
+  }
+  if (
+    typeof isBoothFeatureEnabled === "function" &&
+    !isBoothFeatureEnabled("guest_name", true)
+  ) {
+    return;
+  }
+
+  const guestName =
+    typeof getBoothGuestName === "function" ? getBoothGuestName() : "";
+  if (!guestName) return;
+
+  const slot = frameConfig?.guestNameSlot;
+  if (!slot) return;
+
+  const x = (slot.left / 100) * canvasWidth;
+  const y = (slot.top / 100) * canvasHeight;
+  const w = (slot.width / 100) * canvasWidth;
+  const h = (slot.height / 100) * canvasHeight;
+
+  const fontSize = getKikiGuestNameFontSize(canvasWidth, slot, h);
+  const textAlign = slot.textAlign || "left";
+  const designW =
+    typeof LAYOUT_NATURAL_WIDTH !== "undefined" ? LAYOUT_NATURAL_WIDTH : 908;
+  const padLeft = ((slot.padLeftPx || 0) / designW) * canvasWidth;
+  const textX = textAlign === "center" ? x + w / 2 : x + padLeft;
+  const textY = y + h / 2;
+  const fontSpec = `${Math.round(fontSize)}px "Schoolbell", cursive`;
+
+  await ensureSchoolbellFontLoaded(fontSize);
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+  ctx.save();
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = textAlign;
+  ctx.textBaseline = "middle";
+  ctx.font = fontSpec;
+  ctx.fillText(guestName, textX, textY);
+  ctx.restore();
 }
 
 async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0, options = {}) {
@@ -562,8 +699,29 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   ctx.restore();
 }
 
+async function drawKikiDownloadQR(ctx, frameConfig, canvasWidth, canvasHeight, qrDataUrl) {
+  if (!isReceiptDownloadQrEnabled() || !qrDataUrl) return;
+  if (typeof isKikiFrameSelectLayout === "function" && !isKikiFrameSelectLayout(frameConfig)) {
+    return;
+  }
+
+  const layoutId = frameConfig?.id;
+  const centerTopPct =
+    typeof getKikiQrCenterTopPct === "function" ? getKikiQrCenterTopPct(layoutId) : 81.21;
+  const size =
+    typeof getKikiQrSizePx === "function"
+      ? getKikiQrSizePx(canvasWidth)
+      : Math.round((canvasWidth * 2) / 8);
+  const centerX = (canvasWidth * 50) / 100;
+  const centerY = (centerTopPct / 100) * canvasHeight;
+  const x = centerX - size / 2;
+  const y = centerY - size / 2;
+
+  await drawQRAt(ctx, qrDataUrl, x, y, size, { background: true });
+}
+
 async function drawTheBlumoPreviewQR(ctx, layoutId, qrDataUrl, canvasWidth, canvasHeight, layoutReference = null) {
-  if (!PREVIEW_QR_ON_RECEIPT_ENABLED || !qrDataUrl) return;
+  if (!isReceiptDownloadQrEnabled() || !qrDataUrl) return;
 
   const slot =
     typeof getTheBlumoPreviewQrSlot === "function"
@@ -663,14 +821,16 @@ async function drawTheBlumoPreviewOverlays(
     layoutReference,
     slotOffsetY: options.slotOffsetY ?? 0,
   });
-  await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, options.offsetY ?? 0, {
-    eraseBackground: options.eraseBackground ?? false,
-    previewMode: true,
-    frameConfig,
-    layoutReference,
-  });
+  if (!options.layoutSelectPreview) {
+    await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, options.offsetY ?? 0, {
+      eraseBackground: options.eraseBackground ?? false,
+      previewMode: true,
+      frameConfig,
+      layoutReference,
+    });
+  }
 
-  if (PREVIEW_QR_ON_RECEIPT_ENABLED && options.qrCodeUrl) {
+  if (isReceiptDownloadQrEnabled() && options.qrCodeUrl) {
     await drawTheBlumoPreviewQR(
       ctx,
       frameConfig.id,
@@ -693,6 +853,27 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
     options.frameSrc || previewPath || frameConfig.imagePath;
 
   const frameImg = await loadImage(frameSrc);
+  const isKikiFrameSelect =
+    !options.layoutSelectPreview &&
+    typeof isKikiFrameSelectLayout === "function" &&
+    isKikiFrameSelectLayout(frameConfig);
+
+  if (isKikiFrameSelect) {
+    await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawImageCover, {
+      previewMode: usePreviewSlots,
+      layoutSelectPreview: options.layoutSelectPreview,
+    });
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-over";
+    ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
+    ctx.restore();
+    await drawKikiGuestName(ctx, frameConfig, canvasWidth, canvasHeight, options);
+    if (options.qrCodeUrl) {
+      await drawKikiDownloadQR(ctx, frameConfig, canvasWidth, canvasHeight, options.qrCodeUrl);
+    }
+    return;
+  }
+
   ctx.drawImage(frameImg, 0, 0, canvasWidth, canvasHeight);
 
   if (
@@ -703,18 +884,22 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
     await drawTheBlumoPreviewOverlays(ctx, frameConfig, photos, canvasWidth, canvasHeight, {
       eraseBackground: options.eraseGuestNameBackground !== false,
       qrCodeUrl: options.qrCodeUrl,
+      layoutSelectPreview: options.layoutSelectPreview,
     });
     return;
   }
 
-  await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
-    eraseBackground: options.eraseGuestNameBackground !== false,
-    previewMode: usePreviewSlots,
-    frameConfig,
-    layoutReference: options.layoutReference,
-  });
+  if (!options.layoutSelectPreview && !options.skipGuestName) {
+    await drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, 0, {
+      eraseBackground: options.eraseGuestNameBackground !== false,
+      previewMode: usePreviewSlots,
+      frameConfig,
+      layoutReference: options.layoutReference,
+    });
+  }
   await drawPhotosInSlots(ctx, frameConfig, photos, canvasWidth, canvasHeight, drawImageCover, {
     previewMode: usePreviewSlots,
+    layoutSelectPreview: options.layoutSelectPreview,
   });
 }
 
@@ -1040,6 +1225,13 @@ async function drawTheBlumoPrintComposite(canvas, frameConfig, photos, options =
   return canvas;
 }
 
+function resolveKikiFrameSelectArtwork(frameConfig) {
+  if (typeof isKikiFrameSelectLayout === "function" && !isKikiFrameSelectLayout(frameConfig)) {
+    return null;
+  }
+  return frameConfig?.previewImagePath || frameConfig?.imagePath || null;
+}
+
 async function drawComposite(canvas, frameConfig, photos, options = {}) {
   const isPreview = options.preview !== false;
   const useFrameSelectArtwork =
@@ -1065,9 +1257,17 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
       : null;
-  const frameSrc = useLayoutMock
-    ? frameConfig.selectImagePath
-    : previewPath || frameConfig.imagePath;
+  const kikiFrameSelectSrc = resolveKikiFrameSelectArtwork(frameConfig);
+  const layoutSelectSrc =
+    options.layoutSelectPreview && frameConfig?.selectImagePath
+      ? frameConfig.selectImagePath
+      : null;
+  const frameSrc =
+    layoutSelectSrc ||
+    (useLayoutMock ? frameConfig.selectImagePath : null) ||
+    kikiFrameSelectSrc ||
+    previewPath ||
+    frameConfig.imagePath;
   const sizeImg = await loadImage(frameSrc);
 
   canvas.width = sizeImg.naturalWidth;
@@ -1075,19 +1275,25 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
 
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const isKikiLayout =
+    typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(frameConfig);
+  const qrCodeUrl =
+    isReceiptDownloadQrEnabled() && options.qrCodeUrl
+      ? isKikiLayout ||
+        (isPreview &&
+          useLayoutMock &&
+          typeof isTheBlumoBoothActive === "function" &&
+          isTheBlumoBoothActive())
+        ? options.qrCodeUrl
+        : null
+      : null;
+
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
     usePreviewSlots: useLayoutMock,
     frameSrc,
     eraseGuestNameBackground: !useLayoutMock,
-    qrCodeUrl:
-      isPreview &&
-      PREVIEW_QR_ON_RECEIPT_ENABLED &&
-      options.qrCodeUrl &&
-      useLayoutMock &&
-      typeof isTheBlumoBoothActive === "function" &&
-      isTheBlumoBoothActive()
-        ? options.qrCodeUrl
-        : null,
+    qrCodeUrl,
+    layoutSelectPreview: options.layoutSelectPreview === true,
   });
 
   if (isPreview && isTheBlumoBoothActive?.() && !useLayoutMock) {
@@ -1168,7 +1374,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     typeof isTheBlumoLayout === "function" && isTheBlumoLayout(frameConfig?.id);
 
   if (useTheBlumo) {
-    const qrCodeUrl = PREVIEW_QR_ON_RECEIPT_ENABLED ? qrDataUrl : null;
+    const qrCodeUrl = isReceiptDownloadQrEnabled() ? qrDataUrl : null;
     if (frameConfig?.selectImagePath) {
       await drawLayoutMockComposite(canvas, frameConfig, resolvedPhotos, {
         thermal,
@@ -1180,6 +1386,14 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
         qrCodeUrl,
       });
     }
+    return canvas;
+  }
+
+  if (typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(frameConfig)) {
+    await drawComposite(canvas, frameConfig, resolvedPhotos, {
+      preview: true,
+      qrCodeUrl: isReceiptDownloadQrEnabled() ? qrDataUrl : null,
+    });
     return canvas;
   }
 
@@ -1205,7 +1419,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     ? await measureThankYouTextHeight()
     : 0;
   const footerGap = PRINT_FOOTER_UNDER_QR_ENABLED ? PRINT_QR_TEXT_GAP : 0;
-  const totalH = PRINT_QR_ON_RECEIPT_ENABLED
+  const totalH = isReceiptDownloadQrPrintEnabled()
     ? qrY + qrSize + footerGap + textHeight + padBottom
     : padTop + crop.height + padBottom;
 
@@ -1234,9 +1448,11 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   });
 
   const slots =
-    typeof getActivePhotoSlots === "function"
-      ? getActivePhotoSlots(frameConfig)
-      : frameConfig.slots;
+    options.layoutSelectPreview && frameConfig.selectSlots?.length
+      ? frameConfig.selectSlots
+      : typeof getActivePhotoSlots === "function"
+        ? getActivePhotoSlots(frameConfig)
+        : frameConfig.slots;
   const count = Math.min(frameConfig.photoCount, resolvedPhotos.length, slots.length);
   const radius = getPhotoSlotRadius(frameW);
   const frameId =
@@ -1269,7 +1485,7 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     }
   }
 
-  if (PRINT_QR_ON_RECEIPT_ENABLED) {
+  if (isReceiptDownloadQrPrintEnabled()) {
     await drawQRAt(ctx, qrDataUrl, qrX, qrY, qrSize);
   }
   if (PRINT_FOOTER_UNDER_QR_ENABLED) {
@@ -1354,6 +1570,17 @@ function canvasToUploadJpeg(source, quality = UPLOAD_JPEG_QUALITY) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+function getUploadBoothId() {
+  return typeof getBoothId === "function" ? getBoothId() : "the-receipt-club";
+}
+
+function buildDownloadPath(downloadId) {
+  const params = new URLSearchParams({
+    booth_id: getUploadBoothId(),
+  });
+  return `${API_URL}/api/download/${downloadId}?${params.toString()}`;
+}
+
 async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
   const payloadLen = String(imageBase64 || "").length;
   console.info(`[print] upload start replaceId=${replaceId || "(new)"} b64len=${payloadLen}`);
@@ -1361,7 +1588,11 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
   const data = await fetchJsonWithRetry(`${API_URL}/api/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, replaceId }),
+    body: JSON.stringify({
+      imageBase64,
+      replaceId,
+      booth_id: getUploadBoothId(),
+    }),
   });
 
   if (!data.success) {
@@ -1372,7 +1603,7 @@ async function uploadCompositeAndGetQR(imageBase64, replaceId = null) {
 }
 
 async function createDownloadQRLocally(downloadId) {
-  const downloadUrl = `${API_URL}/api/download/${downloadId}`;
+  const downloadUrl = buildDownloadPath(downloadId);
 
   if (typeof QRCode !== "undefined" && typeof QRCode.toDataURL === "function") {
     const qrCodeUrl = await QRCode.toDataURL(downloadUrl, {
@@ -1396,7 +1627,10 @@ async function createDownloadQR(downloadId) {
   const data = await fetchJsonWithRetry(`${API_URL}/api/qrcode`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ downloadId }),
+    body: JSON.stringify({
+      downloadId,
+      booth_id: getUploadBoothId(),
+    }),
   });
 
   if (!data.success || !data.qrCodeUrl) {
@@ -1463,7 +1697,11 @@ async function preparePrintReceipt() {
 
   const downloadCanvas = document.createElement("canvas");
   const previewCanvas = document.getElementById("receipt-canvas");
-  if (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) {
+  const downloadMatchesPreview =
+    (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) ||
+    (typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(layout));
+
+  if (downloadMatchesPreview) {
     if (!cloneReceiptCanvas(downloadCanvas, previewCanvas)) {
       await drawComposite(downloadCanvas, layout, photos, {
         preview: true,
@@ -1474,7 +1712,7 @@ async function preparePrintReceipt() {
     await drawComposite(downloadCanvas, layout, photos, { preview: false });
   }
   console.info(
-    `[print] download canvas ${downloadCanvas.width}x${downloadCanvas.height} (matches preview for TheBlumo)`
+    `[print] download canvas ${downloadCanvas.width}x${downloadCanvas.height} (matches preview=${downloadMatchesPreview})`
   );
 
   const uploadPrintCanvas = document.createElement("canvas");
@@ -1569,8 +1807,8 @@ async function setupPrintCopies(count) {
   await Promise.all(loadPromises);
 }
 
-/** 80mm thermal @ 203dpi — always render at full printable width */
-const RAWBT_TARGET_WIDTH_PX = 576;
+/** 80mm thermal @ 203dpi — full paper width (~640 dots), not 72mm/576 */
+const RAWBT_TARGET_WIDTH_PX = 640;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1673,17 +1911,11 @@ function refocusBoothAfterPrint() {
 function scaleCanvasForThermal(source, targetWidth = RAWBT_TARGET_WIDTH_PX) {
   if (!source.width || !source.height) return source;
 
-  const scale = targetWidth / source.width;
-  const contentW = Math.max(1, Math.round(source.width * scale));
-  const contentH = Math.max(1, Math.round(source.height * scale));
-
-  if (
-    contentW === source.width &&
-    contentH === source.height &&
-    contentW === targetWidth
-  ) {
+  if (source.width === targetWidth) {
     return source;
   }
+
+  const contentH = Math.max(1, Math.round(source.height * (targetWidth / source.width)));
 
   const scaled = document.createElement("canvas");
   scaled.width = targetWidth;
@@ -1693,8 +1925,7 @@ function scaleCanvasForThermal(source, targetWidth = RAWBT_TARGET_WIDTH_PX) {
   ctx.fillRect(0, 0, scaled.width, scaled.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  const x = Math.round((targetWidth - contentW) / 2);
-  ctx.drawImage(source, x, 0, contentW, contentH);
+  ctx.drawImage(source, 0, 0, targetWidth, contentH);
   return scaled;
 }
 

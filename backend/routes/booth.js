@@ -1,5 +1,6 @@
 const express = require("express");
 const boothSettings = require("../boothSettings");
+const boothProfiles = require("../boothProfiles");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
 const photoSessions = require("../photoSessions");
@@ -8,9 +9,10 @@ const db = require("../db");
 
 const router = express.Router();
 
-router.get("/settings", async (_req, res) => {
+router.get("/settings", async (req, res) => {
   try {
-    const settings = await boothSettings.getSettings();
+    const boothId = req.query.booth_id || req.query.boothId || req.get("x-booth-id");
+    const settings = await boothSettings.getSettings(boothId);
     return res.json({ success: true, settings });
   } catch (error) {
     console.error("[booth/settings]", error);
@@ -21,9 +23,25 @@ router.get("/settings", async (_req, res) => {
   }
 });
 
-router.get("/payment-qr", async (_req, res) => {
+router.get("/profile", async (req, res) => {
   try {
-    const buffer = await paymentSettings.getPaymentQrBuffer();
+    const boothId = req.query.booth_id || req.query.boothId || req.get("x-booth-id");
+    const profile = await boothProfiles.getProfile(boothId);
+    return res.json({ success: true, profile, booth_id: profile.booth_id });
+  } catch (error) {
+    console.error("[booth/profile]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/payment-qr", async (req, res) => {
+  try {
+    const boothId =
+      req.query.booth_id || req.query.boothId || req.get("x-booth-id") || null;
+    const buffer = await paymentSettings.getPaymentQrBuffer(boothId);
     if (!buffer || buffer.length === 0) {
       return res.status(404).json({ success: false, message: "Payment QR not configured" });
     }
@@ -77,8 +95,15 @@ router.get("/payment-sessions/:id/qr-image", async (req, res) => {
 
 router.post("/payment-sessions", async (req, res) => {
   try {
+    const boothId =
+      req.body?.booth_id ||
+      req.query.booth_id ||
+      req.query.boothId ||
+      req.get("x-booth-id") ||
+      null;
     const session = await paymentSessions.createSession({
       amount: req.body?.amount,
+      boothId,
     });
     return res.status(201).json({ success: true, session });
   } catch (error) {
@@ -134,6 +159,10 @@ router.post("/payment-sessions/:id/cancel", async (req, res) => {
 router.post("/photo-sessions", async (req, res) => {
   try {
     const session = await photoSessions.recordSession({
+      boothId:
+        typeof req.body?.booth_id === "string"
+          ? req.body.booth_id
+          : req.query.booth_id || req.get("x-booth-id") || null,
       layoutId: typeof req.body?.layout_id === "string" ? req.body.layout_id : null,
       frameId: typeof req.body?.frame_id === "string" ? req.body.frame_id : null,
       printCount: req.body?.print_count,

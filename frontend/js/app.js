@@ -93,14 +93,21 @@ function initLayoutGrid() {
   const layoutGrid = document.getElementById("layout-grid");
   if (!layoutGrid) return;
 
-  layoutGrid.innerHTML = LAYOUTS.map((layout) => buildLayoutCard(layout)).join("");
+  const layouts = typeof getLayouts === "function" ? getLayouts() : [];
+  layoutGrid.innerHTML = layouts.map((layout) => buildLayoutCard(layout)).join("");
 
   layoutGrid.querySelectorAll(".layout-card").forEach((card) => {
     card.addEventListener("click", () => {
       selectLayout(card.dataset.layoutId);
     });
   });
+
+  if (typeof renderLayoutSelectPreviews === "function") {
+    void renderLayoutSelectPreviews();
+  }
 }
+
+window.rebuildLayoutSelectGrid = initLayoutGrid;
 
 function buildLayoutCard(layout) {
   return `

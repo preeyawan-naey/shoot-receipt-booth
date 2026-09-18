@@ -5,7 +5,7 @@
 
 const ESCPOS_USB_PACKAGE = "com.loopedlabs.usbprintservice";
 const ESCPOS_USB_PRINT_ACTION = "org.escpos.intent.action.PRINT";
-const ESCPOS_PRINT_WIDTH_PX = 576;
+const ESCPOS_PRINT_WIDTH_PX = 640;
 const ESCPOS_MAX_PRINT_HEIGHT_PX = 900;
 const ESCPOS_JPEG_QUALITY = 0.72;
 /** Keep intent small — large extras crash ESC POS USB Print Service */

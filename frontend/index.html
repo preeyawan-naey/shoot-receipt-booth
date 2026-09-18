@@ -10,10 +10,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Schoolbell&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth251" />
+    <link rel="stylesheet" href="css/styles.css?v=booth301" />
   </head>
   <body>
     <div class="viewport">
@@ -21,14 +21,14 @@
         <!-- ==================== HOME PAGE ==================== -->
         <section class="page page--active" id="page-home" data-page="home">
           <header class="home-header">
-            <img src="img/logo2.png" alt="SHOOT Receipt Booth" class="home-header__logo">
+            <img src="img/booths/the-receipt-club/logo2.png" alt="SHOOT Receipt Booth" class="home-header__logo">
           </header>
 
           <div class="home-visual">
             <img
-              src="img/index-re&amp;play.gif"
+              src="img/booths/the-receipt-club/index-kiki.png"
               alt=""
-              class="home-index-art"
+              class="home-index-art home-index-art--kiki"
             />
           </div>
 
@@ -134,6 +134,14 @@
               กลับหน้าหลักภายใน <span id="payment-countdown">300</span> วินาที
             </p>
 
+            <button
+              type="button"
+              class="payment-body__dev-accept"
+              id="btn-payment-dev-accept"
+              hidden
+            >
+              Accept (Dev)
+            </button>
           </div>
         </section>
 
@@ -226,7 +234,7 @@
           <div class="preview-page">
             <div class="preview-dispenser">
               <img
-                src="img/printer.png"
+                src="img/booths/the-receipt-club/printer.png"
                 alt="Printer"
                 class="preview-dispenser__printer"
               />
@@ -319,7 +327,7 @@
         <div class="admin-drawer-backdrop" id="admin-drawer-backdrop" hidden aria-hidden="true">
           <aside class="admin-drawer" id="admin-drawer" role="dialog" aria-label="Admin menu">
             <header class="admin-drawer__header">
-              <img src="img/logo2.png" alt="" class="admin-drawer__logo" />
+              <img src="img/booths/the-receipt-club/logo2.png" alt="" class="admin-drawer__logo" />
               <div class="admin-drawer__brand">
                 <h2 class="admin-drawer__title">The Receipt Club</h2>
                 <p class="admin-drawer__version" id="admin-drawer-version">Booth</p>
@@ -411,19 +419,20 @@
     <script src="js/qrcode.bundle.js?v=booth190"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-settings.js?v=booth238"></script>
+    <script src="js/booth-profile.js?v=booth293"></script>
+    <script src="js/booth-settings.js?v=booth279"></script>
     <script src="js/booth-storage.js?v=booth190"></script>
-    <script src="js/layouts.js?v=booth243"></script>
-    <script src="js/frames.js?v=booth250"></script>
+    <script src="js/layouts.js?v=booth295"></script>
+    <script src="js/frames.js?v=booth280"></script>
     <script src="js/navigation.js?v=booth190"></script>
     <script src="js/kiosk.js?v=booth200"></script>
-    <script src="js/payment.js?v=booth251"></script>
+    <script src="js/payment.js?v=booth285"></script>
     <script src="js/booth-name.js?v=booth201"></script>
-    <script src="js/escpos.js"></script>
+    <script src="js/escpos.js?v=booth253"></script>
     <script src="js/thermer.js"></script>
     <script src="js/native-print.js?v=booth190"></script>
-    <script src="js/composite.js?v=booth252"></script>
+    <script src="js/composite.js?v=booth294"></script>
     <script src="js/camera.js?v=booth207"></script>
-    <script src="js/app.js?v=booth190"></script>
+    <script src="js/app.js?v=booth283"></script>
   </body>
 </html>

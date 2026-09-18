@@ -1,16 +1,14 @@
 /**
  * Decorative frame options — The Blumo booth (Layout-1 / Layout-2 only)
- * Assets: img/Layout/frame/frame-select/layout{N}/TheBlumo.jpg
+ * Assets: img/booths/the-receipt-club/Layout/frame/frame-select/layout{N}/TheBlumo.jpg
  */
-const FRAME_ASSET_BASE = "img/Layout/frame/frame-select";
+const FRAME_ASSET_BASE = "img/booths/the-receipt-club/Layout/frame/frame-select";
 const THE_BLUMO_FRAME_ID = "theblumo";
 /** Set true to show frame picker again */
 const BOOTH_SHOW_FRAME_SELECT = false;
 
-const LAYOUT_FRAME_DIR = {
-  "Layout-1": "layout1",
-  "Layout-2": "layout2",
-};
+/** KiKi booth — no TheBlumo frame-select overlays */
+const LAYOUT_FRAME_DIR = {};
 
 /** Crop full TheBlumo artwork to mockup height (layoutN-theblumo.jpg) */
 const THE_BLUMO_PRINT_CROP_BOTTOM_PCT = {
@@ -124,8 +122,8 @@ function isTheBlumoFrameId(frameId) {
   return frameId === THE_BLUMO_FRAME_ID;
 }
 
-function isTheBlumoLayout(layoutId) {
-  return layoutId === "Layout-1" || layoutId === "Layout-2";
+function isTheBlumoLayout(_layoutId) {
+  return false;
 }
 
 function isTheBlumoBoothActive() {
@@ -146,7 +144,7 @@ function getTheBlumoPrintCropBottomPct(layoutId) {
   return getTheBlumoPreviewBottomPct(layoutId);
 }
 
-function getCaptureSizeForSlot(slot) {
+function getCaptureSizeForSlot(slot, naturalHeight = LAYOUT_NATURAL_HEIGHT) {
   const fallback = { width: 960, height: 720, ratio: 960 / 720 };
   if (!slot || slot.noCaptureCrop) return fallback;
 
@@ -157,7 +155,7 @@ function getCaptureSizeForSlot(slot) {
   }
 
   const pixelW = (slotW / 100) * LAYOUT_NATURAL_WIDTH;
-  const pixelH = (slotH / 100) * LAYOUT_NATURAL_HEIGHT;
+  const pixelH = (slotH / 100) * naturalHeight;
   const slotRatio = pixelW / pixelH;
 
   if (slotRatio >= 1) {
@@ -176,7 +174,8 @@ function getCaptureSizeForLayout(layout, shotIndex = 0) {
     typeof getActivePhotoSlots === "function"
       ? getActivePhotoSlots(layout)
       : layout?.slots;
-  return getCaptureSizeForSlot(slots?.[shotIndex] || slots?.[0]);
+  const naturalHeight = layout?.naturalHeight ?? LAYOUT_NATURAL_HEIGHT;
+  return getCaptureSizeForSlot(slots?.[shotIndex] || slots?.[0], naturalHeight);
 }
 
 function getLayoutFrameDir(layoutId) {

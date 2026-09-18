@@ -40,9 +40,19 @@ function isOmisePaymentMode() {
   return getBoothPaymentMode() === "omise";
 }
 
+function getBoothSettingsUrl() {
+  const boothId =
+    typeof getBoothId === "function" ? getBoothId() : "the-receipt-club";
+  const params = new URLSearchParams({
+    booth_id: boothId,
+    t: String(Date.now()),
+  });
+  return `${API_URL}/api/booth/settings?${params.toString()}`;
+}
+
 async function fetchBoothSettings() {
   try {
-    const res = await fetch(`${API_URL}/api/booth/settings?t=${Date.now()}`, {
+    const res = await fetch(getBoothSettingsUrl(), {
       cache: "no-store",
     });
     const data = await res.json();
@@ -52,6 +62,9 @@ async function fetchBoothSettings() {
       ...boothSettingsState,
       ...data.settings,
     };
+    if (typeof setBoothProfileState === "function") {
+      setBoothProfileState(data.settings);
+    }
     if (typeof renderPackageTierPicker === "function") {
       renderPackageTierPicker();
     }
@@ -66,13 +79,24 @@ async function initBoothSettings() {
   window.setInterval(fetchBoothSettings, BOOTH_SETTINGS_POLL_MS);
 }
 
+function goToPostPaymentOrNameStep() {
+  if (
+    typeof isBoothFeatureEnabled === "function" &&
+    !isBoothFeatureEnabled("guest_name", true)
+  ) {
+    goToLayoutSelect();
+    return;
+  }
+  goToNameEntry();
+}
+
 async function goToBoothStart() {
   await fetchBoothSettings();
   if (isBoothPaymentRequired()) {
     goToPackageSelect();
     return;
   }
-  goToNameEntry();
+  goToPostPaymentOrNameStep();
 }
 
 function goToBoothBack() {
@@ -88,6 +112,7 @@ async function recordBoothPhotoSession({ downloadId = null } = {}) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        booth_id: typeof getBoothId === "function" ? getBoothId() : null,
         layout_id: typeof getSelectedLayoutId === "function" ? getSelectedLayoutId() : null,
         frame_id: typeof getSelectedFrameId === "function" ? getSelectedFrameId() : null,
         print_count: typeof getPrintCopies === "function" ? getPrintCopies() : 1,
@@ -126,6 +151,8 @@ function syncNativePaymentNotify(sessionId = null, sessionAmount = null) {
     console.warn("[booth-settings] native payment notify sync failed", error);
   }
 }
+
+window.goToPostPaymentOrNameStep = goToPostPaymentOrNameStep;
 
 function resyncNativePaymentNotifyAfterSettings() {
   if (!isStaticQrPaymentMode()) return;

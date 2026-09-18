@@ -8,6 +8,16 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Schoolbell";
+  src:
+    url("fonts/Schoolbell.ttf") format("truetype"),
+    url("https://fonts.gstatic.com/s/schoolbell/v18/92zQtBZWOrcgoe-fgnJIVxI.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 
 *,
 *::before,
@@ -248,6 +258,14 @@ body {
   pointer-events: none;
 }
 
+.home-index-art--kiki {
+  width: 100%;
+  height: 100%;
+  max-width: min(92vw, 520px);
+  max-height: 100%;
+  object-fit: contain;
+}
+
 .dispenser {
   position: relative;
   width: clamp(200px, 52vw, 400px);
@@ -443,6 +461,7 @@ body {
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.07);
   cursor: pointer;
   appearance: none;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -490,6 +509,7 @@ body {
 }
 
 .package-card__art {
+  display: block;
   width: auto;
   height: 100%;
   max-height: 100%;
@@ -815,6 +835,23 @@ body {
   font-weight: 700;
 }
 
+.payment-body__dev-accept {
+  margin: 12px auto 0;
+  padding: 12px 24px;
+  border: 1px dashed var(--color-brown);
+  border-radius: 999px;
+  background: rgba(138, 115, 85, 0.08);
+  color: var(--color-brown);
+  font-family: var(--font-sans);
+  font-size: clamp(13px, 2.2vw, 16px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.payment-body__dev-accept:active {
+  transform: scale(0.98);
+}
+
 .payment-footer {
   position: relative;
   flex-shrink: 0;
@@ -999,7 +1036,6 @@ body {
   transform: scale(0.97);
 }
 
-.layout-card:active .layout-card__frame,
 .frame-card:active .frame-card__preview {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
@@ -1010,7 +1046,6 @@ body {
   box-shadow: none;
 }
 
-.layout-card--selected .layout-card__frame,
 .frame-card--selected .frame-card__preview {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
 }
@@ -1022,6 +1057,7 @@ body {
 #page-layout-select.page {
   padding-top: var(--page-padding-y-balanced);
   padding-bottom: var(--page-padding-y-balanced);
+  background: var(--color-bg);
 }
 
 #page-frame-select.page,
@@ -1064,40 +1100,62 @@ body {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr);
-  column-gap: clamp(54px, 9.35vw, 82px);
-  row-gap: clamp(17px, 2.98vw, 26px);
-  padding: clamp(4px, 1vh, 10px) clamp(28px, 6.5vw, 52px);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(28px, 7.5vw, 56px);
+  row-gap: clamp(12px, 2.8vh, 24px);
+  padding: clamp(4px, 1vh, 12px) clamp(36px, 9vw, 64px);
   align-items: center;
   justify-items: center;
+  container-type: size;
 }
 
 #page-layout-select .layout-card {
+  appearance: none;
+  -webkit-appearance: none;
   width: 100%;
   height: 100%;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
   overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#page-layout-select .layout-card:focus,
+#page-layout-select .layout-card:focus-visible {
+  outline: none;
 }
 
 #page-layout-select .layout-card__preview {
   display: block;
   width: auto;
   height: auto;
-  max-height: 100%;
-  max-width: 100%;
+  max-width: min(100%, 38cqw);
+  max-height: min(100%, 41cqh);
+  aspect-ratio: 704 / 1433;
   object-fit: contain;
   object-position: center;
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  outline: none;
+  filter: none;
+  mix-blend-mode: normal;
+  transition: opacity 0.25s ease, transform 0.15s ease;
+}
+
+#page-layout-select .layout-card__preview--loading {
+  opacity: 0.55;
 }
 
 #page-layout-select .layout-card:active .layout-card__preview,
 #page-layout-select .layout-card--selected .layout-card__preview {
-  box-shadow: none;
+  filter: none;
 }
 
 /*.frame-card__label {
@@ -1541,7 +1599,7 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
 }
 
 
@@ -1570,15 +1628,16 @@ body {
 }
 
 .layout-card__preview {
-  width: 100%;
+  width: auto;
   height: auto;
-  aspect-ratio: var(--layout-select-aspect-ratio);
+  max-width: 100%;
+  aspect-ratio: 704 / 1433;
   object-fit: contain;
   display: block;
   background: transparent;
-  border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s ease;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .frame-card__preview {

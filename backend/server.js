@@ -52,7 +52,8 @@ app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/server-info", async (_req, res) => {
   try {
-    const paymentMode = await paymentSettings.getPaymentMode();
+    const boothProfiles = require("./boothProfiles");
+    const paymentMode = await paymentSettings.getPaymentMode(boothProfiles.DEFAULT_BOOTH_ID);
     const omiseEnabled = paymentMode === "omise";
     return res.json({
       publicUrl: config.publicUrl,
@@ -76,13 +77,17 @@ app.get("/api/server-info", async (_req, res) => {
 
 app.post("/api/qrcode", async (req, res) => {
   try {
-    const { downloadId } = req.body;
+    const { downloadId, booth_id: boothIdRaw } = req.body;
 
     if (!downloadId || !/^[0-9a-f-]{36}$/i.test(downloadId)) {
       return res.status(400).json({ success: false, message: "Invalid downloadId" });
     }
 
-    const downloadUrl = storage.buildDownloadUrl(downloadId, resolveRequestBaseUrl(req));
+    const downloadUrl = await storage.buildDownloadUrl(
+      downloadId,
+      resolveRequestBaseUrl(req),
+      boothIdRaw
+    );
     const qrCodeDataUrl = await QRCode.toDataURL(downloadUrl);
 
     res.json({ success: true, qrCodeUrl: qrCodeDataUrl, downloadUrl });
@@ -99,7 +104,7 @@ app.get("/api/qrcode", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing url" });
     }
 
-    if (!storage.isAllowedDownloadUrl(url)) {
+    if (!(await storage.isAllowedDownloadUrl(url))) {
       return res.status(400).json({ success: false, message: "Invalid download url" });
     }
 
@@ -113,7 +118,7 @@ app.get("/api/qrcode", async (req, res) => {
 
 app.post("/api/upload", async (req, res) => {
   try {
-    const { imageBase64, replaceId } = req.body;
+    const { imageBase64, replaceId, booth_id: boothIdRaw } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ success: false, message: "No image data provided" });
@@ -123,8 +128,13 @@ app.post("/api/upload", async (req, res) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
 
-    const downloadUrl = await storage.saveImage(id, buffer, resolveRequestBaseUrl(req));
-    const printUrl = storage.buildPrintUrl(id, resolveRequestBaseUrl(req));
+    const downloadUrl = await storage.saveImage(
+      id,
+      buffer,
+      resolveRequestBaseUrl(req),
+      boothIdRaw
+    );
+    const printUrl = await storage.buildPrintUrl(id, resolveRequestBaseUrl(req), boothIdRaw);
     const qrCodeDataUrl = await QRCode.toDataURL(downloadUrl);
 
     console.log(`📸 Saved photo ${id} (${storage.getStorageMode()})`);
@@ -143,11 +153,13 @@ app.post("/api/upload", async (req, res) => {
   }
 });
 
-app.get("/api/download/:id", (req, res) => {
+app.get("/api/download/:id", async (req, res) => {
   const { id } = req.params;
+  const boothIdRaw = req.query.booth_id || req.query.boothId || null;
 
   if (config.supabase) {
-    return res.redirect(storage.buildDownloadUrl(id));
+    const downloadUrl = await storage.buildDownloadUrl(id, resolveRequestBaseUrl(req), boothIdRaw);
+    return res.redirect(downloadUrl);
   }
 
   const filePath = storage.getLocalFilePath(id);
@@ -162,14 +174,16 @@ app.get("/api/download/:id", (req, res) => {
 });
 
 /** Inline JPEG for RawBT PrintDownloadActivity (avoids huge base64 intents) */
-app.get("/api/print/:id", (req, res) => {
+app.get("/api/print/:id", async (req, res) => {
   const { id } = req.params;
+  const boothIdRaw = req.query.booth_id || req.query.boothId || null;
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
     return res.status(400).send("Invalid id");
   }
 
   if (config.supabase) {
-    return res.redirect(storage.buildDownloadUrl(id));
+    const printUrl = await storage.buildPrintUrl(id, resolveRequestBaseUrl(req), boothIdRaw);
+    return res.redirect(printUrl);
   }
 
   const filePath = storage.getLocalFilePath(id);
@@ -211,12 +225,25 @@ app.use("/api/admin", adminRoutes);
 const adminDir = path.join(FRONTEND_DIR, "admin");
 const adminApp = express.Router();
 
-adminApp.get("/", (_req, res) => {
+function sendAdminIndex(res) {
   res.set("Cache-Control", "no-store");
   res.sendFile(path.join(adminDir, "index.html"));
+}
+
+adminApp.get("/", (_req, res) => {
+  sendAdminIndex(res);
 });
+
 adminApp.use("/css", express.static(path.join(adminDir, "css"), { redirect: false, maxAge: 0 }));
 adminApp.use("/js", express.static(path.join(adminDir, "js"), { redirect: false, maxAge: 0 }));
+
+adminApp.get("/:boothId", (req, res, next) => {
+  const boothId = String(req.params.boothId || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(boothId)) {
+    return next();
+  }
+  sendAdminIndex(res);
+});
 
 app.use("/admin", adminApp);
 
@@ -243,6 +270,11 @@ app.use(express.static(FRONTEND_DIR, {
 async function startServer() {
   try {
     await db.initDb();
+    const boothProfiles = require("./boothProfiles");
+    await boothProfiles.ensureDefaultProfiles();
+    await storage.ensureSupabaseBuckets();
+    const paymentSettings = require("./paymentSettings");
+    await paymentSettings.migrateGlobalPaymentSettings();
   } catch (error) {
     console.error("❌ Database init failed:", error.message);
     process.exit(1);

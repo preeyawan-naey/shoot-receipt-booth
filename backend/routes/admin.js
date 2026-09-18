@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const config = require("../config");
 const admin = require("../admin");
 const boothSettings = require("../boothSettings");
+const boothProfiles = require("../boothProfiles");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
 const omise = require("../omise");
@@ -41,7 +42,7 @@ function requireAdminKey(req, res, next) {
   next();
 }
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   if (!config.adminApiKey) {
     return res.status(503).json({
       success: false,
@@ -56,23 +57,67 @@ router.post("/login", (req, res) => {
     });
   }
 
-  const username = String(req.body?.username ?? "").trim();
+  const usernameRaw = String(req.body?.username ?? "").trim();
+  const username = usernameRaw.toLowerCase();
   const password = String(req.body?.password ?? "");
+  const pathBoothId = req.body?.path_booth_id
+    ? boothProfiles.normalizeBoothId(req.body.path_booth_id)
+    : null;
 
-  if (
-    !safeEqualString(username, config.adminUsername) ||
-    !safeEqualString(password, config.adminPassword)
-  ) {
+  if (!safeEqualString(password, config.adminPassword)) {
     return res.status(401).json({
       success: false,
       message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
     });
   }
 
-  return res.json({
-    success: true,
-    token: config.adminApiKey,
-  });
+  if (safeEqualString(username, config.adminUsername)) {
+    return res.json({
+      success: true,
+      token: config.adminApiKey,
+      role: "super",
+      booth_id: pathBoothId,
+    });
+  }
+
+  const boothId = boothProfiles.normalizeBoothId(username);
+  if (username !== boothId) {
+    return res.status(401).json({
+      success: false,
+      message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+    });
+  }
+
+  if (pathBoothId && pathBoothId !== boothId) {
+    return res.status(401).json({
+      success: false,
+      message: "Username ต้องตรงกับ booth ของหน้านี้",
+    });
+  }
+
+  try {
+    const profile = await boothProfiles.getProfile(boothId);
+    if (!profile?.is_active) {
+      return res.status(401).json({
+        success: false,
+        message: "Booth นี้ถูกปิดใช้งาน",
+      });
+    }
+
+    return res.json({
+      success: true,
+      token: config.adminApiKey,
+      role: "booth",
+      booth_id: boothId,
+      booth_name: profile.name || boothId,
+    });
+  } catch (error) {
+    console.error("[admin/login/booth]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 });
 
 router.use(requireAdminKey);
@@ -80,7 +125,8 @@ router.use(requireAdminKey);
 router.get("/dashboard", async (req, res) => {
   try {
     const { period = "today", from, to } = req.query;
-    const result = await admin.getDashboardMetrics(period, from, to);
+    const boothId = resolveAdminBoothId(req);
+    const result = await admin.getDashboardMetrics(period, from, to, boothId);
 
     if (!result.ok) {
       return res.status(result.status).json({
@@ -110,6 +156,7 @@ router.get("/photos", async (req, res) => {
       limit = "10",
     } = req.query;
 
+    const boothId = resolveAdminBoothId(req);
     const result = await admin.listPhotoHistory({
       period,
       from,
@@ -117,6 +164,7 @@ router.get("/photos", async (req, res) => {
       search,
       page,
       limit,
+      boothId,
     });
 
     if (!result.ok) {
@@ -136,9 +184,24 @@ router.get("/photos", async (req, res) => {
   }
 });
 
-router.get("/settings", async (_req, res) => {
+function resolveAdminBoothId(req) {
+  const raw =
+    req.query.booth_id ||
+    req.query.boothId ||
+    req.body?.booth_id ||
+    req.body?.boothId ||
+    req.get("x-admin-booth-id") ||
+    null;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return null;
+  }
+  return boothProfiles.normalizeBoothId(raw);
+}
+
+router.get("/settings", async (req, res) => {
   try {
-    const settings = await boothSettings.getSettings();
+    const boothId = resolveAdminBoothId(req);
+    const settings = await boothSettings.getSettings(boothId);
     return res.json({ success: true, settings });
   } catch (error) {
     console.error("[admin/settings]", error);
@@ -149,14 +212,18 @@ router.get("/settings", async (_req, res) => {
   }
 });
 
-async function buildAdminPaymentPayload() {
-  const payment = await paymentSettings.getPaymentSettings();
+async function buildAdminPaymentPayload(boothIdRaw) {
+  const boothId = boothIdRaw
+    ? boothProfiles.normalizeBoothId(boothIdRaw)
+    : boothProfiles.DEFAULT_BOOTH_ID;
+  const payment = await paymentSettings.getPaymentSettings(boothId);
   const omiseConfigured = omise.isConfigured();
-  const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode());
+  const paymentMode = payment.payment_mode || (await paymentSettings.getPaymentMode(boothId));
   const omiseActive = paymentMode === "omise" && omiseConfigured;
 
   return {
     ...payment,
+    booth_id: boothId,
     payment_mode: paymentMode,
     omise_enabled: paymentMode === "omise",
     omise_configured: omiseConfigured,
@@ -173,9 +240,10 @@ async function buildAdminPaymentPayload() {
   };
 }
 
-router.get("/payment", async (_req, res) => {
+router.get("/payment", async (req, res) => {
   try {
-    const payment = await buildAdminPaymentPayload();
+    const boothId = resolveAdminBoothId(req);
+    const payment = await buildAdminPaymentPayload(boothId);
     return res.json({
       success: true,
       payment,
@@ -191,6 +259,7 @@ router.get("/payment", async (_req, res) => {
 
 router.patch("/payment", async (req, res) => {
   try {
+    const boothId = resolveAdminBoothId(req);
     const amount = req.body?.payment_amount;
     const paymentTiersRaw = req.body?.payment_tiers;
     const omiseEnabledRaw = req.body?.omise_enabled;
@@ -209,13 +278,13 @@ router.patch("/payment", async (req, res) => {
     }
 
     let paymentMode = hasPaymentMode
-      ? await paymentSettings.setPaymentMode(paymentModeRaw)
-      : await paymentSettings.getPaymentMode();
+      ? await paymentSettings.setPaymentMode(boothId, paymentModeRaw)
+      : await paymentSettings.getPaymentMode(boothId);
 
     if (hasOmiseToggle && !hasPaymentMode) {
       paymentMode = Boolean(omiseEnabledRaw)
-        ? await paymentSettings.setPaymentMode("omise")
-        : await paymentSettings.setPaymentMode("static_qr");
+        ? await paymentSettings.setPaymentMode(boothId, "omise")
+        : await paymentSettings.setPaymentMode(boothId, "static_qr");
     }
 
     if (hasPaymentTiers) {
@@ -232,7 +301,7 @@ router.patch("/payment", async (req, res) => {
           });
         }
       }
-      await paymentSettings.setPaymentTiers(paymentTiersRaw);
+      await paymentSettings.setPaymentTiers(boothId, paymentTiersRaw);
     } else if (hasAmount) {
       const rounded = Math.round(Number(amount));
       const minAmount = paymentMode === "omise" ? 20 : 1;
@@ -245,10 +314,10 @@ router.patch("/payment", async (req, res) => {
               : "payment_amount must be at least 1 baht",
         });
       }
-      await paymentSettings.setPaymentAmount(rounded);
+      await paymentSettings.setPaymentAmount(boothId, rounded);
     }
 
-    const payment = await buildAdminPaymentPayload();
+    const payment = await buildAdminPaymentPayload(boothId);
     return res.json({ success: true, payment });
   } catch (error) {
     console.error("[admin/payment]", error);
@@ -261,6 +330,7 @@ router.patch("/payment", async (req, res) => {
 
 router.post("/payment/qr", async (req, res) => {
   try {
+    const boothId = resolveAdminBoothId(req);
     const imageBase64 = req.body?.image_base64 || req.body?.imageBase64 || "";
     const normalized = String(imageBase64).trim();
     if (!normalized) {
@@ -288,8 +358,8 @@ router.post("/payment/qr", async (req, res) => {
       });
     }
 
-    const updatedAt = await paymentSettings.savePaymentQr(buffer);
-    const payment = await buildAdminPaymentPayload();
+    const updatedAt = await paymentSettings.savePaymentQr(boothId, buffer);
+    const payment = await buildAdminPaymentPayload(boothId);
     return res.json({
       success: true,
       payment,
@@ -301,6 +371,53 @@ router.post("/payment/qr", async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+});
+
+router.get("/booth-profiles", async (_req, res) => {
+  try {
+    const profiles = await boothProfiles.listProfiles();
+    return res.json({ success: true, profiles });
+  } catch (error) {
+    console.error("[admin/booth-profiles/list]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/booth-profiles/:boothId", async (req, res) => {
+  try {
+    const profile = await boothProfiles.getProfile(req.params.boothId);
+    return res.json({ success: true, profile });
+  } catch (error) {
+    console.error("[admin/booth-profiles/get]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put("/booth-profiles/:boothId", async (req, res) => {
+  try {
+    const profile = await boothProfiles.upsertProfile({
+      ...req.body,
+      booth_id: req.params.boothId,
+    });
+    return res.json({ success: true, profile });
+  } catch (error) {
+    console.error("[admin/booth-profiles/put]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/booth-profiles", async (req, res) => {
+  try {
+    const boothId = req.body?.booth_id;
+    if (!boothId) {
+      return res.status(400).json({ success: false, message: "booth_id is required" });
+    }
+    const profile = await boothProfiles.upsertProfile(req.body);
+    return res.status(201).json({ success: true, profile });
+  } catch (error) {
+    console.error("[admin/booth-profiles/create]", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
