@@ -1397,6 +1397,14 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
     return canvas;
   }
 
+  if (typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth()) {
+    await drawComposite(canvas, frameConfig, resolvedPhotos, {
+      preview: true,
+      qrCodeUrl: isReceiptDownloadQrEnabled() ? qrDataUrl : null,
+    });
+    return canvas;
+  }
+
   const previewPath =
     typeof getSelectedFramePreviewPath === "function"
       ? getSelectedFramePreviewPath()
@@ -1699,7 +1707,8 @@ async function preparePrintReceipt() {
   const previewCanvas = document.getElementById("receipt-canvas");
   const downloadMatchesPreview =
     (typeof isTheBlumoLayout === "function" && isTheBlumoLayout(layoutId)) ||
-    (typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(layout));
+    (typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(layout)) ||
+    (typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth());
 
   if (downloadMatchesPreview) {
     if (!cloneReceiptCanvas(downloadCanvas, previewCanvas)) {

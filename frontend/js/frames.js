@@ -4,7 +4,10 @@
  */
 const FRAME_ASSET_BASE = "img/booths/the-receipt-club/Layout/frame/frame-select";
 const SNAP_FRAME_ASSET_BASE = "img/booths/snap-on-receipt/frame/frame-select";
-const SNAP_FRAME_SELECT_ASPECT = "704 / 1433";
+const SNAP_FRAME_SELECT_ASPECT =
+  typeof window !== "undefined" && window.SNAP_RECEIPT_ASPECT_RATIO
+    ? window.SNAP_RECEIPT_ASPECT_RATIO
+    : "908 / 2270";
 const THE_BLUMO_FRAME_ID = "theblumo";
 
 /** The Receipt Club (KiKi event theme) — no TheBlumo frame-select overlays */
@@ -14,7 +17,7 @@ const LAYOUT_FRAME_DIR = {};
 const SNAP_LAYOUT_FRAME_CONFIG = {
   "Layout-1": {
     dir: "layout1",
-    files: ["layout1-1.jpg", "layout1-2.jpg", "layout1-3.jpg", "layout1-4.jpg", "layout1.jpg"],
+    files: ["layout1-1.jpg", "layout1-2.jpg", "layout1-3.jpg", "layout1-4.jpg", "layout1-5.jpg"],
   },
   "Layout-2": {
     dir: "layout2",
@@ -192,15 +195,13 @@ function getCaptureSizeForSlot(slot, naturalHeight = LAYOUT_NATURAL_HEIGHT) {
   const fallback = { width: 960, height: 720, ratio: 960 / 720 };
   if (!slot || slot.noCaptureCrop) return fallback;
 
-  let slotW = slot.width;
-  let slotH = slot.height;
+  const pixelW = (slot.width / 100) * LAYOUT_NATURAL_WIDTH;
+  const pixelH = (slot.height / 100) * naturalHeight;
+  let slotRatio = pixelW / pixelH;
+  // Rotated slots: capture portrait at composite aspect (rotation applied when drawing)
   if (Math.abs(slot.rotation || 0) === 90) {
-    [slotW, slotH] = [slotH, slotW];
+    slotRatio = pixelH / pixelW;
   }
-
-  const pixelW = (slotW / 100) * LAYOUT_NATURAL_WIDTH;
-  const pixelH = (slotH / 100) * naturalHeight;
-  const slotRatio = pixelW / pixelH;
 
   if (slotRatio >= 1) {
     const width = 960;
@@ -255,38 +256,33 @@ function buildSnapFrameId(dir, file) {
   return `snap-${dir}-${file.replace(/\.jpg$/i, "").replace(/[^a-z0-9]+/gi, "-")}`;
 }
 
+function snapSlotsForAsset(assetPath, layoutId, fallbackSlots = []) {
+  if (typeof window.getSnapSlotsForAsset === "function") {
+    const slots = window.getSnapSlotsForAsset(assetPath, layoutId);
+    if (slots?.length) return slots;
+  }
+  return fallbackSlots;
+}
+
 function buildSnapFramesForLayout(layoutId) {
   const config = SNAP_LAYOUT_FRAME_CONFIG[layoutId];
   if (!config) return [];
 
   const layout =
     typeof getLayoutById === "function" ? getLayoutById(layoutId) : null;
-  const slots = layout?.slots || [];
+  const defaultSlots = layout?.slots || [];
 
-  const frames = [
-    {
-      id: "none",
-      label: "ไม่เลือก Frame",
-      selectImagePath: null,
-      previewImagePath: null,
-      selectAspectRatio: SNAP_FRAME_SELECT_ASPECT,
-      slots,
-    },
-  ];
-
-  config.files.forEach((file, index) => {
+  return config.files.map((file, index) => {
     const assetPath = `${SNAP_FRAME_ASSET_BASE}/${config.dir}/${file}`;
-    frames.push({
+    return {
       id: buildSnapFrameId(config.dir, file),
       label: `Frame ${index + 1}`,
       selectImagePath: assetPath,
       previewImagePath: assetPath,
       selectAspectRatio: SNAP_FRAME_SELECT_ASPECT,
-      slots,
-    });
+      slots: snapSlotsForAsset(assetPath, layoutId, defaultSlots),
+    };
   });
-
-  return frames;
 }
 
 function buildFramesForLayout(layoutId) {
@@ -324,7 +320,8 @@ function getFramesForLayout(layoutId) {
 
 function getDefaultFrameId(layoutId) {
   if (isFrameSelectEnabled() && isSnapFrameSelectBooth()) {
-    return "none";
+    const frames = getFramesForLayout(layoutId);
+    return frames[0]?.id || "none";
   }
   return layoutHasDecorativeFrames(layoutId) ? THE_BLUMO_FRAME_ID : "none";
 }

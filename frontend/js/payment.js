@@ -125,6 +125,10 @@ function getPaymentTiersFromSettings() {
   return [{ prints: 1, amount: fallbackAmount }];
 }
 
+function hasMultiplePaymentTiers() {
+  return getPaymentTiersFromSettings().length > 1;
+}
+
 function resolvePaymentTierFromSelection({ prints, amount } = {}) {
   const tiers = getPaymentTiersFromSettings();
   const roundedPrints = Math.max(1, Math.round(Number(prints) || 0));
@@ -175,6 +179,11 @@ function renderPackageTierPicker() {
   const list = document.getElementById("package-tier-list");
   if (!list) return;
 
+  if (typeof isBoothPaymentRequired === "function" && !isBoothPaymentRequired()) {
+    list.replaceChildren();
+    return;
+  }
+
   const tiers = getPaymentTiersFromSettings();
   list.replaceChildren();
   tiers.forEach((tier, index) => {
@@ -217,6 +226,17 @@ function renderPackageTierPicker() {
 }
 
 function goToPackageSelect() {
+  if (typeof isBoothPaymentRequired === "function" && !isBoothPaymentRequired()) {
+    return;
+  }
+
+  const tiers = getPaymentTiersFromSettings();
+  if (tiers.length <= 1) {
+    const tier = tiers[0];
+    goToPayment(tier.amount, tier.prints);
+    return;
+  }
+
   renderPackageTierPicker();
   navigateTo("package");
 }
@@ -935,7 +955,11 @@ function initPaymentModule() {
     clearPaymentFlow();
     void cancelPaymentSession();
     clearSelectedPaymentTier();
-    goToPackageSelect();
+    if (hasMultiplePaymentTiers()) {
+      goToPackageSelect();
+      return;
+    }
+    goToHome();
   });
 
   document.getElementById("btn-package-back")?.addEventListener("click", () => {
@@ -949,7 +973,6 @@ function initPaymentModule() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initPaymentModule();
-  renderPackageTierPicker();
 });
 
 window.renderPackageTierPicker = renderPackageTierPicker;

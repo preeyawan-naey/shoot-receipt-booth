@@ -38,6 +38,14 @@
 }
 
 .booth-theme--snap-on-receipt {
+  --color-bg: #ffffff;
+  --color-bg-card: #ffffff;
+
+  /* 80 mm × 20 cm receipt (908 / 2270 px artboard) */
+  --layout-select-aspect-ratio: 908 / 2270;
+  --receipt-aspect-ratio: 908 / 2270;
+  --booth-frame-select-preview-aspect: 908 / 2270;
+
   /* Accent — matches START pill (#343434) */
   --booth-accent: #343434;
   --color-red: var(--booth-accent);
@@ -46,11 +54,11 @@
   /* Home */
   --booth-home-padding-top: clamp(48px, 8vh, 80px);
   --booth-home-padding-bottom: clamp(48px, 7vh, 80px);
-  --booth-home-logo-width: 55%;
+  --booth-home-logo-width: 72.75%;
   --booth-home-art-width: 100%;
   --booth-home-start-bg: #343434;
   --booth-home-start-color: #ffffff;
-  --booth-home-start-min-width: clamp(220px, 58vw, 340px);
+  --booth-home-start-padding-x: clamp(32px, 6vw, 48px);
 
   /* Layout select */
   --booth-layout-grid-column-gap: clamp(24px, 6.5vw, 48px);
@@ -76,6 +84,12 @@
   --booth-preview-receipt-width: clamp(140px, 36vw, 280px);
   --booth-preview-layout4-scale: 1;
   --booth-preview-layout4-width: clamp(140px, 36vw, 280px);
+}
+
+/* Home logo — +15% twice vs default 55%; override styles.css max-width: 792px */
+.booth-theme--snap-on-receipt .home-header__logo {
+  width: 72.75%;
+  max-width: 1048px;
 }
 
 /* Hardcoded reds in styles.css — tie to booth accent */
@@ -105,18 +119,27 @@
   }
 
   .booth-theme--snap-on-receipt {
-    --booth-home-logo-width: 38%;
-    --booth-home-start-min-width: clamp(200px, 52vw, 300px);
+    --booth-home-logo-width: 72.75%;
     --booth-frame-grid-gap: 12px;
     --booth-preview-dispenser-width: min(100%, clamp(180px, 48vw, 340px));
     --booth-preview-receipt-width: clamp(130px, 34vw, 260px);
     --booth-preview-layout4-width: clamp(130px, 34vw, 260px);
   }
+
+  .booth-theme--snap-on-receipt .home-header__logo {
+    width: 72.75%;
+    max-width: 1048px;
+  }
 }
 
 .booth-theme--snap-on-receipt .start-btn {
-  min-width: var(--booth-home-start-min-width);
-  padding: clamp(14px, 2.4vh, 18px) clamp(36px, 8vw, 52px);
+  width: fit-content;
+  max-width: 100%;
+  height: 64px;
+  padding: 0 var(--booth-home-start-padding-x);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   background: var(--booth-home-start-bg);
   color: var(--booth-home-start-color);

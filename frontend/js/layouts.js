@@ -10,6 +10,10 @@ const FRAME_SELECT_BASE = `${LAYOUT_SELECT_BASE}/frame/frame-select`;
 const LAYOUT_NATURAL_WIDTH = 908;
 const LAYOUT_NATURAL_HEIGHT = 2190;
 const LAYOUT_SELECT_ASPECT_RATIO = "704 / 1433";
+const SNAP_LAYOUT_SELECT_ASPECT_RATIO =
+  typeof window !== "undefined" && window.SNAP_RECEIPT_ASPECT_RATIO
+    ? window.SNAP_RECEIPT_ASPECT_RATIO
+    : "908 / 2270";
 
 function getKikiLayoutSelectPath(layoutNum) {
   return `${LAYOUT_SELECT_BASE}/layout-2/layout-${layoutNum}.jpg`;
@@ -23,8 +27,73 @@ function getSnapLayoutSelectPath(layoutNum) {
   return `${SNAP_ON_RECEIPT_IMG_BASE}/layout-2/layout-${layoutNum}.jpg`;
 }
 
-function getSnapFrameSelectPath(layoutNum) {
+function snapFrameSelectPath(layoutNum) {
+  if (typeof window.getSnapFrameSelectPath === "function") {
+    return window.getSnapFrameSelectPath(layoutNum);
+  }
   return getSnapLayoutSelectPath(layoutNum);
+}
+
+function snapLayoutSlots(layoutId) {
+  if (typeof window.getSnapSlotsForLayout === "function") {
+    return window.getSnapSlotsForLayout(layoutId);
+  }
+  return [];
+}
+
+function snapLayoutNaturalHeight(layoutId) {
+  const heights = {
+    "Layout-1": 2363,
+    "Layout-2": 2335,
+    "Layout-3": 2517,
+    "Layout-4": 2360,
+  };
+  return heights[layoutId] ?? LAYOUT_NATURAL_HEIGHT;
+}
+
+function buildSnapLayoutSet() {
+  return [
+    {
+      id: "Layout-1",
+      photoCount: 1,
+      naturalHeight: snapLayoutNaturalHeight("Layout-1"),
+      imagePath: snapFrameSelectPath(1),
+      previewImagePath: snapFrameSelectPath(1),
+      selectImagePath: getSnapLayoutSelectPath(1),
+      selectAspectRatio: SNAP_LAYOUT_SELECT_ASPECT_RATIO,
+      slots: snapLayoutSlots("Layout-1"),
+    },
+    {
+      id: "Layout-2",
+      photoCount: 2,
+      naturalHeight: snapLayoutNaturalHeight("Layout-2"),
+      imagePath: snapFrameSelectPath(2),
+      previewImagePath: snapFrameSelectPath(2),
+      selectImagePath: getSnapLayoutSelectPath(2),
+      selectAspectRatio: SNAP_LAYOUT_SELECT_ASPECT_RATIO,
+      slots: snapLayoutSlots("Layout-2"),
+    },
+    {
+      id: "Layout-3",
+      photoCount: 3,
+      naturalHeight: snapLayoutNaturalHeight("Layout-3"),
+      imagePath: snapFrameSelectPath(3),
+      previewImagePath: snapFrameSelectPath(3),
+      selectImagePath: getSnapLayoutSelectPath(3),
+      selectAspectRatio: SNAP_LAYOUT_SELECT_ASPECT_RATIO,
+      slots: snapLayoutSlots("Layout-3"),
+    },
+    {
+      id: "Layout-4",
+      photoCount: 4,
+      naturalHeight: snapLayoutNaturalHeight("Layout-4"),
+      imagePath: snapFrameSelectPath(4),
+      previewImagePath: snapFrameSelectPath(4),
+      selectImagePath: getSnapLayoutSelectPath(4),
+      selectAspectRatio: SNAP_LAYOUT_SELECT_ASPECT_RATIO,
+      slots: snapLayoutSlots("Layout-4"),
+    },
+  ];
 }
 
 function isKikiFrameSelectLayout(layoutOrId) {
@@ -175,7 +244,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
 
 const LAYOUT_SETS = {
   kiki: buildLayoutSet(getKikiLayoutSelectPath, getKikiFrameSelectPath),
-  "snap-on-receipt": buildLayoutSet(getSnapLayoutSelectPath, getSnapFrameSelectPath),
+  "snap-on-receipt": buildSnapLayoutSet(),
 };
 
 function getLayouts() {

@@ -66,7 +66,11 @@ async function fetchBoothSettings() {
       setBoothProfileState(data.settings);
     }
     if (typeof renderPackageTierPicker === "function") {
-      renderPackageTierPicker();
+      const onPackagePage =
+        typeof getCurrentPage === "function" && getCurrentPage() === "package";
+      if (!isBoothPaymentRequired() || onPackagePage) {
+        renderPackageTierPicker();
+      }
     }
     resyncNativePaymentNotifyAfterSettings();
   } catch (error) {
