@@ -1822,8 +1822,8 @@ const RAWBT_TARGET_WIDTH_PX = 640;
 const THERMAL_PRINTABLE_WIDTH_PX = 576;
 /** Snap artboard 908px = Illustrator 8 cm — maps 1:1 to 640 dots (80 mm @ 203 dpi) */
 const SNAP_THERMAL_PAPER_WIDTH_PX = RAWBT_TARGET_WIDTH_PX;
-/** Compensate XP-T80A head starting ~1.5 mm right of paper edge */
-const SNAP_THERMAL_X_OFFSET_PX = -36;
+/** Horizontal nudge before print — 0 avoids clipping edge artwork (e.g. full-bleed borders) */
+const SNAP_THERMAL_X_OFFSET_PX = 0;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
