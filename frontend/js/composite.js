@@ -1820,6 +1820,8 @@ async function setupPrintCopies(count) {
 const RAWBT_TARGET_WIDTH_PX = 640;
 /** 72mm printable area on 80mm rolls (XP-T80A and similar) */
 const THERMAL_PRINTABLE_WIDTH_PX = 576;
+/** Snap — nudge content left on paper (many 80mm heads offset ~1–2mm right) */
+const SNAP_THERMAL_X_OFFSET_PX = -20;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1919,33 +1921,43 @@ function refocusBoothAfterPrint() {
   }
 }
 
-function getThermalContentWidthPx() {
-  if (typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth()) {
+function isSnapThermalPrintBooth() {
+  return typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth();
+}
+
+function getThermalContentWidthPx(paperWidth = RAWBT_TARGET_WIDTH_PX) {
+  if (isSnapThermalPrintBooth()) {
     return THERMAL_PRINTABLE_WIDTH_PX;
   }
-  return RAWBT_TARGET_WIDTH_PX;
+  return paperWidth;
 }
 
 function scaleCanvasForThermal(source, paperWidth = RAWBT_TARGET_WIDTH_PX) {
   if (!source.width || !source.height) return source;
 
-  const contentWidth = getThermalContentWidthPx();
+  const isSnap = isSnapThermalPrintBooth();
+  const contentWidth = getThermalContentWidthPx(paperWidth);
   const contentH = Math.max(1, Math.round(source.height * (contentWidth / source.width)));
 
-  if (contentWidth === paperWidth && source.width === paperWidth) {
+  if (!isSnap && contentWidth === paperWidth && source.width === paperWidth) {
     return source;
   }
 
   const scaled = document.createElement("canvas");
-  scaled.width = paperWidth;
+  scaled.width = isSnap ? contentWidth : paperWidth;
   scaled.height = contentH;
   const ctx = scaled.getContext("2d");
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, scaled.width, scaled.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  const offsetX = Math.max(0, Math.round((paperWidth - contentWidth) / 2));
-  ctx.drawImage(source, 0, 0, source.width, source.height, offsetX, 0, contentWidth, contentH);
+
+  if (isSnap) {
+    ctx.drawImage(source, 0, 0, source.width, source.height, SNAP_THERMAL_X_OFFSET_PX, 0, contentWidth, contentH);
+    return scaled;
+  }
+
+  ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, contentWidth, contentH);
   return scaled;
 }
 
