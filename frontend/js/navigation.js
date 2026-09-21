@@ -90,6 +90,9 @@ function goToHome() {
   if (typeof resetPrintCopiesUI === "function") {
     resetPrintCopiesUI();
   }
+  if (typeof resetBoothSelectUI === "function") {
+    resetBoothSelectUI();
+  }
   navigateTo("home");
 }
 

@@ -144,6 +144,20 @@ function buildLayoutCard(layout) {
   `;
 }
 
+function resetBoothSelectUI() {
+  appState.selectedLayout = null;
+  appState.selectedFrame = "none";
+
+  document.querySelectorAll("#layout-grid .layout-card--selected").forEach((card) => {
+    card.classList.remove("layout-card--selected");
+  });
+  document.querySelectorAll("#frame-grid .frame-picker-card--selected").forEach((card) => {
+    card.classList.remove("frame-picker-card--selected");
+  });
+}
+
+window.resetBoothSelectUI = resetBoothSelectUI;
+
 function selectLayout(layoutId) {
   const layoutGrid = document.getElementById("layout-grid");
   const layout = getLayoutById(layoutId);

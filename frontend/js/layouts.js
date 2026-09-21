@@ -1,6 +1,6 @@
 /**
  * Layout config — 4 receipt layouts (1–4 photos) — The Receipt Club (KiKi event theme)
- * Select page: img/booths/the-receipt-club/Layout/layout-2/layout-N.jpg
+ * Select page: TRC layout-2/layout-N.jpg; Snap thumbnail/layout/layoutN.jpg
  * Preview / print: .../Layout/frame/frame-select/layoutN/layout-Nkiki.jpg
  */
 const THE_RECEIPT_CLUB_IMG_BASE = "img/booths/the-receipt-club";
@@ -23,8 +23,10 @@ function getKikiFrameSelectPath(layoutNum) {
   return `${FRAME_SELECT_BASE}/layout${layoutNum}/layout-${layoutNum}kiki.jpg`;
 }
 
+const SNAP_LAYOUT_THUMBNAIL_BASE = `${SNAP_ON_RECEIPT_IMG_BASE}/thumbnail/layout`;
+
 function getSnapLayoutSelectPath(layoutNum) {
-  return `${SNAP_ON_RECEIPT_IMG_BASE}/layout-2/layout-${layoutNum}.jpg`;
+  return `${SNAP_LAYOUT_THUMBNAIL_BASE}/layout${layoutNum}.jpg`;
 }
 
 function snapFrameSelectPath(layoutNum) {
