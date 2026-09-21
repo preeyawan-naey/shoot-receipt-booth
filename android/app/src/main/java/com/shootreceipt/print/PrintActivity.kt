@@ -276,6 +276,22 @@ object PrintEngine {
         if (source.width == TARGET_WIDTH_PX) {
             return source
         }
+
+        // 576 px (72 mm printable) — pad on the right only; do not stretch (avoids horizontal shift)
+        if (source.width == 576 && source.width < TARGET_WIDTH_PX) {
+            val padded =
+                Bitmap.createBitmap(
+                    TARGET_WIDTH_PX,
+                    source.height,
+                    Bitmap.Config.ARGB_8888,
+                )
+            val canvas = android.graphics.Canvas(padded)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            canvas.drawBitmap(source, 0f, 0f, null)
+            source.recycle()
+            return padded
+        }
+
         val ratio = TARGET_WIDTH_PX.toFloat() / source.width.toFloat()
         val height = (source.height * ratio).toInt().coerceAtLeast(1)
         return Bitmap.createScaledBitmap(source, TARGET_WIDTH_PX, height, true)

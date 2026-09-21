@@ -1820,8 +1820,10 @@ async function setupPrintCopies(count) {
 const RAWBT_TARGET_WIDTH_PX = 640;
 /** 72mm printable area on 80mm rolls (XP-T80A and similar) */
 const THERMAL_PRINTABLE_WIDTH_PX = 576;
-/** Snap — nudge content left on paper (many 80mm heads offset ~1–2mm right) */
-const SNAP_THERMAL_X_OFFSET_PX = -20;
+/** Snap artboard 908px = Illustrator 8 cm — maps 1:1 to 640 dots (80 mm @ 203 dpi) */
+const SNAP_THERMAL_PAPER_WIDTH_PX = RAWBT_TARGET_WIDTH_PX;
+/** Compensate XP-T80A head starting ~1.5 mm right of paper edge */
+const SNAP_THERMAL_X_OFFSET_PX = -36;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1925,39 +1927,55 @@ function isSnapThermalPrintBooth() {
   return typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth();
 }
 
-function getThermalContentWidthPx(paperWidth = RAWBT_TARGET_WIDTH_PX) {
-  if (isSnapThermalPrintBooth()) {
-    return THERMAL_PRINTABLE_WIDTH_PX;
-  }
-  return paperWidth;
-}
-
 function scaleCanvasForThermal(source, paperWidth = RAWBT_TARGET_WIDTH_PX) {
   if (!source.width || !source.height) return source;
 
   const isSnap = isSnapThermalPrintBooth();
-  const contentWidth = getThermalContentWidthPx(paperWidth);
-  const contentH = Math.max(1, Math.round(source.height * (contentWidth / source.width)));
 
-  if (!isSnap && contentWidth === paperWidth && source.width === paperWidth) {
+  if (isSnap) {
+    const destW = SNAP_THERMAL_PAPER_WIDTH_PX;
+    const contentH = Math.max(1, Math.round(source.height * (destW / source.width)));
+
+    if (source.width === destW && SNAP_THERMAL_X_OFFSET_PX === 0) {
+      return source;
+    }
+
+    const scaled = document.createElement("canvas");
+    scaled.width = destW;
+    scaled.height = contentH;
+    const ctx = scaled.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, scaled.width, scaled.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(
+      source,
+      0,
+      0,
+      source.width,
+      source.height,
+      SNAP_THERMAL_X_OFFSET_PX,
+      0,
+      destW,
+      contentH
+    );
+    return scaled;
+  }
+
+  if (source.width === paperWidth) {
     return source;
   }
 
+  const contentH = Math.max(1, Math.round(source.height * (paperWidth / source.width)));
   const scaled = document.createElement("canvas");
-  scaled.width = isSnap ? contentWidth : paperWidth;
+  scaled.width = paperWidth;
   scaled.height = contentH;
   const ctx = scaled.getContext("2d");
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, scaled.width, scaled.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-
-  if (isSnap) {
-    ctx.drawImage(source, 0, 0, source.width, source.height, SNAP_THERMAL_X_OFFSET_PX, 0, contentWidth, contentH);
-    return scaled;
-  }
-
-  ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, contentWidth, contentH);
+  ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, paperWidth, contentH);
   return scaled;
 }
 

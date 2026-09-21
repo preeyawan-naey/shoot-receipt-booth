@@ -54,8 +54,8 @@
   /* Home */
   --booth-home-padding-top: clamp(48px, 8vh, 80px);
   --booth-home-padding-bottom: clamp(48px, 7vh, 80px);
-  --booth-home-logo-width: 72.75%;
-  --booth-home-art-width: 100%;
+  --booth-home-logo-width: 80.03%;
+  --booth-home-art-width: 110%;
   --booth-home-start-bg: #343434;
   --booth-home-start-color: #ffffff;
   --booth-home-start-padding-x: clamp(32px, 6vw, 48px);
@@ -88,8 +88,8 @@
 
 /* Home logo — +15% twice vs default 55%; override styles.css max-width: 792px */
 .booth-theme--snap-on-receipt .home-header__logo {
-  width: 72.75%;
-  max-width: 1048px;
+  width: 80.03%;
+  max-width: 1153px;
 }
 
 /* Hardcoded reds in styles.css — tie to booth accent */
@@ -119,7 +119,7 @@
   }
 
   .booth-theme--snap-on-receipt {
-    --booth-home-logo-width: 72.75%;
+    --booth-home-logo-width: 80.03%;
     --booth-frame-grid-gap: 12px;
     --booth-preview-dispenser-width: min(100%, clamp(180px, 48vw, 340px));
     --booth-preview-receipt-width: clamp(130px, 34vw, 260px);
@@ -127,8 +127,8 @@
   }
 
   .booth-theme--snap-on-receipt .home-header__logo {
-    width: 72.75%;
-    max-width: 1048px;
+    width: 80.03%;
+    max-width: 1153px;
   }
 }
 
