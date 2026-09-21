@@ -2,6 +2,7 @@ package com.thereceiptclub.booth
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.net.Uri
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -127,7 +128,14 @@ class MainActivity : Activity() {
 
     private fun resolveStartUrl(intent: Intent?): String {
         intent?.dataString?.takeIf { it.startsWith("http") }?.let { return it }
-        return BuildConfig.BOOTH_URL
+        val base = BuildConfig.BOOTH_URL.trim().trimEnd('/')
+        val boothId = BuildConfig.BOOTH_ID.trim()
+        if (boothId.isEmpty()) return base
+        return Uri.parse(base)
+            .buildUpon()
+            .appendQueryParameter("booth", boothId)
+            .build()
+            .toString()
     }
 
     private fun injectBridgePatch() {

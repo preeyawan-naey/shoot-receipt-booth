@@ -8,6 +8,42 @@ const LEGACY_BOOTH_IDS = {
   kiki: DEFAULT_BOOTH_ID,
 };
 
+/** Built-in fallbacks — applied before API fetch (matches backend boothProfiles.js). */
+const BOOTH_BUILTIN_PROFILES = {
+  [DEFAULT_BOOTH_ID]: {
+    booth_id: DEFAULT_BOOTH_ID,
+    name: "The Receipt Club",
+    theme: "kiki",
+    home_image: "img/booths/the-receipt-club/index-kiki.png",
+    home_logo: "img/booths/the-receipt-club/logo2.png",
+    layout_set: "kiki",
+    features: {
+      receipt_download_qr: true,
+      receipt_download_qr_print: true,
+      guest_name: true,
+      hide_name_back_after_payment: true,
+      frame_select: false,
+      discount_field: false,
+    },
+  },
+  "snap-on-receipt": {
+    booth_id: "snap-on-receipt",
+    name: "Snap on Receipt",
+    theme: "snap",
+    home_image: "img/booths/snap-on-receipt/index.png",
+    home_logo: "img/booths/snap-on-receipt/logo.png",
+    layout_set: "snap-on-receipt",
+    features: {
+      receipt_download_qr: true,
+      receipt_download_qr_print: true,
+      guest_name: false,
+      hide_name_back_after_payment: false,
+      frame_select: true,
+      discount_field: false,
+    },
+  },
+};
+
 let resolvedBoothId = DEFAULT_BOOTH_ID;
 let boothProfileState = null;
 
@@ -59,6 +95,24 @@ function readBoothIdFromBridge() {
   return null;
 }
 
+function readBoothIdFromBoot() {
+  try {
+    const id = window.__BOOT_BOOTH_ID__ || document.documentElement?.dataset?.boothId;
+    return id ? normalizeBoothId(id) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isBoothAppShell() {
+  try {
+    const bridge = window.ReceiptClubBridge;
+    return bridge?.isBoothApp?.() === true;
+  } catch {
+    return false;
+  }
+}
+
 function readStoredBoothId() {
   try {
     const stored = localStorage.getItem(BOOTH_ID_STORAGE_KEY);
@@ -89,7 +143,15 @@ function resolveBoothId() {
   const fromBridge = readBoothIdFromBridge();
   if (fromBridge) return persistBoothId(fromBridge);
 
-  // Root URL (ไม่มี ?booth=) → The Receipt Club เสมอ ไม่ใช้ค่าเก่าใน localStorage
+  const fromBoot = readBoothIdFromBoot();
+  if (fromBoot) return persistBoothId(fromBoot);
+
+  if (isBoothAppShell()) {
+    const stored = readStoredBoothId();
+    if (stored) return stored;
+  }
+
+  // Root URL (browser, ไม่มี ?booth=) → The Receipt Club
   if (!hasExplicitBoothQuery()) {
     return persistBoothId(DEFAULT_BOOTH_ID);
   }
@@ -170,6 +232,15 @@ function applyBoothThemeToDom(boothId) {
   applyHomeStartButton(normalized);
 }
 
+function getBuiltinBoothProfile(boothId) {
+  const normalized = normalizeBoothId(boothId);
+  return BOOTH_BUILTIN_PROFILES[normalized] || BOOTH_BUILTIN_PROFILES[DEFAULT_BOOTH_ID];
+}
+
+function markBoothProfileReady() {
+  document.getElementById("page-home")?.classList.add("booth-profile-ready");
+}
+
 function applyBoothProfileToDom(profile) {
   if (!profile) return;
 
@@ -188,6 +259,8 @@ function applyBoothProfileToDom(profile) {
   if (profile.name) {
     document.title = profile.name;
   }
+
+  markBoothProfileReady();
 }
 
 function setBoothProfileState(settings) {
@@ -215,10 +288,73 @@ function setBoothProfileState(settings) {
   }
 }
 
-function initBoothProfile() {
+function applyBootProfileIfPresent() {
+  const bootProfile = window.__BOOT_BOOTH_PROFILE__;
+  if (!bootProfile) return false;
+
+  const queryId = readBoothIdFromQuery();
+  const bridgeId = readBoothIdFromBridge();
+  const bootId = readBoothIdFromBoot();
+  if (
+    !queryId &&
+    !bridgeId &&
+    bootId === DEFAULT_BOOTH_ID &&
+    typeof window.ReceiptClubBridge === "undefined"
+  ) {
+    return false;
+  }
+
+  const boothId = bootId || resolveBoothId();
+  resolvedBoothId = persistBoothId(boothId);
+  boothProfileState = getBuiltinBoothProfile(boothId);
+  applyBoothThemeToDom(boothId);
+
+  const logo = document.querySelector(".home-header__logo");
+  const art = document.querySelector(".home-index-art");
+  if (logo && bootProfile.logo) logo.src = bootProfile.logo;
+  if (art && bootProfile.art) art.src = bootProfile.art;
+  if (bootProfile.name) document.title = bootProfile.name;
+  applyHomeStartButton(boothId);
+  markBoothProfileReady();
+  return true;
+}
+
+function bootstrapBoothProfile(attempt = 0) {
   resolvedBoothId = resolveBoothId();
-  applyBoothThemeToDom(resolvedBoothId);
-  console.info(`[booth] id=${getBoothId()}`);
+  const builtin = getBuiltinBoothProfile(resolvedBoothId);
+  boothProfileState = builtin;
+  applyBoothProfileToDom(builtin);
+
+  const bridgeId = readBoothIdFromBridge();
+  const queryId = readBoothIdFromQuery();
+  const shouldRetryForBridge =
+    attempt < 12 &&
+    !queryId &&
+    !bridgeId &&
+    resolvedBoothId === DEFAULT_BOOTH_ID &&
+    typeof window.ReceiptClubBridge === "undefined";
+
+  if (shouldRetryForBridge) {
+    window.setTimeout(() => bootstrapBoothProfile(attempt + 1), 20);
+    return;
+  }
+
+  if (typeof refreshLayoutsForBooth === "function") {
+    refreshLayoutsForBooth();
+  }
+  console.info(`[booth] id=${getBoothId()} attempt=${attempt}`);
+}
+
+function initBoothProfile() {
+  if (!applyBootProfileIfPresent()) {
+    bootstrapBoothProfile();
+    return;
+  }
+
+  if (typeof refreshLayoutsForBooth === "function") {
+    refreshLayoutsForBooth();
+  }
+  console.info(`[booth] id=${getBoothId()} boot=inline`);
 }
 
 window.getBoothId = getBoothId;

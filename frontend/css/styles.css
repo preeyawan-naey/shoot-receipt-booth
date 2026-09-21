@@ -240,6 +240,12 @@ body {
   padding-bottom: var(--booth-home-padding-bottom);
 }
 
+#page-home:not(.booth-profile-ready) .home-header,
+#page-home:not(.booth-profile-ready) .home-visual,
+#page-home:not(.booth-profile-ready) .home-footer {
+  visibility: hidden;
+}
+
 .home-header {
   width: 100%;
   padding-top: 0;

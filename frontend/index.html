@@ -13,24 +13,97 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Schoolbell&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth353" />
+    <link rel="stylesheet" href="css/styles.css?v=booth361" />
     <link rel="stylesheet" href="css/booth-themes.css?v=booth357" />
+    <style>
+      #page-home:not(.booth-profile-ready) .home-header,
+      #page-home:not(.booth-profile-ready) .home-visual,
+      #page-home:not(.booth-profile-ready) .home-footer {
+        visibility: hidden;
+      }
+    </style>
+    <script>
+      (function () {
+        var DEFAULT_BOOTH_ID = "the-receipt-club";
+        var THEME_PREFIX = "booth-theme--";
+        var BOOT_PROFILES = {
+          "the-receipt-club": {
+            logo: "img/booths/the-receipt-club/logo2.png",
+            art: "img/booths/the-receipt-club/index-kiki.png",
+            name: "The Receipt Club",
+          },
+          "snap-on-receipt": {
+            logo: "img/booths/snap-on-receipt/logo.png",
+            art: "img/booths/snap-on-receipt/index.png",
+            name: "Snap on Receipt",
+          },
+        };
+
+        function normalizeBoothId(value) {
+          var id = String(value || DEFAULT_BOOTH_ID).trim().toLowerCase();
+          return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) ? id : DEFAULT_BOOTH_ID;
+        }
+
+        function readBoothIdFromBridge() {
+          try {
+            var bridge = window.ReceiptClubBridge;
+            if (bridge && typeof bridge.getBoothId === "function") {
+              var id = bridge.getBoothId();
+              if (id) return normalizeBoothId(id);
+            }
+          } catch (e) {}
+          return null;
+        }
+
+        function readBoothIdFromQuery() {
+          try {
+            var params = new URLSearchParams(window.location.search);
+            var fromQuery = params.get("booth") || params.get("booth_id");
+            return fromQuery ? normalizeBoothId(fromQuery) : null;
+          } catch (e) {}
+          return null;
+        }
+
+        function readStoredBoothId() {
+          try {
+            var stored = localStorage.getItem("SHOOT_BOOTH_ID");
+            return stored ? normalizeBoothId(stored) : null;
+          } catch (e) {}
+          return null;
+        }
+
+        var boothId =
+          readBoothIdFromQuery() ||
+          readBoothIdFromBridge() ||
+          readStoredBoothId() ||
+          DEFAULT_BOOTH_ID;
+
+        document.documentElement.dataset.boothId = boothId;
+        document.documentElement.classList.add(THEME_PREFIX + boothId);
+
+        window.__BOOT_BOOTH_ID__ = boothId;
+        window.__BOOT_BOOTH_PROFILE__ = BOOT_PROFILES[boothId] || BOOT_PROFILES[DEFAULT_BOOTH_ID];
+      })();
+    </script>
   </head>
   <body>
     <div class="viewport">
       <div class="booth-screen" id="booth-screen">
+        <script>
+          (function () {
+            var id = document.documentElement.dataset.boothId;
+            var screen = document.getElementById("booth-screen");
+            if (id && screen) screen.classList.add("booth-theme--" + id);
+          })();
+        </script>
         <!-- ==================== HOME PAGE ==================== -->
         <section class="page page--active" id="page-home" data-page="home">
           <header class="home-header">
-            <img src="img/booths/the-receipt-club/logo2.png" alt="SHOOT Receipt Booth" class="home-header__logo">
+            <img src="" alt="" class="home-header__logo" decoding="async" />
           </header>
 
           <div class="home-visual">
-            <img
-              src="img/booths/the-receipt-club/index-kiki.png"
-              alt=""
-              class="home-index-art"
-            />
+            <img src="" alt="" class="home-index-art" decoding="async" />
           </div>
 
           <footer class="home-footer">
@@ -38,12 +111,10 @@
               class="start-overlay"
               id="btn-start-overlay"
               type="button"
-              aria-label="Tap to START"
+              aria-label="START"
             ></button>
 
-            <button class="start-btn start-btn--blink" id="btn-start" type="button">
-              <span class="start-btn__highlight">TAP</span> to START
-            </button>
+            <button class="start-btn" id="btn-start" type="button">START</button>
           </footer>
         </section>
 
@@ -423,7 +494,7 @@
     <script src="js/qrcode.bundle.js?v=booth190"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-profile.js?v=booth331"></script>
+    <script src="js/booth-profile.js?v=booth361"></script>
     <script src="js/booth-settings.js?v=booth355"></script>
     <script src="js/booth-storage.js?v=booth190"></script>
     <script src="js/snap-layout-slots.js?v=booth350"></script>
@@ -436,7 +507,7 @@
     <script src="js/escpos.js?v=booth253"></script>
     <script src="js/thermer.js"></script>
     <script src="js/native-print.js?v=booth190"></script>
-    <script src="js/composite.js?v=booth339"></script>
+    <script src="js/composite.js?v=booth360"></script>
     <script src="js/camera.js?v=booth207"></script>
     <script src="js/app.js?v=booth327"></script>
   </body>

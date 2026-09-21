@@ -1818,6 +1818,8 @@ async function setupPrintCopies(count) {
 
 /** 80mm thermal @ 203dpi — full paper width (~640 dots), not 72mm/576 */
 const RAWBT_TARGET_WIDTH_PX = 640;
+/** 72mm printable area on 80mm rolls (XP-T80A and similar) */
+const THERMAL_PRINTABLE_WIDTH_PX = 576;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1917,24 +1919,33 @@ function refocusBoothAfterPrint() {
   }
 }
 
-function scaleCanvasForThermal(source, targetWidth = RAWBT_TARGET_WIDTH_PX) {
+function getThermalContentWidthPx() {
+  if (typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth()) {
+    return THERMAL_PRINTABLE_WIDTH_PX;
+  }
+  return RAWBT_TARGET_WIDTH_PX;
+}
+
+function scaleCanvasForThermal(source, paperWidth = RAWBT_TARGET_WIDTH_PX) {
   if (!source.width || !source.height) return source;
 
-  if (source.width === targetWidth) {
+  const contentWidth = getThermalContentWidthPx();
+  const contentH = Math.max(1, Math.round(source.height * (contentWidth / source.width)));
+
+  if (contentWidth === paperWidth && source.width === paperWidth) {
     return source;
   }
 
-  const contentH = Math.max(1, Math.round(source.height * (targetWidth / source.width)));
-
   const scaled = document.createElement("canvas");
-  scaled.width = targetWidth;
+  scaled.width = paperWidth;
   scaled.height = contentH;
   const ctx = scaled.getContext("2d");
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, scaled.width, scaled.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, 0, 0, targetWidth, contentH);
+  const offsetX = Math.max(0, Math.round((paperWidth - contentWidth) / 2));
+  ctx.drawImage(source, 0, 0, source.width, source.height, offsetX, 0, contentWidth, contentH);
   return scaled;
 }
 
