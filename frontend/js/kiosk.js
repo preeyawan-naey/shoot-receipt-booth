@@ -433,3 +433,4 @@ window.isKioskMode = isKioskMode;
 window.setKioskMode = setKioskMode;
 window.toggleErudaConsole = toggleErudaConsole;
 window.logBoothDiagnostics = logBoothDiagnostics;
+window.hideAdminDrawer = hideAdminDrawer;

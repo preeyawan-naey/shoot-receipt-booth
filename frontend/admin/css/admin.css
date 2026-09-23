@@ -1328,6 +1328,12 @@ body {
   font-weight: 600;
 }
 
+.booth-device-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .booth-features-actions {
   display: flex;
   align-items: center;

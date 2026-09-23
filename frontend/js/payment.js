@@ -303,7 +303,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const apiFetch = typeof boothApiFetch === "function" ? boothApiFetch : fetch;
+    return await apiFetch(url, { ...options, signal: controller.signal });
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(`เชื่อมต่อ server ไม่สำเร็จ (${API_URL}) — ตรวจสอบ Wi‑Fi`);

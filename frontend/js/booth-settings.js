@@ -52,7 +52,8 @@ function getBoothSettingsUrl() {
 
 async function fetchBoothSettings() {
   try {
-    const res = await fetch(getBoothSettingsUrl(), {
+    const apiFetch = typeof boothApiFetch === "function" ? boothApiFetch : fetch;
+    const res = await apiFetch(getBoothSettingsUrl(), {
       cache: "no-store",
     });
     const data = await res.json();
@@ -131,7 +132,8 @@ async function recordBoothPhotoSession({
     const paymentSessionId =
       typeof getActivePaymentSessionId === "function" ? getActivePaymentSessionId() : "";
 
-    await fetch(`${API_URL}/api/booth/photo-sessions`, {
+    const apiFetch = typeof boothApiFetch === "function" ? boothApiFetch : fetch;
+    await apiFetch(`${API_URL}/api/booth/photo-sessions`, {
       method: "POST",
       headers: {
         Accept: "application/json",

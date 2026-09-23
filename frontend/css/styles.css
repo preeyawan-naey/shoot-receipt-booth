@@ -2434,6 +2434,12 @@ body.admin-drawer-open {
   text-align: center;
 }
 
+.kiosk-pin-form__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: #166534;
+}
+
 .kiosk-pin-form__error {
   margin: 10px 0 0;
   font-size: 13px;

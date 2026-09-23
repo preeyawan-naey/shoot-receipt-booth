@@ -633,9 +633,10 @@
 
     try {
       await loadAppInfo();
-      const [profileData, paymentData] = await Promise.all([
+      const [profileData, paymentData, deviceAuthData] = await Promise.all([
         apiFetch(`/booth-profiles/${encodeURIComponent(boothId)}`),
         apiFetch(buildPaymentApiPathForBooth("/payment", boothId)),
+        apiFetch(`/booths/${encodeURIComponent(boothId)}/device-auth`).catch(() => null),
       ]);
       const booth = {
         ...(cached || {}),
@@ -650,10 +651,87 @@
         payment_enabled: (paymentData.payment?.payment_mode || cached?.payment_mode) !== "free",
       };
       renderBoothDetail(booth, paymentData.payment || {}, profileData.profile || {});
+      if (deviceAuthData) {
+        renderBoothDeviceAuth(deviceAuthData);
+      }
     } catch (error) {
       console.error("[admin/booth-detail]", error);
       setText("booth-detail-name", boothId);
       setText("booth-detail-id", `โหลดรายละเอียดไม่สำเร็จ: ${error.message}`);
+    }
+  }
+
+  function renderBoothDeviceAuth(status) {
+    const el = $("#booth-detail-device-auth");
+    if (!el) return;
+
+    const hasToken = status?.has_active_token === true;
+    const tokenCreated = status?.active_token_created_at
+      ? formatDate(status.active_token_created_at)
+      : "—";
+    const pendingExpiry = status?.pending_pairing_expires_at
+      ? formatDate(status.pending_pairing_expires_at)
+      : "—";
+
+    el.innerHTML = `
+      <div class="booth-meta-row"><dt>สถานะ token</dt><dd>${hasToken ? "Active" : "None"}</dd></div>
+      <div class="booth-meta-row"><dt>สร้าง token ล่าสุด</dt><dd>${escapeHtml(tokenCreated)}</dd></div>
+      <div class="booth-meta-row"><dt>Pairing code ค้าง (หมดอายุ)</dt><dd>${escapeHtml(pendingExpiry)}</dd></div>
+    `;
+
+    const resultEl = $("#booth-pairing-code-result");
+    if (resultEl) {
+      resultEl.hidden = true;
+      resultEl.textContent = "";
+    }
+  }
+
+  async function createBoothPairingCode() {
+    const boothId = state.boothDetailId;
+    if (!boothId) return;
+
+    const resultEl = $("#booth-pairing-code-result");
+    try {
+      const data = await apiFetch(`/booths/${encodeURIComponent(boothId)}/pairing-code`, {
+        method: "POST",
+      });
+      if (resultEl) {
+        resultEl.hidden = false;
+        resultEl.textContent = `Pairing code: ${data.pairing_code} (หมดอายุ ${formatDate(data.expires_at)}) — แสดงครั้งเดียว`;
+      }
+      const status = await apiFetch(`/booths/${encodeURIComponent(boothId)}/device-auth`);
+      renderBoothDeviceAuth(status);
+    } catch (error) {
+      if (resultEl) {
+        resultEl.hidden = false;
+        resultEl.textContent = error.message || "สร้าง pairing code ไม่สำเร็จ";
+      }
+    }
+  }
+
+  async function revokeBoothDeviceToken() {
+    const boothId = state.boothDetailId;
+    if (!boothId) return;
+    if (!window.confirm(`เพิกถอน device token ของ ${boothId}?`)) {
+      return;
+    }
+
+    const resultEl = $("#booth-pairing-code-result");
+    try {
+      const data = await apiFetch(`/booths/${encodeURIComponent(boothId)}/revoke-device-token`, {
+        method: "POST",
+      });
+      if (resultEl) {
+        resultEl.hidden = false;
+        resultEl.textContent = `เพิกถอนแล้ว (${data.revoked_count || 0} token)`;
+      }
+      const status = await apiFetch(`/booths/${encodeURIComponent(boothId)}/device-auth`);
+      renderBoothDeviceAuth(status);
+    } catch (error) {
+      if (resultEl) {
+        resultEl.hidden = false;
+        resultEl.textContent = error.message || "เพิกถอนไม่สำเร็จ";
+      }
     }
   }
 
@@ -1926,6 +2004,14 @@
       const title = $("#admin-topbar-title");
       if (title) title.textContent = "Booth Overview";
       loadBoothsAdmin().catch(console.error);
+    });
+
+    $("#btn-booth-pairing-code")?.addEventListener("click", () => {
+      createBoothPairingCode().catch(console.error);
+    });
+
+    $("#btn-booth-revoke-token")?.addEventListener("click", () => {
+      revokeBoothDeviceToken().catch(console.error);
     });
   }
 

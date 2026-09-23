@@ -302,6 +302,27 @@
 
               <section class="settings-card">
                 <header class="settings-card__header">
+                  <h3 class="settings-card__title">Device token</h3>
+                  <p class="settings-card__subtitle">
+                    สร้างรหัสจับคู่ให้ tablet — token แสดงบนตู้ครั้งเดียวหลังจับคู่สำเร็จ
+                  </p>
+                </header>
+                <div class="settings-card__body settings-card__body--stack">
+                  <dl class="booth-meta-list booth-meta-list--compact" id="booth-detail-device-auth"></dl>
+                  <div class="booth-device-auth-actions">
+                    <button class="admin-btn admin-btn--primary" id="btn-booth-pairing-code" type="button">
+                      สร้าง pairing code
+                    </button>
+                    <button class="admin-btn admin-btn--ghost admin-btn--danger" id="btn-booth-revoke-token" type="button">
+                      เพิกถอน token
+                    </button>
+                  </div>
+                  <p class="settings-card__hint" id="booth-pairing-code-result" hidden></p>
+                </div>
+              </section>
+
+              <section class="settings-card">
+                <header class="settings-card__header">
                   <h3 class="settings-card__title">Config</h3>
                   <p class="settings-card__subtitle">ค่าพื้นฐานของตู้</p>
                 </header>
@@ -526,6 +547,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=33"></script>
+    <script src="/admin/js/admin.js?v=34"></script>
   </body>
 </html>
