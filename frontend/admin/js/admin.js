@@ -108,6 +108,67 @@
     return candidate;
   }
 
+  function getAdminBasePath() {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const adminIndex = parts.indexOf("admin");
+    if (adminIndex === -1) return "/admin";
+    return `/${parts.slice(0, adminIndex + 1).join("/")}`;
+  }
+
+  function buildAdminBoothUrl(boothId) {
+    const id = String(boothId || "")
+      .trim()
+      .toLowerCase();
+    if (!id || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) {
+      return `${getAdminBasePath()}/`;
+    }
+    return `${getAdminBasePath()}/${encodeURIComponent(id)}`;
+  }
+
+  function syncAdminPathBoothId(boothId, { replace = true } = {}) {
+    const nextPath = buildAdminBoothUrl(boothId);
+    const normalize = (path) => path.replace(/\/+$/, "") || "/";
+    if (normalize(window.location.pathname) === normalize(nextPath)) {
+      state.pathBoothId = readBoothIdFromPath();
+      return;
+    }
+
+    const nextUrl = `${nextPath}${window.location.search}${window.location.hash}`;
+    if (replace) {
+      history.replaceState({ adminBoothId: boothId }, "", nextUrl);
+    } else {
+      history.pushState({ adminBoothId: boothId }, "", nextUrl);
+    }
+    state.pathBoothId = readBoothIdFromPath();
+    if (state.pathBoothId) {
+      state.paymentBoothId = state.pathBoothId;
+    }
+    updateBoothScopeUi();
+  }
+
+  function clearAdminPathBoothScope() {
+    if (isBoothScopedAdmin()) return;
+
+    const basePath = getAdminBasePath();
+    const normalize = (path) => path.replace(/\/+$/, "") || "/";
+    if (normalize(window.location.pathname) === normalize(basePath)) {
+      state.pathBoothId = null;
+      return;
+    }
+
+    history.replaceState({}, "", `${basePath}/${window.location.search}${window.location.hash}`);
+    state.pathBoothId = null;
+    updateBoothScopeUi();
+  }
+
+  function applyAdminPathBoothScope() {
+    const boothId = isBoothScopedAdmin()
+      ? getSessionBoothId()
+      : state.pathBoothId || state.boothDetailId || null;
+    if (!boothId) return;
+    syncAdminPathBoothId(boothId, { replace: true });
+  }
+
   function getSessionBoothId() {
     if (memoryBoothId) return memoryBoothId;
     try {
@@ -698,6 +759,7 @@
 
   function showBoothsListPanel() {
     state.boothDetailId = null;
+    clearAdminPathBoothScope();
     const listPanel = $("#booths-list-panel");
     const detailPanel = $("#booth-detail-panel");
     if (listPanel) listPanel.hidden = false;
@@ -706,6 +768,9 @@
 
   async function showBoothDetail(boothId) {
     state.boothDetailId = boothId;
+    if (!isBoothScopedAdmin()) {
+      syncAdminPathBoothId(boothId, { replace: false });
+    }
     const listPanel = $("#booths-list-panel");
     const detailPanel = $("#booth-detail-panel");
     if (listPanel) listPanel.hidden = true;
@@ -1026,9 +1091,12 @@
 
     const loginDesc = $("#admin-login-desc");
     if (loginDesc) {
-      loginDesc.textContent = state.pathBoothId
-        ? `เข้าสู่ระบบ booth: ${state.pathBoothId} (username = booth id)`
-        : "เข้าสู่ระบบด้วย booth id หรือ admin (super)";
+      if (state.pathBoothId) {
+        loginDesc.textContent = `เข้าสู่ระบบ booth: ${state.pathBoothId} (username = booth id)`;
+      } else {
+        loginDesc.textContent =
+          `เข้าสู่ระบบด้วย booth id หรือ admin (super) — ลิงก์ตู้: ${buildAdminBoothUrl("snap-on-receipt")}`;
+      }
     }
 
     const brandSubtitle = $("#admin-sidebar-booth");
@@ -1861,6 +1929,7 @@
         }
       })(),
     });
+    applyAdminPathBoothScope();
     updateBoothScopeUi();
     showApp();
     showAdminView("dashboard");
@@ -2011,7 +2080,11 @@
 
     $("#payment-booth-select")?.addEventListener("change", () => {
       state.boothPaymentLoadedFor = "";
-      syncBoothSelectValues(getSelectedPaymentBoothId());
+      const boothId = getSelectedPaymentBoothId();
+      syncBoothSelectValues(boothId);
+      if (!isBoothScopedAdmin()) {
+        syncAdminPathBoothId(boothId, { replace: true });
+      }
       if (state.view === "dashboard") {
         refresh().catch(console.error);
         return;
@@ -2108,6 +2181,23 @@
       loadBoothsAdmin().catch(console.error);
     });
 
+    window.addEventListener("popstate", () => {
+      state.pathBoothId = readBoothIdFromPath();
+      if (state.pathBoothId) {
+        state.paymentBoothId = state.pathBoothId;
+        syncBoothSelectValues(state.pathBoothId);
+      }
+      updateBoothScopeUi();
+      if (!getApiKey()) return;
+      if (state.view === "payment") {
+        loadPaymentAdmin().catch(console.error);
+        return;
+      }
+      if (state.view === "dashboard") {
+        refresh().catch(console.error);
+      }
+    });
+
     $("#btn-booth-pairing-code")?.addEventListener("click", () => {
       createBoothPairingCode().catch(console.error);
     });
@@ -2139,6 +2229,10 @@
       clearApiKey();
       showLogin("กรุณา login ใหม่สำหรับ booth นี้");
       return;
+    }
+
+    if (key && isBoothScopedAdmin() && getSessionBoothId() && !state.pathBoothId) {
+      applyAdminPathBoothScope();
     }
 
     setLoginLoading(true);

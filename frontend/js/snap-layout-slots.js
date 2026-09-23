@@ -23,7 +23,7 @@ function snapSlot(left, top, width, height, rotation = 0, overrides = {}) {
 }
 
 /** layout1-5 — portrait photo → rotate 90° and cover the blue placeholder (Calendar) */
-const SNAP_LAYOUT1_5_SLOT = snapSlot(20.55, 4.57, 51.98, 16.38, 90, {
+const SNAP_LAYOUT1_5_SLOT = snapSlot(21.37, 2.37, 50.88, 16.68, 90, {
   fit: "cover",
   expandPct: 0,
 });
@@ -113,14 +113,17 @@ const SNAP_LAYOUT_DEFAULT_SLOTS = {
 /** Per-frame artwork overrides — keyed by layout folder + filename. */
 const SNAP_FRAME_FILE_SLOTS = {
   "layout1/layout1-5.jpg": [SNAP_LAYOUT1_5_SLOT],
-  "layout1/layout1-1.jpg": [snapSlot(12.33, 9.39, 75.11, 38.89, 0, { expandPct: 0.5 })],
-  "layout1/layout1-2.jpg": [snapSlot(10.55, 12.21, 78.9, 49.03, 0, { expandPct: 0.5 })],
+  "layout1/layout1-1.jpg": [snapSlot(11.89, 9.91, 75.99, 41.59, 0, { expandPct: 0 })],
+  /** Bleed + expand — ทับเส้นกรอบม่วง/ฟ้าด้านบนช่องรูป (layout1-2 มี lip บางๆ เหนือ fill) */
+  "layout1/layout1-2.jpg": [
+    snapSlot(10.11, 14.42, 79.78, 58.55, 0, { expandPct: 1.2, noBleed: false }),
+  ],
   "layout1/layout1-3.jpg": [snapSlot(10.35, 33.63, 79.07, 38.54, 0, { expandPct: 0.5 })],
-  "layout1/layout1-4.jpg": [snapSlot(12.09, 29.94, 75.6, 54.08, 0, { expandPct: 0.5 })],
+  "layout1/layout1-4.jpg": [snapSlot(12.09, 31.22, 75.82, 56.84, 0, { expandPct: 0 })],
 
   "layout2/layout2-1.jpg": [
-    snapSlot(11.89, 7.9, 75.99, 23.88, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
-    snapSlot(11.89, 32.4, 75.99, 23.53, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(11.89, 7.9, 75.99, 23.88, 0, { expandPct: 0 }),
+    snapSlot(12.11, 32.4, 75.77, 23.44, 0, { expandPct: 0 }),
   ],
   "layout2/layout2-2.jpg": [
     snapSlot(9.89, 11.24, 79.78, 33.2, 0, { expandPct: 0.5 }),
@@ -167,10 +170,10 @@ const SNAP_FRAME_FILE_SLOTS = {
   ],
 
   "layout4/layout4-1.jpg": [
-    snapSlot(14.95, 14.3, 70.33, 16.43, 0, { expandPct: 0.5 }),
-    snapSlot(14.95, 30.72, 70.33, 16.6, 0, { expandPct: 0.5 }),
-    snapSlot(14.95, 47.32, 70.33, 16.43, 0, { expandPct: 0.5 }),
-    snapSlot(15.16, 63.74, 70.11, 16.34, 0, { expandPct: 0.5 }),
+    snapSlot(14.54, 11.68, 70.7, 17.29, 0, { expandPct: 1.0, noBleed: false }),
+    snapSlot(14.54, 28.97, 70.7, 17.2, 0, { expandPct: 1.0, noBleed: false }),
+    snapSlot(14.54, 46.17, 70.7, 17.29, 0, { expandPct: 1.0, noBleed: false }),
+    snapSlot(14.54, 63.46, 70.7, 11.41, 0, { expandPct: 1.0, noBleed: false }),
   ],
   "layout4/layout4-2.jpg": [
     snapSlot(16.7, 11.09, 66.37, 21.22, 0, { expandPct: 0.5 }),
