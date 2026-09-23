@@ -6,12 +6,48 @@ const paymentSessions = require("../paymentSessions");
 const photoSessions = require("../photoSessions");
 const omise = require("../omise");
 const db = require("../db");
+const deviceTokens = require("../deviceTokens");
+const { deviceAuth, resolveRequestBoothId } = require("../middleware/deviceAuth");
 
 const router = express.Router();
 
+router.post("/pair", async (req, res) => {
+  try {
+    const code = req.body?.code || req.body?.pairing_code;
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: "pairing code is required",
+      });
+    }
+
+    const result = await deviceTokens.pairWithCode(code);
+    return res.json({
+      success: true,
+      device_token: result.device_token,
+      booth_id: result.booth_id,
+      tenant: result.tenant,
+    });
+  } catch (error) {
+    const message = error.message || "Pairing failed";
+    const clientError =
+      message.includes("not found") ||
+      message.includes("expired") ||
+      message.includes("already used") ||
+      message.includes("Invalid");
+    console.error("[booth/pair]", error);
+    return res.status(clientError ? 400 : 500).json({
+      success: false,
+      message,
+    });
+  }
+});
+
+router.use(deviceAuth);
+
 router.get("/settings", async (req, res) => {
   try {
-    const boothId = req.query.booth_id || req.query.boothId || req.get("x-booth-id");
+    const boothId = resolveRequestBoothId(req);
     const settings = await boothSettings.getSettings(boothId);
     return res.json({ success: true, settings });
   } catch (error) {
@@ -25,7 +61,7 @@ router.get("/settings", async (req, res) => {
 
 router.get("/profile", async (req, res) => {
   try {
-    const boothId = req.query.booth_id || req.query.boothId || req.get("x-booth-id");
+    const boothId = resolveRequestBoothId(req);
     const profile = await boothProfiles.getProfile(boothId);
     return res.json({ success: true, profile, booth_id: profile.booth_id });
   } catch (error) {
@@ -39,8 +75,7 @@ router.get("/profile", async (req, res) => {
 
 router.get("/payment-qr", async (req, res) => {
   try {
-    const boothId =
-      req.query.booth_id || req.query.boothId || req.get("x-booth-id") || null;
+    const boothId = resolveRequestBoothId(req, null);
     const buffer = await paymentSettings.getPaymentQrBuffer(boothId);
     if (!buffer || buffer.length === 0) {
       return res.status(404).json({ success: false, message: "Payment QR not configured" });
@@ -95,12 +130,7 @@ router.get("/payment-sessions/:id/qr-image", async (req, res) => {
 
 router.post("/payment-sessions", async (req, res) => {
   try {
-    const boothId =
-      req.body?.booth_id ||
-      req.query.booth_id ||
-      req.query.boothId ||
-      req.get("x-booth-id") ||
-      null;
+    const boothId = resolveRequestBoothId(req, null);
     const session = await paymentSessions.createSession({
       amount: req.body?.amount,
       boothId,
@@ -169,10 +199,7 @@ router.post("/photo-sessions", async (req, res) => {
         typeof req.body?.payment_session_id === "string"
           ? req.body.payment_session_id
           : null,
-      boothId:
-        typeof req.body?.booth_id === "string"
-          ? req.body.booth_id
-          : req.query.booth_id || req.get("x-booth-id") || null,
+      boothId: resolveRequestBoothId(req, null),
       layoutId: typeof req.body?.layout_id === "string" ? req.body.layout_id : null,
       frameId: typeof req.body?.frame_id === "string" ? req.body.frame_id : null,
       printCount: req.body?.print_count,

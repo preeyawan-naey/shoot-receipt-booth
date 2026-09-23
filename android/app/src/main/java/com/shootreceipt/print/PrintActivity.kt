@@ -277,8 +277,8 @@ object PrintEngine {
             return source
         }
 
-        // 576 px (72 mm printable) — pad on the right only; do not stretch (avoids horizontal shift)
-        if (source.width == 576 && source.width < TARGET_WIDTH_PX) {
+        // Narrower than paper — center on 640 dots (72 mm content on 80 mm roll)
+        if (source.width in 1 until TARGET_WIDTH_PX) {
             val padded =
                 Bitmap.createBitmap(
                     TARGET_WIDTH_PX,
@@ -287,7 +287,8 @@ object PrintEngine {
                 )
             val canvas = android.graphics.Canvas(padded)
             canvas.drawColor(android.graphics.Color.WHITE)
-            canvas.drawBitmap(source, 0f, 0f, null)
+            val x = ((TARGET_WIDTH_PX - source.width) / 2f).coerceAtLeast(0f)
+            canvas.drawBitmap(source, x, 0f, null)
             source.recycle()
             return padded
         }

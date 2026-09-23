@@ -8,6 +8,7 @@ const boothProfiles = require("../boothProfiles");
 const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
 const omise = require("../omise");
+const deviceTokens = require("../deviceTokens");
 
 const router = express.Router();
 
@@ -453,6 +454,41 @@ router.post("/booth-profiles", async (req, res) => {
     return res.status(201).json({ success: true, profile });
   } catch (error) {
     console.error("[admin/booth-profiles/create]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/booths/:boothId/device-auth", async (req, res) => {
+  try {
+    const status = await deviceTokens.getDeviceTokenStatus(req.params.boothId);
+    return res.json({ success: true, ...status });
+  } catch (error) {
+    console.error("[admin/booths/device-auth]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/booths/:boothId/pairing-code", async (req, res) => {
+  try {
+    const result = await deviceTokens.createPairingCode(req.params.boothId);
+    return res.status(201).json({
+      success: true,
+      booth_id: result.booth_id,
+      pairing_code: result.pairing_code,
+      expires_at: result.expires_at,
+    });
+  } catch (error) {
+    console.error("[admin/booths/pairing-code]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/booths/:boothId/revoke-device-token", async (req, res) => {
+  try {
+    const result = await deviceTokens.revokeDeviceTokens(req.params.boothId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("[admin/booths/revoke-device-token]", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

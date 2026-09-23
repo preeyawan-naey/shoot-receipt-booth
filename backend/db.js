@@ -178,6 +178,50 @@ function runSqliteMigration() {
     "CREATE INDEX IF NOT EXISTS idx_photo_sessions_payment_session_id ON photo_sessions (payment_session_id)"
   );
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT OR IGNORE INTO tenants (id, name)
+    VALUES ('00000000-0000-4000-8000-000000000001', 'Default tenant');
+  `);
+
+  const profileColsAfter = sqlite.prepare("PRAGMA table_info(booth_profiles)").all();
+  if (!profileColsAfter.some((col) => col.name === "tenant_id")) {
+    sqlite.exec("ALTER TABLE booth_profiles ADD COLUMN tenant_id TEXT");
+  }
+  sqlite
+    .prepare(
+      `UPDATE booth_profiles
+       SET tenant_id = '00000000-0000-4000-8000-000000000001'
+       WHERE tenant_id IS NULL OR tenant_id = ''`
+    )
+    .run();
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS booth_pairing_codes (
+      id TEXT PRIMARY KEY,
+      booth_id TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_booth_pairing_codes_booth_id ON booth_pairing_codes (booth_id);
+    CREATE INDEX IF NOT EXISTS idx_booth_pairing_codes_code_hash ON booth_pairing_codes (code_hash);
+
+    CREATE TABLE IF NOT EXISTS booth_device_tokens (
+      id TEXT PRIMARY KEY,
+      booth_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_booth_device_tokens_booth_id ON booth_device_tokens (booth_id);
+  `);
+
   runSqlitePhotoSessionConsolidation();
 }
 
@@ -492,7 +536,23 @@ async function linkPostgresPaidSessionsWithoutPhotoHistory() {
   }
 }
 
+async function runSqlBatch(sql) {
+  if (!pgPool) {
+    throw new Error("runSqlBatch requires PostgreSQL connection");
+  }
+  await pgPool.query(sql);
+}
+
 async function initDb() {
+  if (config.isProduction) {
+    const dbUrl = String(config.databaseUrl || "").trim();
+    if (!dbUrl.toLowerCase().startsWith("postgres")) {
+      throw new Error(
+        "NODE_ENV=production requires DATABASE_URL (PostgreSQL). SQLite fallback is disabled."
+      );
+    }
+  }
+
   if (config.databaseUrl.startsWith("postgres")) {
     const { Pool } = require("pg");
     pgPool = new Pool({
@@ -500,8 +560,10 @@ async function initDb() {
       ssl: config.databaseSsl,
     });
     await pgPool.query("SELECT 1");
-    await runPostgresMigration();
     mode = "postgres";
+    await runPostgresMigration();
+    const { runSqlMigrations } = require("./db/migrate");
+    await runSqlMigrations();
     console.log("🗄️  Database: PostgreSQL");
     return;
   }
@@ -569,4 +631,5 @@ module.exports = {
   queryOne,
   queryAll,
   execute,
+  runSqlBatch,
 };

@@ -28,6 +28,19 @@ class BoothJsBridge(
     fun getBoothId(): String = BuildConfig.BOOTH_ID
 
     @JavascriptInterface
+    fun getDeviceToken(): String = DeviceTokenStore.getToken(activity)
+
+    @JavascriptInterface
+    fun setDeviceToken(token: String) {
+        DeviceTokenStore.setToken(activity, token)
+    }
+
+    @JavascriptInterface
+    fun clearDeviceToken() {
+        DeviceTokenStore.clearToken(activity)
+    }
+
+    @JavascriptInterface
     fun setKioskMode(enabled: Boolean) {
         activity.runOnUiThread {
             activity.setKioskMode(enabled)

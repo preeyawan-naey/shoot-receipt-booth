@@ -8,6 +8,7 @@ const fs = require("fs");
 const config = require("./config");
 const storage = require("./storage");
 const db = require("./db");
+const { assertProductionRuntime } = require("./productionGuard");
 const paymentSettings = require("./paymentSettings");
 const adminRoutes = require("./routes/admin");
 const boothRoutes = require("./routes/booth");
@@ -269,6 +270,7 @@ app.use(express.static(FRONTEND_DIR, {
 
 async function startServer() {
   try {
+    assertProductionRuntime();
     await db.initDb();
     const boothProfiles = require("./boothProfiles");
     await boothProfiles.ensureDefaultProfiles();
@@ -289,7 +291,12 @@ async function startServer() {
     }
     console.log(`🚀 Backend running on port ${config.port}`);
     console.log(`🌐 Public URL: ${config.publicUrl}`);
+    console.log(`🌍 NODE_ENV: ${config.nodeEnv}`);
+    console.log(`🗄️  Database: ${db.getDbMode()}`);
     console.log(`💾 Storage: ${storage.getStorageMode()}`);
+    console.log(
+      `🔐 Device token: ${config.requireDeviceToken ? "required" : "optional (legacy booth_id allowed)"}`
+    );
     console.log(`🧹 Photo retention: ${config.photoRetentionDays} days (/api/cron/cleanup-photos)`);
     console.log(`📱 QR download: ${config.publicUrl}/api/download/<id>`);
     if (config.omiseSecretKey) {

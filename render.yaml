@@ -5,6 +5,8 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: PUBLIC_URL
         sync: false
       - key: SUPABASE_ENABLED

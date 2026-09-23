@@ -39,7 +39,13 @@ const supabaseBucket = process.env.SUPABASE_BUCKET || "photos";
 const supabaseEnabled =
   process.env.SUPABASE_ENABLED === "true" && supabaseUrl && supabaseKey;
 
+const nodeEnv = process.env.NODE_ENV || "development";
+const isProduction = nodeEnv === "production";
+
 const config = {
+  nodeEnv,
+  isProduction,
+  requireDeviceToken: process.env.REQUIRE_DEVICE_TOKEN === "true",
   port: Number(process.env.PORT) || 3000,
   publicUrl: resolvePublicUrl(),
   lanIp: getLocalIP(),
