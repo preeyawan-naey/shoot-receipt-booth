@@ -1820,12 +1820,10 @@ async function setupPrintCopies(count) {
 const RAWBT_TARGET_WIDTH_PX = 640;
 /** 72mm printable area on 80mm rolls (XP-T80A and similar) */
 const THERMAL_PRINTABLE_WIDTH_PX = 576;
-/** 80 mm paper width sent to the printer (640 dots @ 203 dpi) */
+/** Snap print width — full 80 mm (640 dots @ 203 dpi), not letterboxed 576 */
 const SNAP_THERMAL_PAPER_WIDTH_PX = RAWBT_TARGET_WIDTH_PX;
-/** Snap artwork width on paper — 72 mm printable, centered inside 80 mm */
-const SNAP_THERMAL_CONTENT_WIDTH_PX = THERMAL_PRINTABLE_WIDTH_PX;
-/** Extra horizontal nudge after centering (dots) */
-const SNAP_THERMAL_X_OFFSET_PX = 0;
+/** XP-T80A head often starts ~1–1.5 mm right — nudge art left on the bitmap */
+const SNAP_THERMAL_X_OFFSET_PX = -32;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1840,7 +1838,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth371";
+const PRINT_BUILD = "booth372";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
@@ -1935,14 +1933,15 @@ function scaleCanvasForThermal(source, paperWidth = RAWBT_TARGET_WIDTH_PX) {
   const isSnap = isSnapThermalPrintBooth();
 
   if (isSnap) {
-    const paperW = SNAP_THERMAL_PAPER_WIDTH_PX;
-    const contentW = SNAP_THERMAL_CONTENT_WIDTH_PX;
-    const contentH = Math.max(1, Math.round(source.height * (contentW / source.width)));
-    const x =
-      Math.round((paperW - contentW) / 2) + SNAP_THERMAL_X_OFFSET_PX;
+    const destW = SNAP_THERMAL_PAPER_WIDTH_PX;
+    const contentH = Math.max(1, Math.round(source.height * (destW / source.width)));
+
+    if (source.width === destW && SNAP_THERMAL_X_OFFSET_PX === 0) {
+      return source;
+    }
 
     const scaled = document.createElement("canvas");
-    scaled.width = paperW;
+    scaled.width = destW;
     scaled.height = contentH;
     const ctx = scaled.getContext("2d");
     ctx.fillStyle = "#ffffff";
@@ -1955,9 +1954,9 @@ function scaleCanvasForThermal(source, paperWidth = RAWBT_TARGET_WIDTH_PX) {
       0,
       source.width,
       source.height,
-      x,
+      SNAP_THERMAL_X_OFFSET_PX,
       0,
-      contentW,
+      destW,
       contentH
     );
     return scaled;
