@@ -125,8 +125,15 @@ body {
 }
 
 .admin-login__input:focus {
-  outline: 2px solid var(--red-muted);
+  outline: none;
   border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-muted);
+}
+
+.admin-search:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-muted);
 }
 
 .admin-login__btn {
@@ -290,6 +297,27 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.admin-filters__booth {
+  margin-bottom: 0.75rem;
+}
+
+.admin-filters__booth-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.admin-filters__booth-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.admin-filters__booth .admin-login__input {
+  min-width: min(100%, 280px);
+}
+
 .admin-filters__tabs {
   display: flex;
   flex-wrap: wrap;
@@ -443,11 +471,18 @@ body {
   border-radius: var(--radius);
   padding: 1.25rem;
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .kpi-card--primary {
-  border-color: rgba(214, 40, 40, 0.25);
+  border: 1px solid rgba(214, 40, 40, 0.28);
+  border-radius: var(--radius);
   background: linear-gradient(135deg, #fff 0%, var(--red-light) 100%);
+  background-clip: padding-box;
+}
+
+.admin-app--single-booth .admin-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .kpi-card__label {
@@ -514,17 +549,19 @@ body {
   font-size: 0.85rem;
 }
 
-.admin-search:focus {
-  outline: 2px solid var(--red-muted);
-  border-color: var(--red);
+.payment-admin-field select:disabled,
+.payment-admin-field .admin-login__input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  background: #f9fafb;
 }
 
 .admin-table-card {
   margin: 0 1.5rem 1.5rem;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(214, 40, 40, 0.22);
   border-radius: 12px;
-  overflow: visible;
+  overflow: hidden;
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
 }
 
@@ -578,6 +615,14 @@ body {
   background: var(--red-light);
 }
 
+.admin-table-card .admin-table thead th:first-child {
+  border-top-left-radius: 11px;
+}
+
+.admin-table-card .admin-table thead th:last-child {
+  border-top-right-radius: 11px;
+}
+
 .admin-table th {
   text-align: left;
   padding: 0.95rem 1.1rem;
@@ -609,6 +654,14 @@ body {
 
 .admin-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.admin-table-card .admin-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 11px;
+}
+
+.admin-table-card .admin-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 11px;
 }
 
 .admin-table tbody tr:hover {

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/admin/css/admin.css?v=23" />
+    <link rel="stylesheet" href="/admin/css/admin.css?v=26" />
   </head>
   <body>
     <div class="admin-login" id="admin-login">
@@ -78,7 +78,7 @@
             <span class="admin-nav__icon">▣</span>
             Dashboard
           </button>
-          <button class="admin-nav__item" type="button" data-view="booths">
+          <button class="admin-nav__item" type="button" data-view="booths" id="admin-nav-booths">
             <span class="admin-nav__icon">◫</span>
             Booths
           </button>
@@ -86,7 +86,13 @@
             <span class="admin-nav__icon">฿</span>
             Payment
           </button>
-          <a class="admin-nav__item admin-nav__item--link" href="/" target="_blank" rel="noopener">
+          <a
+            class="admin-nav__item admin-nav__item--link"
+            id="admin-nav-open-booth"
+            href="/"
+            target="_blank"
+            rel="noopener"
+          >
             <span class="admin-nav__icon">↗</span>
             Open Booth
           </a>
@@ -106,6 +112,14 @@
 
         <div id="view-dashboard">
         <section class="admin-filters">
+          <div class="admin-filters__booth" id="dashboard-booth-filter" hidden>
+            <label class="admin-filters__booth-label">
+              <span class="admin-filters__booth-text">Booth</span>
+              <select class="admin-login__input" id="dashboard-booth-select">
+                <option value="the-receipt-club">The Receipt Club</option>
+              </select>
+            </label>
+          </div>
           <div class="admin-filters__tabs" id="period-tabs">
             <button class="admin-tab admin-tab--active" type="button" data-period="today">Today</button>
             <button class="admin-tab" type="button" data-period="7days">7 Days</button>
@@ -126,11 +140,11 @@
             <p class="kpi-card__label">Total Revenue</p>
             <p class="kpi-card__value" id="kpi-revenue">—</p>
           </article>
-          <article class="kpi-card">
+          <article class="kpi-card" id="kpi-card-share-cafe" data-admin-super-only>
             <p class="kpi-card__label" id="kpi-cafe-label">Cafe Share (40%)</p>
             <p class="kpi-card__value" id="kpi-cafe">—</p>
           </article>
-          <article class="kpi-card">
+          <article class="kpi-card" id="kpi-card-share-club" data-admin-super-only>
             <p class="kpi-card__label" id="kpi-receipt-club-label">The Receipt Club (60%)</p>
             <p class="kpi-card__value" id="kpi-receipt-club">—</p>
           </article>
@@ -473,7 +487,7 @@
               </div>
             </section>
 
-            <section class="settings-card" id="payment-webhook-panel">
+            <section class="settings-card" id="payment-webhook-panel" data-admin-super-only>
               <header class="settings-card__header">
                 <h3 class="settings-card__title">Webhook / Server</h3>
                 <p class="settings-card__subtitle" id="payment-webhook-subtitle">
@@ -512,6 +526,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=30"></script>
+    <script src="/admin/js/admin.js?v=33"></script>
   </body>
 </html>

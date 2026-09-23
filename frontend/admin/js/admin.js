@@ -27,6 +27,8 @@
     boothFeaturesSaved: {},
     boothFeaturesDraft: {},
     boothDetailPayment: null,
+    boothPaymentEnabled: true,
+    boothPaymentLoadedFor: "",
   };
 
   let lastPaidPaymentMode = "static_qr";
@@ -130,6 +132,15 @@
     return getSessionRole() === "booth" && Boolean(getSessionBoothId());
   }
 
+  /** Booth login or /admin/{booth_id} — single-booth backoffice UI */
+  function isSingleBoothAdminView() {
+    return isBoothScopedAdmin() || Boolean(state.pathBoothId);
+  }
+
+  function canViewSuperAdminPanels() {
+    return isSuperAdminSession();
+  }
+
   function getActiveBoothId() {
     if (isBoothScopedAdmin()) return getSessionBoothId();
     if (state.pathBoothId) return state.pathBoothId;
@@ -168,7 +179,7 @@
 
   async function apiFetch(path, options = {}, keyOverride) {
     const key = keyOverride ?? getApiKey();
-    const scopedBoothId = isBoothScopedAdmin() ? getSessionBoothId() : "";
+    const scopedBoothId = getActiveBoothId();
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
@@ -207,6 +218,34 @@
 
   function formatMoney(amount) {
     return `฿${Number(amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  }
+
+  function formatSessionPrice(amount, paymentMode) {
+    if (!state.boothPaymentEnabled) return "—";
+    if (paymentMode === "free") return "—";
+    return formatMoney(amount);
+  }
+
+  async function refreshBoothPaymentState() {
+    const boothId = getActiveBoothId();
+    if (!boothId) {
+      state.boothPaymentEnabled = true;
+      state.boothPaymentLoadedFor = "";
+      return;
+    }
+
+    if (state.boothPaymentLoadedFor === boothId) return;
+
+    try {
+      const paymentData = await apiFetch(buildPaymentApiPathForBooth("/payment", boothId));
+      const mode = paymentData.payment?.payment_mode || paymentData.payment?.payment_provider || "static_qr";
+      state.boothPaymentEnabled = mode !== "free";
+      state.boothPaymentLoadedFor = boothId;
+    } catch (error) {
+      console.warn("[admin/payment-state]", error);
+      state.boothPaymentEnabled = true;
+      state.boothPaymentLoadedFor = boothId;
+    }
   }
 
   function formatDate(iso) {
@@ -733,15 +772,85 @@
 
   function appendBoothScopeToQuery(params) {
     const boothId = getActiveBoothId();
-    if (boothId && (isBoothScopedAdmin() || state.pathBoothId)) {
+    if (boothId) {
       params.set("booth_id", boothId);
     }
   }
 
+  function syncBoothSelectValues(boothId) {
+    if (!boothId) return;
+    state.paymentBoothId = boothId;
+    const paymentSelect = $("#payment-booth-select");
+    const dashboardSelect = $("#dashboard-booth-select");
+    if (paymentSelect && [...paymentSelect.options].some((opt) => opt.value === boothId)) {
+      paymentSelect.value = boothId;
+    }
+    if (dashboardSelect && [...dashboardSelect.options].some((opt) => opt.value === boothId)) {
+      dashboardSelect.value = boothId;
+    }
+  }
+
+  function renderBoothSelectOptions(select, profiles, selectedId) {
+    if (!select) return selectedId;
+    select.innerHTML = profiles
+      .map((profile) => {
+        const boothId = profile.booth_id || "";
+        const label = profile.name || boothId;
+        return `<option value="${escapeHtml(boothId)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+
+    const fallback = profiles[0]?.booth_id || "the-receipt-club";
+    const nextId =
+      selectedId && profiles.some((profile) => profile.booth_id === selectedId)
+        ? selectedId
+        : fallback;
+    select.value = nextId;
+    return nextId;
+  }
+
+  async function fetchBoothProfileOptions() {
+    const data = await apiFetch("/booth-profiles");
+    return Array.isArray(data.profiles) ? data.profiles : [];
+  }
+
   function updateBoothScopeUi() {
     const boothCard = $("#payment-booth-card");
-    const scoped = isBoothScopedAdmin() || Boolean(state.pathBoothId);
+    const dashboardFilter = $("#dashboard-booth-filter");
+    const scoped = isSingleBoothAdminView();
+    const superAdmin = canViewSuperAdminPanels();
     if (boothCard) boothCard.hidden = scoped;
+    if (dashboardFilter) dashboardFilter.hidden = scoped;
+
+    $("#admin-nav-booths")?.toggleAttribute("hidden", scoped);
+    const openBoothNav = $("#admin-nav-open-booth");
+    if (openBoothNav) {
+      openBoothNav.hidden = scoped;
+      if (scoped && getActiveBoothId()) {
+        openBoothNav.href = `/?booth=${encodeURIComponent(getActiveBoothId())}`;
+      }
+    }
+
+    document.querySelectorAll("[data-admin-super-only]").forEach((el) => {
+      el.hidden = !superAdmin;
+    });
+
+    const adminApp = $("#admin-app");
+    if (adminApp) {
+      adminApp.classList.toggle("admin-app--single-booth", scoped);
+      adminApp.classList.toggle("admin-app--super-admin", superAdmin);
+    }
+
+    const modeSelect = $("#payment-mode-select");
+    if (modeSelect) {
+      modeSelect.disabled = !superAdmin;
+    }
+
+    const paymentToggle = $("#payment-enabled-toggle");
+    if (paymentToggle) paymentToggle.disabled = !superAdmin;
+
+    const paymentFooter = document.querySelector(".payment-settings__footer");
+    if (paymentFooter) paymentFooter.hidden = !superAdmin;
 
     const usernameInput = $("#admin-username-input");
     if (usernameInput && state.pathBoothId && !getApiKey()) {
@@ -770,27 +879,26 @@
     if (!select || isBoothScopedAdmin() || state.pathBoothId) return;
 
     try {
-      const data = await apiFetch("/booth-profiles");
-      const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+      const profiles = await fetchBoothProfileOptions();
       if (!profiles.length) return;
-
-      select.innerHTML = profiles
-        .map((profile) => {
-          const boothId = profile.booth_id || "";
-          const label = profile.name || boothId;
-          return `<option value="${escapeHtml(boothId)}">${escapeHtml(label)}</option>`;
-        })
-        .join("");
-
-      const preferred = state.paymentBoothId;
-      if (preferred && profiles.some((profile) => profile.booth_id === preferred)) {
-        select.value = preferred;
-      } else {
-        select.value = profiles[0].booth_id;
-        state.paymentBoothId = profiles[0].booth_id;
-      }
+      const boothId = renderBoothSelectOptions(select, profiles, state.paymentBoothId);
+      syncBoothSelectValues(boothId);
     } catch (error) {
       console.warn("[admin/payment-booths]", error);
+    }
+  }
+
+  async function loadDashboardBoothOptions() {
+    const select = $("#dashboard-booth-select");
+    if (!select || isBoothScopedAdmin() || state.pathBoothId) return;
+
+    try {
+      const profiles = await fetchBoothProfileOptions();
+      if (!profiles.length) return;
+      const boothId = renderBoothSelectOptions(select, profiles, getSelectedPaymentBoothId());
+      syncBoothSelectValues(boothId);
+    } catch (error) {
+      console.warn("[admin/dashboard-booths]", error);
     }
   }
 
@@ -925,15 +1033,29 @@
     const qs = buildQuery();
     const data = await apiFetch(`/dashboard?${qs}`);
     const m = data.metrics || {};
+    const boothId = getActiveBoothId();
+    const dashboardSelect = $("#dashboard-booth-select");
+    const boothLabel =
+      dashboardSelect?.selectedOptions?.[0]?.textContent?.trim() ||
+      memoryBoothName ||
+      boothId ||
+      "—";
 
-    setText("kpi-revenue", formatMoney(m.totalRevenue));
+    setText(
+      "kpi-revenue",
+      state.boothPaymentEnabled ? formatMoney(m.totalRevenue) : "—"
+    );
     setText("kpi-cafe-label", "Cafe Share (40%)");
     setText("kpi-receipt-club-label", "The Receipt Club (60%)");
     setText("kpi-cafe", formatMoney(m.cafeShare));
     setText("kpi-receipt-club", formatMoney(m.receiptClubShare ?? m.noeyShare));
     setText("kpi-sessions", String(m.totalSessions ?? "—"));
     setText("kpi-prints", String(m.totalPrints ?? "—"));
-    setText("table-period-label", data.periodLabel || state.period);
+    const periodLabel = data.periodLabel || state.period;
+    setText(
+      "table-period-label",
+      boothId ? `${periodLabel} · Booth: ${boothLabel}` : periodLabel
+    );
   }
 
   async function loadPayments() {
@@ -955,7 +1077,7 @@
           <td>${escapeHtml(row.layout_id || "—")}</td>
           <td>${escapeHtml(row.frame_id || "—")}</td>
           <td>${escapeHtml(String(row.print_count ?? 0))}</td>
-          <td>${formatMoney(row.amount)}</td>
+          <td>${formatSessionPrice(row.amount, row.payment_mode)}</td>
           <td><span class="status-badge status-badge--${escapeHtml(row.payment_mode || "omise")}">${escapeHtml(paymentModeLabel(row.payment_mode))}</span></td>
           <td class="admin-table__cell-print-status">${renderPrintStatusCell(row)}</td>
         </tr>`
@@ -1225,10 +1347,11 @@
     const hint = $("#payment-enabled-hint");
     const mode = $("#payment-mode-select")?.value || "static_qr";
 
+    const lockPaymentMethod = !canViewSuperAdminPanels();
     if (pricingCard) pricingCard.hidden = !enabled;
-    if (methodCard) methodCard.hidden = !enabled;
+    if (methodCard) methodCard.hidden = lockPaymentMethod ? false : !enabled;
     if (staticPanel) staticPanel.hidden = !enabled || mode !== "static_qr";
-    if (webhookPanel) webhookPanel.hidden = !enabled;
+    if (webhookPanel) webhookPanel.hidden = !enabled || !canViewSuperAdminPanels();
     if (hint) {
       hint.textContent = enabled
         ? "ลูกค้าต้องชำระก่อนถ่ายรูป"
@@ -1288,7 +1411,13 @@
     if (enabledToggle) enabledToggle.checked = paymentEnabled;
 
     const modeSelect = $("#payment-mode-select");
-    if (modeSelect) modeSelect.value = lastPaidPaymentMode;
+    if (modeSelect) {
+      modeSelect.value = lastPaidPaymentMode;
+      modeSelect.disabled = !canViewSuperAdminPanels();
+    }
+
+    state.boothPaymentEnabled = paymentEnabled;
+    state.boothPaymentLoadedFor = boothId;
 
     const staticPanel = $("#payment-static-qr-panel");
     if (staticPanel) staticPanel.hidden = !paymentEnabled || lastPaidPaymentMode !== "static_qr";
@@ -1533,6 +1662,9 @@
       }
       return;
     }
+    await loadDashboardBoothOptions();
+    await refreshBoothPaymentState();
+    updateBoothScopeUi();
     await Promise.all([loadDashboard(), loadPayments()]);
   }
 
@@ -1698,8 +1830,20 @@
     });
 
     $("#payment-booth-select")?.addEventListener("change", () => {
-      state.paymentBoothId = getSelectedPaymentBoothId();
+      state.boothPaymentLoadedFor = "";
+      syncBoothSelectValues(getSelectedPaymentBoothId());
+      if (state.view === "dashboard") {
+        refresh().catch(console.error);
+        return;
+      }
       loadPaymentAdmin().catch(console.error);
+    });
+
+    $("#dashboard-booth-select")?.addEventListener("change", () => {
+      state.boothPaymentLoadedFor = "";
+      syncBoothSelectValues($("#dashboard-booth-select")?.value || "");
+      state.page = 1;
+      refresh().catch(console.error);
     });
 
     $("#booths-tbody")?.addEventListener("click", (event) => {

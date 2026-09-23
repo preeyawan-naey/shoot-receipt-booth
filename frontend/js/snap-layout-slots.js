@@ -22,8 +22,8 @@ function snapSlot(left, top, width, height, rotation = 0, overrides = {}) {
   return slot;
 }
 
-/** layout1-5 — portrait photo → rotate 90° and cover the purple placeholder */
-const SNAP_LAYOUT1_5_SLOT = snapSlot(21.15, 6.09, 51.98, 16.38, 90, {
+/** layout1-5 — portrait photo → rotate 90° and cover the blue placeholder (Calendar) */
+const SNAP_LAYOUT1_5_SLOT = snapSlot(20.55, 4.57, 51.98, 16.38, 90, {
   fit: "cover",
   expandPct: 0,
 });
@@ -113,10 +113,10 @@ const SNAP_LAYOUT_DEFAULT_SLOTS = {
 /** Per-frame artwork overrides — keyed by layout folder + filename. */
 const SNAP_FRAME_FILE_SLOTS = {
   "layout1/layout1-5.jpg": [SNAP_LAYOUT1_5_SLOT],
-  "layout1/layout1-1.jpg": [snapSlot(13.22, 13.73, 74.67, 37.73)],
-  "layout1/layout1-2.jpg": [snapSlot(10.13, 17.45, 79.52, 47.27)],
-  "layout1/layout1-3.jpg": [snapSlot(10.13, 36.11, 79.52, 37.04)],
-  "layout1/layout1-4.jpg": [snapSlot(12.0, 30.51, 75.88, 52.39)],
+  "layout1/layout1-1.jpg": [snapSlot(12.33, 9.39, 75.11, 38.89, 0, { expandPct: 0.5 })],
+  "layout1/layout1-2.jpg": [snapSlot(10.55, 12.21, 78.9, 49.03, 0, { expandPct: 0.5 })],
+  "layout1/layout1-3.jpg": [snapSlot(10.35, 33.63, 79.07, 38.54, 0, { expandPct: 0.5 })],
+  "layout1/layout1-4.jpg": [snapSlot(12.09, 29.94, 75.6, 54.08, 0, { expandPct: 0.5 })],
 
   "layout2/layout2-1.jpg": [
     snapSlot(12.0, 12.76, 75.88, 23.13),
