@@ -153,15 +153,39 @@ function formatTierCopyLabel(prints) {
 }
 
 const DEFAULT_PACKAGE_ART_BOOTH_ID = "the-receipt-club";
+const SNAP_PACKAGE_ART_BOOTH_ID = "snap-on-receipt";
+
+/** Which booth folder under img/booths/{id}/Package — Snap uses its own Copies1–3 art. */
+function resolvePackageArtBoothId() {
+  const fallback = DEFAULT_PACKAGE_ART_BOOTH_ID;
+  const boothId =
+    typeof getBoothId === "function" ? String(getBoothId() || "").trim().toLowerCase() : fallback;
+  if (boothId === SNAP_PACKAGE_ART_BOOTH_ID) {
+    return SNAP_PACKAGE_ART_BOOTH_ID;
+  }
+  const profile = typeof getBoothProfile === "function" ? getBoothProfile() : null;
+  const layoutSet = String(profile?.layout_set || "").trim().toLowerCase();
+  const theme = String(profile?.theme || "").trim().toLowerCase();
+  if (
+    layoutSet === SNAP_PACKAGE_ART_BOOTH_ID ||
+    profile?.booth_id === SNAP_PACKAGE_ART_BOOTH_ID ||
+    theme === "snap"
+  ) {
+    return SNAP_PACKAGE_ART_BOOTH_ID;
+  }
+  return boothId || fallback;
+}
 
 function getPackageArtBase() {
-  const boothId =
-    typeof getBoothId === "function" ? getBoothId() : DEFAULT_PACKAGE_ART_BOOTH_ID;
-  return `img/booths/${boothId}/Package`;
+  return `img/booths/${resolvePackageArtBoothId()}/Package`;
 }
 
 function getPackageArtFallbackPath(prints) {
   const count = Math.max(1, Math.min(3, Math.round(Number(prints) || 1)));
+  const artBooth = resolvePackageArtBoothId();
+  if (artBooth === SNAP_PACKAGE_ART_BOOTH_ID) {
+    return `${getPackageArtBase()}/Copies${count}.png`;
+  }
   return `img/booths/${DEFAULT_PACKAGE_ART_BOOTH_ID}/Package/Copies${count}.png`;
 }
 
@@ -678,7 +702,7 @@ function formatPaymentNotifyDebugStatus(raw) {
       return "";
     }
     if (!status.config_ready) {
-      return "แอpp ยัง sync secret ไม่ครบ — รอ server หรือเปิดหน้า QR ใหม่";
+      return "App ยัง sync secret ไม่ครบ — รอ server หรือเปิดหน้า QR ใหม่";
     }
 
     const forCurrentSession = isCurrentPaymentDebugEvent(status);

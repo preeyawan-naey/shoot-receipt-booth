@@ -1118,6 +1118,15 @@ body {
   line-height: 1.5;
 }
 
+.settings-card__body .payment-admin-field + .payment-webhook-info__hint {
+  margin-top: 0.75rem;
+  padding-top: 0.15rem;
+}
+
+#payment-mode-hint {
+  max-width: 42rem;
+}
+
 .payment-webhook-info__sample {
   margin: 0;
   padding: 12px 14px;

@@ -1589,13 +1589,36 @@
     }
   }
 
+  let paymentAdminSuccessHideTimer = null;
+
+  function showPaymentAdminSuccess(message) {
+    const success = $("#payment-admin-success");
+    const alert = $("#payment-settings-alert");
+    if (!success) return;
+
+    if (paymentAdminSuccessHideTimer) {
+      clearTimeout(paymentAdminSuccessHideTimer);
+      paymentAdminSuccessHideTimer = null;
+    }
+
+    success.textContent = message;
+    success.hidden = false;
+    if (alert) alert.hidden = true;
+
+    paymentAdminSuccessHideTimer = setTimeout(() => {
+      success.hidden = true;
+      success.textContent = "";
+      paymentAdminSuccessHideTimer = null;
+    }, 4000);
+  }
+
   function updatePaymentModeHint(mode, payment) {
     const hint = $("#payment-mode-hint");
     if (!hint) return;
 
     if (mode === "static_qr") {
       hint.textContent =
-        "เงินเข้าบัญชีร้านตรง — App ตู่อ่าน noti ธนาคารบน tablet เครื่องเดียว (ไม่ต้องมือถือแยก)";
+        "เงินเข้าบัญชีร้านตรง — App ตู่อ่าน noti ธนาคาร";
       return;
     }
     if (mode === "omise") {
@@ -1653,12 +1676,11 @@
         body: JSON.stringify({ ...payload, booth_id: getSelectedPaymentBoothId() }),
       });
 
-      if (success) {
-        success.textContent = paymentEnabled
+      showPaymentAdminSuccess(
+        paymentEnabled
           ? "บันทึกการตั้งค่าแล้ว — booth sync ภายใน ~15 วินาที"
-          : "ปิดการเรียกเก็บเงินแล้ว — booth sync ภายใน ~15 วินาที";
-        success.hidden = false;
-      }
+          : "ปิดการเรียกเก็บเงินแล้ว — booth sync ภายใน ~15 วินาที"
+      );
       await loadPaymentAdmin();
     } catch (saveErr) {
       if (err) {
@@ -1712,10 +1734,7 @@
         }),
       });
 
-      if (success) {
-        success.textContent = "บันทึก QR แล้ว — booth sync ภายใน ~15 วินาที";
-        success.hidden = false;
-      }
+      showPaymentAdminSuccess("บันทึก QR แล้ว — booth sync ภายใน ~15 วินาที");
       if (fileInput) fileInput.value = "";
       await loadPaymentAdmin();
     } catch (saveErr) {
