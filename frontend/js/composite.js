@@ -1820,10 +1820,10 @@ async function setupPrintCopies(count) {
 const RAWBT_TARGET_WIDTH_PX = 640;
 /** 72mm printable area on 80mm rolls (XP-T80A and similar) */
 const THERMAL_PRINTABLE_WIDTH_PX = 576;
-/** Snap print width — full 80 mm (640 dots @ 203 dpi), not letterboxed 576 */
+/** Snap artboard 908px = Illustrator 8 cm — maps 1:1 to 640 dots (80 mm @ 203 dpi) */
 const SNAP_THERMAL_PAPER_WIDTH_PX = RAWBT_TARGET_WIDTH_PX;
-/** XP-T80A head often starts ~1–1.5 mm right — nudge art left on the bitmap */
-const SNAP_THERMAL_X_OFFSET_PX = -32;
+/** Compensate XP-T80A head starting ~1.5 mm right of paper edge */
+const SNAP_THERMAL_X_OFFSET_PX = -36;
 const RAWBT_JPEG_QUALITY = 0.92;
 /** Smaller JPEG for POST /api/upload — avoids WebView network failures on tablet */
 const UPLOAD_JPEG_QUALITY = 0.82;
@@ -1838,7 +1838,7 @@ const RAWBT_PACKAGE = "ru.a402d.rawbtprinter";
 const RAWBT_ACTION_VIEW = "android.intent.action.VIEW";
 const RAWBT_PRINT_ACTION = "ru.a402d.rawbtprinter.action.PRINT_RAWBT";
 const RAWBT_PRINT_DATA_EXTRA = "ru.a402d.rawbtprinter.extra.DATA";
-const PRINT_BUILD = "booth372";
+const PRINT_BUILD = "booth375";
 
 console.info(`[print] composite ${PRINT_BUILD}`);
 
