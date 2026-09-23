@@ -94,19 +94,19 @@ function normalizeUniformSnapSlots(slots) {
 const SNAP_LAYOUT_DEFAULT_SLOTS = {
   "Layout-1": [SNAP_LAYOUT1_5_SLOT],
   "Layout-2": [
-    snapSlot(12.0, 12.76, 75.88, 23.13, SNAP_LAYOUT2_ROTATION),
-    snapSlot(12.0, 36.62, 75.88, 23.13, SNAP_LAYOUT2_ROTATION),
+    snapSlot(11.89, 7.9, 75.99, 23.88, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(11.89, 32.4, 75.99, 23.53, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "Layout-3": [
-    snapSlot(11.0, 15.26, 77.89, 17.08),
-    snapSlot(11.0, 32.3, 77.89, 17.08),
-    snapSlot(11.0, 49.42, 77.89, 17.08),
+    snapSlot(10.79, 11.49, 78.41, 20.73, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 32.3, 78.41, 20.73, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 53.11, 78.41, 20.73, 0, { expandPct: 0.5 }),
   ],
   "Layout-4": [
-    snapSlot(14.76, 14.28, 70.37, 16.36),
-    snapSlot(14.76, 30.72, 70.37, 16.4),
-    snapSlot(14.76, 47.03, 70.37, 16.44),
-    snapSlot(14.87, 63.47, 70.26, 16.4),
+    snapSlot(14.73, 14.21, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.73, 25.53, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.73, 36.85, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.95, 63.66, 70.33, 16.51, 0, { expandPct: 0.5 }),
   ],
 };
 
@@ -119,77 +119,74 @@ const SNAP_FRAME_FILE_SLOTS = {
   "layout1/layout1-4.jpg": [snapSlot(12.09, 29.94, 75.6, 54.08, 0, { expandPct: 0.5 })],
 
   "layout2/layout2-1.jpg": [
-    snapSlot(12.0, 12.76, 75.88, 23.13),
-    snapSlot(12.0, 36.62, 75.88, 22.87),
+    snapSlot(11.89, 7.9, 75.99, 23.88, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(11.89, 32.4, 75.99, 23.53, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "layout2/layout2-2.jpg": [
-    snapSlot(10.02, 17.04, 79.63, 30.02),
-    snapSlot(10.02, 47.07, 79.63, 30.02),
+    snapSlot(9.89, 11.24, 79.78, 33.2, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(9.89, 44.52, 79.78, 33.2, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "layout2/layout2-3.jpg": [
-    snapSlot(10.12, 37.0, 79.65, 18.76),
-    snapSlot(10.12, 56.0, 79.65, 18.76),
+    snapSlot(9.89, 33.71, 79.78, 19.23, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(9.89, 53.02, 79.78, 19.23, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "layout2/layout2-4.jpg": [
-    snapSlot(12.0, 28.18, 75.77, 29.55),
-    snapSlot(12.11, 59.01, 75.66, 29.55),
+    snapSlot(11.89, 26.87, 75.99, 30.38, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(11.89, 58.56, 75.99, 30.29, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "layout2/layout2-5.jpg": [
-    snapSlot(10.46, 8.94, 77.97, 42.54),
-    snapSlot(10.46, 53.22, 77.97, 42.47),
+    snapSlot(13.85, 8.9, 71.43, 42.6, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
+    snapSlot(13.63, 53.23, 72.09, 42.6, SNAP_LAYOUT2_ROTATION, { expandPct: 0.5 }),
   ],
   "layout2/layout2-6.jpg": [
-    snapSlot(10.13, 6.01, 78.41, 24.23, 90, SNAP_ROTATE_90_CONTAIN),
-    snapSlot(10.13, 31.6, 78.41, 24.23, 90, SNAP_ROTATE_90_CONTAIN),
+    snapSlot(9.91, 6.24, 79.52, 25.13, 90, SNAP_ROTATE_90_CONTAIN),
+    snapSlot(9.91, 32.78, 79.52, 25.22, 90, SNAP_ROTATE_90_CONTAIN),
   ],
 
   "layout3/layout3-1.jpg": [
-    snapSlot(11.0, 15.26, 77.89, 17.08),
-    snapSlot(11.0, 32.3, 77.89, 17.08),
-    snapSlot(11.0, 49.42, 77.89, 17.08),
+    snapSlot(10.79, 11.49, 78.41, 20.73, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 32.3, 78.41, 20.73, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 53.11, 78.41, 20.73, 0, { expandPct: 0.5 }),
   ],
-  /** Equal 0.834% gap between slots (measured box h=20.779%, anchored top/bottom) */
   "layout3/layout3-2.jpg": [
-    snapSlot(11.454, 25.586, 75.991, 20.779),
-    snapSlot(11.454, 47.199, 75.991, 20.779),
-    snapSlot(11.454, 68.812, 75.991, 20.779),
+    snapSlot(11.65, 26.6, 75.82, 15.64, 0, { expandPct: 0.5 }),
+    snapSlot(11.65, 42.31, 75.82, 15.64, 0, { expandPct: 0.5 }),
+    snapSlot(11.65, 58.02, 75.82, 15.64, 0, { expandPct: 0.5 }),
   ],
   "layout3/layout3-3.jpg": [
-    snapSlot(12.11, 11.17, 76.43, 26.79),
-    snapSlot(12.11, 39.3, 76.43, 26.79),
-    snapSlot(12.11, 67.43, 76.43, 26.79),
+    snapSlot(16.26, 11.15, 68.13, 26.85, 0, { expandPct: 0.5 }),
+    snapSlot(16.26, 39.28, 68.57, 26.78, 0, { expandPct: 0.5 }),
+    snapSlot(15.82, 67.4, 67.25, 26.85, 0, { expandPct: 0.5 }),
   ],
   "layout3/layout3-4.jpg": [
-    snapSlot(11.01, 2.79, 79.74, 30.92),
-    snapSlot(11.01, 34.54, 79.74, 30.92),
-    snapSlot(11.01, 66.35, 79.74, 30.92),
+    snapSlot(10.79, 2.86, 80.18, 20.46, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 23.37, 80.18, 20.46, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 43.88, 80.18, 20.46, 0, { expandPct: 0.5 }),
   ],
 
   "layout4/layout4-1.jpg": [
-    snapSlot(14.76, 14.28, 70.37, 16.36),
-    snapSlot(14.76, 30.72, 70.37, 16.4),
-    snapSlot(14.76, 47.03, 70.37, 16.44),
-    snapSlot(14.87, 63.47, 70.26, 16.4),
+    snapSlot(14.73, 14.21, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.73, 25.53, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.73, 36.85, 70.55, 10.47, 0, { expandPct: 0.5 }),
+    snapSlot(14.95, 63.66, 70.33, 16.51, 0, { expandPct: 0.5 }),
   ],
-  /** Equal 1.925% gap — anchored top 11.168% / bottom 96.256% */
   "layout4/layout4-2.jpg": [
-    snapSlot(12.335, 11.168, 75.551, 19.829),
-    snapSlot(12.335, 32.921, 75.551, 19.829),
-    snapSlot(12.335, 54.674, 75.551, 19.829),
-    snapSlot(12.335, 76.428, 75.551, 19.829),
+    snapSlot(16.7, 11.09, 66.37, 21.22, 0, { expandPct: 0.5 }),
+    snapSlot(16.7, 32.37, 66.37, 21.22, 0, { expandPct: 0.5 }),
+    snapSlot(16.7, 53.65, 66.37, 21.22, 0, { expandPct: 0.5 }),
+    snapSlot(16.7, 74.94, 66.37, 21.22, 0, { expandPct: 0.5 }),
   ],
   "layout4/layout4-3.jpg": [
-    snapSlot(10.13, 19.43, 39.54, 22.98),
-    snapSlot(50.0, 19.43, 39.54, 22.98),
-    snapSlot(10.13, 42.45, 39.54, 22.98),
-    snapSlot(50.0, 42.45, 39.54, 22.98),
+    snapSlot(10.11, 16.94, 39.14, 28.92, 0, { expandPct: 0.5 }),
+    snapSlot(50.1, 16.94, 39.14, 28.92, 0, { expandPct: 0.5 }),
+    snapSlot(10.11, 46.71, 39.14, 28.92, 0, { expandPct: 0.5 }),
+    snapSlot(50.1, 46.71, 39.14, 28.92, 0, { expandPct: 0.5 }),
   ],
-  /** Equal 1.809% gap — anchored top 2.856% / bottom 95.874% */
   "layout4/layout4-4.jpg": [
-    snapSlot(11.013, 2.856, 79.956, 21.898),
-    snapSlot(11.013, 26.563, 79.956, 21.898),
-    snapSlot(11.013, 50.270, 79.956, 21.898),
-    snapSlot(11.013, 73.977, 79.956, 21.898),
+    snapSlot(10.79, 2.86, 80.18, 23.21, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 26.12, 80.18, 23.21, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 49.39, 80.18, 23.21, 0, { expandPct: 0.5 }),
+    snapSlot(10.79, 72.66, 80.18, 23.21, 0, { expandPct: 0.5 }),
   ],
 };
 
