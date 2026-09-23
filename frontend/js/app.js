@@ -241,6 +241,10 @@ function buildFrameCard(option) {
     `;
   }
 
+  const frameClass = option.selectPreviewContain
+    ? "frame-picker-card__frame frame-picker-card__frame--select-contain"
+    : "frame-picker-card__frame";
+
   return `
     <button
       class="frame-picker-card"
@@ -248,7 +252,7 @@ function buildFrameCard(option) {
       data-frame-id="${option.id}"
       aria-label="${option.label}"
     >
-      <div class="frame-picker-card__frame" style="aspect-ratio: ${aspect}">
+      <div class="${frameClass}" style="aspect-ratio: ${aspect}">
         <img
           class="frame-picker-card__preview"
           src="${option.selectImagePath}"

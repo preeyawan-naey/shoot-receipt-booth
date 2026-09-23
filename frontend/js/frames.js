@@ -8,6 +8,8 @@ const SNAP_FRAME_SELECT_ASPECT =
   typeof window !== "undefined" && window.SNAP_RECEIPT_ASPECT_RATIO
     ? window.SNAP_RECEIPT_ASPECT_RATIO
     : "908 / 2270";
+/** 2×2 grid — JPG 455×915; ใช้ใน picker แทนใบยาว 908×2270 เพื่อไม่ให้ cover ซูม */
+const SNAP_FRAME_SELECT_ASPECT_LAYOUT4_3 = "455 / 915";
 const THE_BLUMO_FRAME_ID = "theblumo";
 
 /** The Receipt Club (KiKi event theme) — no TheBlumo frame-select overlays */
@@ -274,12 +276,16 @@ function buildSnapFramesForLayout(layoutId) {
 
   return config.files.map((file, index) => {
     const assetPath = `${SNAP_FRAME_ASSET_BASE}/${config.dir}/${file}`;
+    const isLayout43Picker = file === "layout4-3.jpg";
     return {
       id: buildSnapFrameId(config.dir, file),
       label: `Frame ${index + 1}`,
       selectImagePath: assetPath,
       previewImagePath: assetPath,
-      selectAspectRatio: SNAP_FRAME_SELECT_ASPECT,
+      selectAspectRatio: isLayout43Picker
+        ? SNAP_FRAME_SELECT_ASPECT_LAYOUT4_3
+        : SNAP_FRAME_SELECT_ASPECT,
+      selectPreviewContain: isLayout43Picker,
       slots: snapSlotsForAsset(assetPath, layoutId, defaultSlots),
     };
   });

@@ -990,6 +990,16 @@ body {
   box-shadow: none;
 }
 
+#page-frame-select .frame-picker-card__frame--select-contain {
+  background: var(--color-white, #fff);
+}
+
+#page-frame-select .frame-picker-card__frame--select-contain .frame-picker-card__preview {
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center center;
+}
+
 .frame-picker-card__none-icon {
   display: flex;
   align-items: center;

@@ -924,11 +924,12 @@
       modeSelect.disabled = !superAdmin;
     }
 
+    /** Booth admin เปิด/ปิดชำระเงิน + บันทึกราคา/QR ได้ (Omise ยัง super เท่านั้น) */
     const paymentToggle = $("#payment-enabled-toggle");
-    if (paymentToggle) paymentToggle.disabled = !superAdmin;
+    if (paymentToggle) paymentToggle.disabled = false;
 
     const paymentFooter = document.querySelector(".payment-settings__footer");
-    if (paymentFooter) paymentFooter.hidden = !superAdmin;
+    if (paymentFooter) paymentFooter.hidden = false;
 
     const usernameInput = $("#admin-username-input");
     if (usernameInput && state.pathBoothId && !getApiKey()) {
@@ -1518,7 +1519,7 @@
     setText(
       "payment-kpi-mode-hint",
       mode === "static_qr"
-        ? "QR ร้าน + แอppตู่อ่าน noti"
+        ? "QR ร้าน + Appตู่อ่าน noti"
         : mode === "omise"
           ? payment.omise_configured
             ? "Omise dynamic QR"
@@ -1594,7 +1595,7 @@
 
     if (mode === "static_qr") {
       hint.textContent =
-        "เงินเข้าบัญชีร้านตรง — แอppตู่อ่าน noti ธนาคารบน tablet เครื่องเดียว (ไม่ต้องมือถือแยก)";
+        "เงินเข้าบัญชีร้านตรง — App ตู่อ่าน noti ธนาคารบน tablet เครื่องเดียว (ไม่ต้องมือถือแยก)";
       return;
     }
     if (mode === "omise") {
@@ -1611,7 +1612,10 @@
     const success = $("#payment-admin-success");
     const btn = $("#btn-save-payment-settings");
     const paymentEnabled = isPaymentEnabledInForm();
-    const mode = paymentEnabled ? $("#payment-mode-select")?.value || "static_qr" : "free";
+    let mode = paymentEnabled ? $("#payment-mode-select")?.value || "static_qr" : "free";
+    if (paymentEnabled && !canViewSuperAdminPanels()) {
+      mode = "static_qr";
+    }
     const tiers = readPaymentTierFormValues();
 
     if (err) err.hidden = true;
