@@ -2,7 +2,7 @@
  * Booth settings — synced from backoffice via /api/booth/settings
  */
 
-const BOOTH_SETTINGS_POLL_MS = 15000;
+const BOOTH_SETTINGS_POLL_MS = 5000;
 
 let boothSettingsState = {
   payment_amount: 49,
@@ -59,10 +59,20 @@ async function fetchBoothSettings() {
     const data = await res.json();
     if (!data.success || !data.settings) return;
 
+    const previousQrUpdatedAt = boothSettingsState.payment_qr_updated_at;
+
     boothSettingsState = {
       ...boothSettingsState,
       ...data.settings,
     };
+
+    if (
+      boothSettingsState.payment_qr_updated_at &&
+      boothSettingsState.payment_qr_updated_at !== previousQrUpdatedAt &&
+      typeof refreshStaticPaymentQrImage === "function"
+    ) {
+      refreshStaticPaymentQrImage();
+    }
     if (typeof setBoothProfileState === "function") {
       setBoothProfileState(data.settings);
     }

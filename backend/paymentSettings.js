@@ -244,6 +244,11 @@ async function setPaymentAmount(boothIdRaw, amount) {
   return Number(value);
 }
 
+async function getPaymentQrUpdatedAt(boothIdRaw) {
+  const boothId = resolveBoothId(boothIdRaw);
+  return getSettingValue(boothId, PAYMENT_QR_UPDATED_KEY, null);
+}
+
 async function savePaymentQr(boothIdRaw, buffer) {
   const boothId = resolveBoothId(boothIdRaw);
   await setSettingValue(boothId, PAYMENT_QR_BASE64_KEY, buffer.toString("base64"));
@@ -299,6 +304,7 @@ module.exports = {
   setOmisePaymentEnabled,
   isOmisePaymentEnabled,
   savePaymentQr,
+  getPaymentQrUpdatedAt,
   getPaymentQrBuffer,
   getPaymentQrPath,
   buildPaymentQrUrl,

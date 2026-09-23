@@ -32,6 +32,8 @@
   };
 
   let lastPaidPaymentMode = "static_qr";
+  let paymentQrPreviewObjectUrl = null;
+  let paymentQrPreviewLoadGen = 0;
 
   const BOOTH_FEATURE_META = {
     guest_name: {
@@ -273,6 +275,89 @@
     const value = select?.value || state.paymentBoothId || "the-receipt-club";
     state.paymentBoothId = value;
     return value;
+  }
+
+  function appendCacheBustToUrl(url, bust) {
+    if (!url) return url;
+    const token = encodeURIComponent(String(bust ?? Date.now()));
+    return url.includes("?") ? `${url}&v=${token}` : `${url}?v=${token}`;
+  }
+
+  function buildPaymentQrPreviewSrc(payment) {
+    if (!payment?.payment_qr_url) return null;
+    const path = payment.payment_qr_url.startsWith("http")
+      ? payment.payment_qr_url
+      : `${window.location.origin}${
+          payment.payment_qr_url.startsWith("/") ? payment.payment_qr_url : `/${payment.payment_qr_url}`
+        }`;
+    return appendCacheBustToUrl(path, payment.payment_qr_updated_at || Date.now());
+  }
+
+  function clearPaymentQrPreviewObjectUrl() {
+    if (paymentQrPreviewObjectUrl) {
+      URL.revokeObjectURL(paymentQrPreviewObjectUrl);
+      paymentQrPreviewObjectUrl = null;
+    }
+  }
+
+  function formatPaymentQrStatus(payment) {
+    const boothId = payment?.booth_id || getSelectedPaymentBoothId();
+    if (payment?.payment_qr_updated_at) {
+      return `อัปโหลดแล้ว — ${formatDate(payment.payment_qr_updated_at)} · booth: ${boothId}`;
+    }
+    return `อัปโหลด QR แล้ว · booth: ${boothId}`;
+  }
+
+  async function renderPaymentQrPreview(payment) {
+    const qrPreview = $("#payment-qr-preview");
+    const qrStatus = $("#payment-qr-status");
+    const src = buildPaymentQrPreviewSrc(payment);
+    if (!src || !qrPreview) {
+      clearPaymentQrPreviewObjectUrl();
+      if (qrPreview) {
+        qrPreview.hidden = true;
+        qrPreview.removeAttribute("src");
+      }
+      if (qrStatus) qrStatus.textContent = "ยังไม่ได้อัปโหลด QR";
+      return;
+    }
+
+    paymentQrPreviewLoadGen += 1;
+    const loadId = paymentQrPreviewLoadGen;
+    qrPreview.hidden = false;
+
+    try {
+      const res = await fetch(src, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      if (loadId !== paymentQrPreviewLoadGen) return;
+
+      clearPaymentQrPreviewObjectUrl();
+      paymentQrPreviewObjectUrl = URL.createObjectURL(blob);
+      qrPreview.src = paymentQrPreviewObjectUrl;
+      if (qrStatus) qrStatus.textContent = formatPaymentQrStatus(payment);
+    } catch (error) {
+      console.warn("[admin] payment qr preview failed:", error.message, src);
+      if (qrStatus) {
+        qrStatus.textContent = `โหลด preview ไม่สำเร็จ (${error.message}) — ลอง refresh`;
+      }
+    }
+  }
+
+  function renderPaymentQrPreviewFromDataUrl(dataUrl, payment = null) {
+    const qrPreview = $("#payment-qr-preview");
+    const qrStatus = $("#payment-qr-status");
+    if (!qrPreview || !dataUrl) return;
+    clearPaymentQrPreviewObjectUrl();
+    qrPreview.src = dataUrl;
+    qrPreview.hidden = false;
+    if (qrStatus) {
+      qrStatus.textContent = payment
+        ? formatPaymentQrStatus(payment)
+        : "บันทึกแล้ว — แสดง QR จากไฟล์ที่อัปโหลด";
+    }
   }
 
   function buildPaymentApiPath(path) {
@@ -1519,7 +1604,7 @@
     setText(
       "payment-kpi-mode-hint",
       mode === "static_qr"
-        ? "QR ร้าน + Appตู่อ่าน noti"
+        ? "QR ร้าน + Appตู้อ่าน noti"
         : mode === "omise"
           ? payment.omise_configured
             ? "Omise dynamic QR"
@@ -1529,21 +1614,7 @@
 
     updatePaymentModeHint(paymentEnabled ? lastPaidPaymentMode : "free", payment);
 
-    const qrPreview = $("#payment-qr-preview");
-    const qrStatus = $("#payment-qr-status");
-    if (payment.payment_qr_url && qrPreview) {
-      qrPreview.src = `${window.location.origin}${payment.payment_qr_url}?t=${Date.now()}`;
-      qrPreview.hidden = false;
-      if (qrStatus) {
-        qrStatus.textContent = payment.payment_qr_updated_at
-          ? `อัปโหลดแล้ว — ${formatDate(payment.payment_qr_updated_at)}`
-          : "อัปโหลด QR แล้ว";
-      }
-    } else if (qrPreview) {
-      qrPreview.hidden = true;
-      qrPreview.removeAttribute("src");
-      if (qrStatus) qrStatus.textContent = "ยังไม่ได้อัปโหลด QR";
-    }
+    void renderPaymentQrPreview(payment);
 
     const webhookUrlInput = $("#payment-webhook-url");
     const webhookSecretStatus = $("#payment-webhook-secret-status");
@@ -1726,7 +1797,7 @@
         reader.readAsDataURL(file);
       });
 
-      await apiFetch(buildPaymentApiPath("/payment/qr"), {
+      const uploadData = await apiFetch(buildPaymentApiPath("/payment/qr"), {
         method: "POST",
         body: JSON.stringify({
           image_base64: base64,
@@ -1734,9 +1805,17 @@
         }),
       });
 
-      showPaymentAdminSuccess("บันทึก QR แล้ว — booth sync ภายใน ~15 วินาที");
+      if (uploadData.payment) {
+        renderPaymentQrPreviewFromDataUrl(base64, uploadData.payment);
+      } else {
+        renderPaymentQrPreviewFromDataUrl(base64);
+        await loadPaymentAdmin();
+      }
+
+      showPaymentAdminSuccess(
+        `บันทึก QR แล้ว (booth: ${uploadData.payment?.booth_id || getSelectedPaymentBoothId()}) — ตรวจว่าตู้ใช้ booth_id เดียวกัน`
+      );
       if (fileInput) fileInput.value = "";
-      await loadPaymentAdmin();
     } catch (saveErr) {
       if (err) {
         err.textContent = saveErr.message;

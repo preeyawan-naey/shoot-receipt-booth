@@ -57,4 +57,25 @@ function resolveApiUrl() {
 }
 
 const API_URL = resolveApiUrl();
+
+function warnApiOverrideMismatch() {
+  if (typeof window === "undefined") return;
+  const override = readApiOverride();
+  if (!override) return;
+
+  const pageOrigin = window.location.origin.replace(/\/$/, "");
+  const apiOrigin = API_URL.replace(/\/$/, "");
+  if (pageOrigin === apiOrigin) return;
+
+  const onLocalPage =
+    window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!onLocalPage) return;
+
+  console.warn(
+    `[booth] API override ชี้ไป ${apiOrigin} แต่เปิดหน้าเว็บที่ ${pageOrigin} — ` +
+      "Admin บันทึก QR ที่ localhost แล้วตู้จะไม่เปลี่ยนจนกว่าจะลบ override (localStorage SHOOT_API_URL) หรือใช้ ?api="
+  );
+}
+
+warnApiOverrideMismatch();
 console.info(`[booth] api=${API_URL}`);

@@ -73,6 +73,21 @@ router.get("/profile", async (req, res) => {
   }
 });
 
+function detectPaymentQrContentType(buffer) {
+  if (buffer?.[0] === 0xff && buffer?.[1] === 0xd8) return "image/jpeg";
+  if (buffer?.[0] === 0x89 && buffer?.[1] === 0x50) return "image/png";
+  if (buffer?.[0] === 0x47 && buffer?.[1] === 0x49) return "image/gif";
+  if (
+    buffer?.[0] === 0x52 &&
+    buffer?.[1] === 0x49 &&
+    buffer?.[2] === 0x46 &&
+    buffer?.[8] === 0x57
+  ) {
+    return "image/webp";
+  }
+  return "image/png";
+}
+
 router.get("/payment-qr", async (req, res) => {
   try {
     const boothId = resolveRequestBoothId(req, null);
@@ -81,8 +96,14 @@ router.get("/payment-qr", async (req, res) => {
       return res.status(404).json({ success: false, message: "Payment QR not configured" });
     }
 
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Content-Type", "image/png");
+    const updatedAt = await paymentSettings.getPaymentQrUpdatedAt(boothId);
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    if (updatedAt) {
+      res.setHeader("ETag", `"${updatedAt}"`);
+    }
+    res.setHeader("Content-Type", detectPaymentQrContentType(buffer));
     return res.send(buffer);
   } catch (error) {
     console.error("[booth/payment-qr]", error);

@@ -13,6 +13,7 @@ let paymentSessionId = null;
 let activePaymentSession = null;
 let paymentFlowGeneration = 0;
 let paymentQrLoadGeneration = 0;
+let paymentQrObjectUrl = null;
 let paymentNotifyAccessPrompted = false;
 let paymentBatteryPrompted = false;
 let paymentSessionStartedAt = 0;
@@ -423,13 +424,35 @@ function formatPaymentAmount(amount) {
   });
 }
 
-function resolvePaymentQrUrl(session) {
-  if (!session?.qr_image_url) return null;
+function appendCacheBustToUrl(url, bust) {
+  if (!url) return url;
+  const token = encodeURIComponent(String(bust ?? Date.now()));
+  return url.includes("?") ? `${url}&v=${token}` : `${url}?v=${token}`;
+}
 
-  const path = session.qr_image_url.startsWith("/")
-    ? session.qr_image_url
-    : `/${session.qr_image_url}`;
-  return `${API_URL}${path}?t=${Date.now()}`;
+function resolvePaymentQrUrl(session) {
+  const qrPath = session?.qr_image_url || boothSettingsState?.payment_qr_url;
+  if (!qrPath) return null;
+
+  const path = qrPath.startsWith("/") ? qrPath : `/${qrPath}`;
+  const bust = boothSettingsState?.payment_qr_updated_at || Date.now();
+  return appendCacheBustToUrl(`${API_URL}${path}`, bust);
+}
+
+function refreshStaticPaymentQrImage() {
+  if (!isStaticQrPaymentMode()) return;
+
+  const qrImage = document.getElementById("payment-qr-image");
+  if (!qrImage) return;
+
+  const onPaymentPage =
+    typeof getCurrentPage === "function" && getCurrentPage() === "payment";
+  if (!onPaymentPage) return;
+
+  const qrUrl = resolvePaymentQrUrl(activePaymentSession);
+  if (!qrUrl) return;
+
+  loadPaymentQrImage(qrImage, qrUrl);
 }
 
 function setPaymentQrLoading(isLoading, message = "กำลังโหลด QR PromptPay...", isError = false) {
@@ -445,7 +468,7 @@ function setPaymentQrLoading(isLoading, message = "กำลังโหลด Q
   if (qrWrap) qrWrap.classList.toggle("payment-body__qr-wrap--loading", isLoading && !isError);
 }
 
-function loadPaymentQrImage(qrImage, qrUrl) {
+async function loadPaymentQrImage(qrImage, qrUrl) {
   paymentQrLoadGeneration += 1;
   const loadId = paymentQrLoadGeneration;
 
@@ -454,24 +477,33 @@ function loadPaymentQrImage(qrImage, qrUrl) {
   qrImage.hidden = true;
   setPaymentQrLoading(true, "กำลังโหลด QR PromptPay...");
 
-  const finish = (ok) => {
+  try {
+    const res = await fetch(qrUrl, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
     if (loadId !== paymentQrLoadGeneration) return;
 
-    if (ok) {
-      setPaymentQrLoading(false);
-      qrImage.hidden = false;
-      return;
+    if (paymentQrObjectUrl) {
+      URL.revokeObjectURL(paymentQrObjectUrl);
+      paymentQrObjectUrl = null;
     }
+    paymentQrObjectUrl = URL.createObjectURL(blob);
 
-    setPaymentQrLoading(true, "โหลด QR ไม่สำเร็จ — กำลังลองใหม่...");
-  };
+    await new Promise((resolve, reject) => {
+      qrImage.onload = () => resolve();
+      qrImage.onerror = () => reject(new Error("QR image decode failed"));
+      qrImage.src = paymentQrObjectUrl;
+    });
 
-  qrImage.onload = () => finish(true);
-  qrImage.onerror = () => finish(false);
-  qrImage.src = qrUrl;
-
-  if (qrImage.complete && qrImage.naturalWidth > 0) {
-    finish(true);
+    if (loadId !== paymentQrLoadGeneration) return;
+    setPaymentQrLoading(false);
+    qrImage.hidden = false;
+  } catch (error) {
+    if (loadId !== paymentQrLoadGeneration) return;
+    console.warn("[payment] qr load failed:", error.message, qrUrl);
+    setPaymentQrLoading(true, "โหลด QR ไม่สำเร็จ — กำลังลองใหม่...", true);
   }
 }
 
@@ -1005,3 +1037,4 @@ window.goToPackageSelect = goToPackageSelect;
 window.clearSelectedPaymentTier = clearSelectedPaymentTier;
 window.getSelectedPaymentTier = () => selectedPaymentTier;
 window.getActivePaymentSessionAmount = getActivePaymentSessionAmount;
+window.refreshStaticPaymentQrImage = refreshStaticPaymentQrImage;
