@@ -127,6 +127,15 @@ function runSqliteMigration() {
   `);
 
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS payment_notify_receipts (
+      booth_id TEXT NOT NULL,
+      notification_id TEXT NOT NULL,
+      received_at TEXT NOT NULL,
+      PRIMARY KEY (booth_id, notification_id)
+    );
+  `);
+
+  sqlite.exec(`
     CREATE TABLE IF NOT EXISTS booth_profiles (
       booth_id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -221,6 +230,11 @@ function runSqliteMigration() {
     );
     CREATE INDEX IF NOT EXISTS idx_booth_device_tokens_booth_id ON booth_device_tokens (booth_id);
   `);
+
+  const pairingCols = sqlite.prepare("PRAGMA table_info(booth_pairing_codes)").all();
+  if (!pairingCols.some((col) => col.name === "code_plain")) {
+    sqlite.exec("ALTER TABLE booth_pairing_codes ADD COLUMN code_plain TEXT");
+  }
 
   runSqlitePhotoSessionConsolidation();
 }

@@ -29,28 +29,62 @@ class PaymentNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        PaymentNotificationProcessor.handlePosted(this, sbn, "bank_pkg_seen")
+        handle(sbn, "bank_pkg_seen")
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        val packageName = sbn.packageName ?: return
-        if (!PaymentNotificationProcessor.isBankPackage(packageName)) return
-        // MIUI sometimes delivers bank payment only while the notification is active.
-        PaymentNotificationProcessor.handlePosted(this, sbn, "bank_removed_scan")
+        Log.i(TAG, "notification removed pkg=${sbn.packageName} key=${sbn.key}")
+    }
+
+    private fun handle(sbn: StatusBarNotification, source: String) {
+        val gate = BankNotificationGate.get(this)
+        val decision = gate.evaluate(sbn)
+        if (decision != BankNotificationGate.Decision.FRESH) {
+            if (
+                decision != BankNotificationGate.Decision.NOT_BANK &&
+                decision != BankNotificationGate.Decision.SOURCE_DISABLED
+            ) {
+                Log.i(TAG, "skip ${decision.name} source=$source postTime=${sbn.postTime}")
+            }
+            return
+        }
+        if (!gate.beginForward(sbn)) return
+        val sessionId = gate.pendingSessionId()
+        PaymentNotificationProcessor.forwardFresh(this, sbn, sessionId) { outcome ->
+            gate.endForward(sbn, processed = outcome.httpOk)
+            if (outcome.httpOk) {
+                try {
+                    cancelNotification(sbn.key)
+                } catch (error: Exception) {
+                    Log.w(TAG, "cancelNotification failed key=${sbn.key}", error)
+                }
+            }
+            if (outcome.matched) gate.clearPending()
+            PaymentNotifyBridge.dispatchResult(
+                this,
+                outcome.matched,
+                outcome.httpCode,
+                outcome.body,
+            )
+        }
     }
 
     private fun scanActiveNotificationsSafely(reason: String) {
         try {
             val active = activeNotifications ?: emptyArray()
             Log.i(TAG, "scan active notifications reason=$reason count=${active.size}")
-            PaymentNotificationProcessor.scanActiveNotifications(this, active)
+            for (sbn in active) {
+                handle(sbn, "active_scan")
+            }
+            val eligible = BankNotificationGate.get(this).countForUi(active)
+            PaymentNotifyDebug.recordEligibleCount(this, eligible, active.size)
         } catch (error: SecurityException) {
             Log.w(TAG, "active notification scan denied reason=$reason", error)
-            PaymentNotifyDebug.recordScan(this, bankCount = 0, totalCount = 0)
+            PaymentNotifyDebug.recordEligibleCount(this, eligibleCount = 0, totalCount = 0)
         } catch (error: Exception) {
             Log.w(TAG, "active notification scan failed reason=$reason", error)
-            PaymentNotifyDebug.recordScan(this, bankCount = 0, totalCount = 0)
+            PaymentNotifyDebug.recordEligibleCount(this, eligibleCount = 0, totalCount = 0)
         }
     }
 

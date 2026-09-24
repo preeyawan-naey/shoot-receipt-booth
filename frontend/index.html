@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Schoolbell&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=booth385" />
+    <link rel="stylesheet" href="css/styles.css?v=booth389" />
     <link rel="stylesheet" href="css/booth-themes.css?v=booth364" />
     <style>
       #page-home:not(.booth-profile-ready) .home-header,
@@ -87,6 +87,45 @@
     </script>
   </head>
   <body>
+    <div
+      class="device-pair-gate"
+      id="device-pair-gate"
+      hidden
+      aria-hidden="true"
+      role="dialog"
+      aria-labelledby="device-pair-gate-title"
+    >
+      <div class="device-pair-gate__panel">
+        <img
+          src="img/booths/snap-on-receipt/logo.png"
+          alt=""
+          class="device-pair-gate__logo"
+          decoding="async"
+        />
+        <h1 class="device-pair-gate__title" id="device-pair-gate-title">จับคู่ตู้ Snap on Receipt</h1>
+        <p class="device-pair-gate__hint" id="device-pair-gate-hint">
+          กรอกรหัสจับคู่จากหน้า admin (ใช้ครั้งเดียว · หมดอายุ 24 ชม.)
+        </p>
+        <form id="device-pair-form" class="device-pair-gate__form" autocomplete="off">
+          <input
+            id="device-pair-input"
+            class="device-pair-gate__input"
+            type="text"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="one-time-code"
+            maxlength="12"
+            placeholder="รหัสจับคู่"
+            aria-label="รหัสจับคู่"
+          />
+          <p class="device-pair-gate__error" id="device-pair-error" hidden></p>
+          <button type="submit" class="device-pair-gate__submit" id="device-pair-submit">
+            ยืนยันจับคู่
+          </button>
+        </form>
+      </div>
+    </div>
+
     <div class="viewport">
       <div class="booth-screen" id="booth-screen">
         <script>
@@ -494,10 +533,11 @@
     <script src="js/qrcode.bundle.js?v=booth190"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/booth-api.js?v=booth370"></script>
+    <script src="js/booth-api.js?v=booth389"></script>
     <script src="js/booth-profile.js?v=booth361"></script>
-    <script src="js/booth-settings.js?v=booth372"></script>
+    <script src="js/booth-settings.js?v=booth389"></script>
     <script src="js/booth-storage.js?v=booth190"></script>
+    <script src="js/device-pair.js?v=booth389"></script>
     <script src="js/snap-layout-slots.js?v=booth387"></script>
     <script src="js/layouts.js?v=booth366"></script>
     <script src="js/frames.js?v=booth385"></script>
@@ -510,6 +550,6 @@
     <script src="js/native-print.js?v=booth190"></script>
     <script src="js/composite.js?v=booth375"></script>
     <script src="js/camera.js?v=booth207"></script>
-    <script src="js/app.js?v=booth385"></script>
+    <script src="js/app.js?v=booth389"></script>
   </body>
 </html>

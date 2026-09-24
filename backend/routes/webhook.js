@@ -54,11 +54,14 @@ router.post("/bank-notify", async (req, res) => {
       req.body?.payment_session_id ||
       null;
 
+    const notificationId = req.body?.notification_id || req.body?.notificationId || null;
+
     const result = await paymentSessions.confirmFromBankNotification({
       text,
       packageName,
       sessionId: typeof sessionId === "string" ? sessionId : null,
       source: req.body?.source || "bank_notify",
+      notificationId: typeof notificationId === "string" ? notificationId : null,
     });
 
     console.info("[webhook/bank-notify]", result.matched ? "paid" : result.reason, {

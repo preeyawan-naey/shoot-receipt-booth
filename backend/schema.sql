@@ -76,6 +76,13 @@ CREATE TABLE IF NOT EXISTS booth_payment_settings (
 
 CREATE INDEX IF NOT EXISTS idx_booth_payment_settings_booth_id ON booth_payment_settings (booth_id);
 
+CREATE TABLE IF NOT EXISTS payment_notify_receipts (
+  booth_id TEXT NOT NULL,
+  notification_id TEXT NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (booth_id, notification_id)
+);
+
 CREATE TABLE IF NOT EXISTS booth_profiles (
   booth_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

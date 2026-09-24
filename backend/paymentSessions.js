@@ -364,12 +364,54 @@ async function confirmFromOmiseCharge(charge) {
   };
 }
 
+async function rejectListenerStaleNotification(session, notificationId) {
+  const id = typeof notificationId === "string" ? notificationId.trim() : "";
+  if (!id || !session?.created_at) return null;
+
+  const boothId = resolveBoothId(session.booth_id);
+  const sessionCreatedMs = new Date(session.created_at).getTime();
+  if (!Number.isFinite(sessionCreatedMs)) return null;
+
+  const existing = await db.queryOne(
+    `SELECT received_at
+     FROM payment_notify_receipts
+     WHERE booth_id = $1 AND notification_id = $2`,
+    [boothId, id]
+  );
+
+  if (!existing) {
+    const receivedAt = nowIso();
+    await db.execute(
+      `INSERT INTO payment_notify_receipts (booth_id, notification_id, received_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (booth_id, notification_id) DO NOTHING`,
+      [boothId, id, receivedAt]
+    );
+  }
+
+  const row = await db.queryOne(
+    `SELECT received_at
+     FROM payment_notify_receipts
+     WHERE booth_id = $1 AND notification_id = $2`,
+    [boothId, id]
+  );
+  const receivedMs = new Date(row?.received_at).getTime();
+  if (!Number.isFinite(receivedMs) || receivedMs >= sessionCreatedMs) return null;
+
+  return {
+    matched: false,
+    reason: "stale",
+    session_id: session.id,
+  };
+}
+
 async function confirmFromBankNotification({
   text,
   packageName = null,
   sessionId = null,
   source = "bank_notify",
   boothId: boothIdRaw = null,
+  notificationId = null,
 } = {}) {
   await expirePendingSessions();
 
@@ -382,6 +424,11 @@ async function confirmFromBankNotification({
 
   if (!session) {
     return { matched: false, reason: "no_pending_session" };
+  }
+
+  if ((await paymentSettings.getPaymentSource(session.booth_id)) === "listener") {
+    const stale = await rejectListenerStaleNotification(session, notificationId);
+    if (stale) return stale;
   }
 
   const parsedAmount = parseAmountFromNotification(text, session.amount);

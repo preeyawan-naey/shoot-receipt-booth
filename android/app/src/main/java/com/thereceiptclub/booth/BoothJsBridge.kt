@@ -119,6 +119,29 @@ class BoothJsBridge(
     }
 
     @JavascriptInterface
+    fun startPendingPayment(sessionId: String, timeoutSec: Int) {
+        if (sessionId.isBlank()) return
+        BankNotificationGate.get(activity).startPending(sessionId, timeoutSec)
+        Log.i(TAG, "startPendingPayment session=${sessionId.take(8)} timeoutSec=$timeoutSec")
+    }
+
+    @JavascriptInterface
+    fun clearPendingPayment() {
+        BankNotificationGate.get(activity).clearPending()
+        Log.i(TAG, "clearPendingPayment")
+    }
+
+    @JavascriptInterface
+    fun setPaymentConfig(source: String, senderName: String) {
+        val gate = BankNotificationGate.get(activity)
+        gate.paymentSource = source
+        if (senderName.isNotBlank()) {
+            gate.senderName = senderName
+        }
+        Log.i(TAG, "setPaymentConfig source=$source sender=${senderName.take(40)}")
+    }
+
+    @JavascriptInterface
     fun scanPaymentNotifications() {
         PaymentNotifyAccess.requestRebind(activity)
         PaymentNotificationListener.scanActiveNotifications(activity)

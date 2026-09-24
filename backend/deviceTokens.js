@@ -42,6 +42,16 @@ async function getTenantForBooth(boothId) {
   ]);
 }
 
+async function expirePendingPairingCodes(boothId) {
+  const now = new Date().toISOString();
+  await db.execute(
+    `UPDATE booth_pairing_codes
+     SET expires_at = $2, code_plain = NULL
+     WHERE booth_id = $1 AND used_at IS NULL AND expires_at > $2`,
+    [boothId, now]
+  );
+}
+
 async function createPairingCode(boothIdRaw) {
   const boothId = boothProfiles.normalizeBoothId(boothIdRaw);
   const profile = await boothProfiles.getProfile(boothId);
@@ -49,14 +59,16 @@ async function createPairingCode(boothIdRaw) {
     throw new Error("Booth not found");
   }
 
+  await expirePendingPairingCodes(boothId);
+
   const code = generatePairingCodePlain();
   const codeHash = hashSecret(code);
   const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
 
   await db.execute(
-    `INSERT INTO booth_pairing_codes (id, booth_id, code_hash, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [randomUUID(), boothId, codeHash, expiresAt.toISOString()]
+    `INSERT INTO booth_pairing_codes (id, booth_id, code_hash, code_plain, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [randomUUID(), boothId, codeHash, code, expiresAt.toISOString()]
   );
 
   return {
@@ -99,7 +111,7 @@ async function pairWithCode(codeRaw) {
   const tokenHash = hashSecret(deviceToken);
 
   await db.execute(
-    `UPDATE booth_pairing_codes SET used_at = $2 WHERE id = $1`,
+    `UPDATE booth_pairing_codes SET used_at = $2, code_plain = NULL WHERE id = $1`,
     [row.id, new Date().toISOString()]
   );
 
@@ -184,7 +196,7 @@ async function getDeviceTokenStatus(boothIdRaw) {
   );
 
   const pendingCode = await db.queryOne(
-    `SELECT expires_at, created_at
+    `SELECT code_plain, expires_at, created_at
      FROM booth_pairing_codes
      WHERE booth_id = $1 AND used_at IS NULL AND expires_at > $2
      ORDER BY created_at DESC
@@ -196,6 +208,8 @@ async function getDeviceTokenStatus(boothIdRaw) {
     booth_id: boothId,
     has_active_token: Boolean(active),
     active_token_created_at: active?.created_at || null,
+    pending_pairing_code: pendingCode?.code_plain || null,
+    pending_pairing_created_at: pendingCode?.created_at || null,
     pending_pairing_expires_at: pendingCode?.expires_at || null,
   };
 }

@@ -297,7 +297,24 @@ function clearPaymentDebugPolling() {
   }
 }
 
+function isListenerPaymentSource() {
+  return boothSettingsState?.payment_source === "listener";
+}
+
+function callListenerPaymentBridge(methodName, args) {
+  if (!isListenerPaymentSource()) return;
+  const bridge = window.ReceiptClubBridge;
+  const method = bridge?.[methodName];
+  if (typeof method !== "function") return;
+  try {
+    method.apply(bridge, args);
+  } catch (error) {
+    console.warn(`[payment] ${methodName} failed`, error);
+  }
+}
+
 function clearPaymentFlow() {
+  callListenerPaymentBridge("clearPendingPayment", []);
   clearPaymentCountdown();
   clearPaymentPolling();
   clearPaymentWaitingHint();
@@ -785,7 +802,15 @@ function formatPaymentNotifyDebugStatus(raw) {
       return "";
     }
 
-    if (forCurrentSession && status.last_active_bank_count > 0) {
+    if (
+      isListenerPaymentSource() &&
+      forCurrentSession &&
+      status.eligible_bank_count > 0
+    ) {
+      return `เห็น noti SCB ในระบบ (${status.eligible_bank_count}) — กำลังส่งไป server...`;
+    }
+
+    if (!isListenerPaymentSource() && forCurrentSession && status.last_active_bank_count > 0) {
       return `เห็น noti SCB ในระบบ (${status.last_active_bank_count}) — กำลังส่งไป server...`;
     }
 
@@ -911,6 +936,7 @@ async function startAutoPaymentSession(flowId, paymentAmount) {
     paymentSessionStartedAt = Date.now();
     applySessionPrintCount(session);
     renderPaymentPage(session.amount ?? paymentAmount, session);
+    callListenerPaymentBridge("startPendingPayment", [session.id, PAYMENT_TIMEOUT_SEC]);
     syncNativePaymentNotify(session.id, session.amount);
     ensureNativeNotificationAccess();
 

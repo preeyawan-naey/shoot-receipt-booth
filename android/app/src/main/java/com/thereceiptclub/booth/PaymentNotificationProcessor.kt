@@ -13,110 +13,64 @@ import java.util.concurrent.Executors
  */
 object PaymentNotificationProcessor {
     private const val TAG = "ReceiptClubPay"
-    private const val DEDUPE_WINDOW_MS = 120_000L
 
     private val executor = Executors.newSingleThreadExecutor()
-    private val recentForwardKeys = LinkedHashMap<String, Long>()
 
-    fun handlePosted(context: Context, sbn: StatusBarNotification, source: String) {
-        val packageName = sbn.packageName ?: return
-        if (!isBankPackage(packageName)) return
+    data class ForwardOutcome(
+        val httpOk: Boolean,
+        val matched: Boolean,
+        val httpCode: Int,
+        val body: String,
+    )
 
-        if (!isNotificationFreshForSession(context, sbn.postTime)) {
-            Log.i(TAG, "skip stale bank notification pkg=$packageName source=$source postTime=${sbn.postTime}")
-            return
-        }
-
-        val text = extractNotificationText(sbn, packageName)
-        PaymentNotifyDebug.recordSeen(context, packageName, text, source)
-
-        val config = PaymentNotifyConfig.read(context)
-        if (!config.isReady) {
-            Log.w(TAG, "skip bank notification — payment config not ready pkg=$packageName source=$source")
-            PaymentNotifyDebug.recordSeen(context, packageName, text, "config_not_ready")
-            return
-        }
-
-        if (text.isBlank()) {
-            Log.w(TAG, "skip bank notification — empty text pkg=$packageName source=$source")
-            PaymentNotifyDebug.recordSeen(context, packageName, text, "empty_text")
-            return
-        }
-
-        if (!looksLikeIncomingPayment(text, config.expectedAmount, packageName)) {
-            Log.i(
-                TAG,
-                "skip bank notification — not payment text pkg=$packageName source=$source text=${text.take(120)}",
-            )
-            PaymentNotifyDebug.recordSeen(context, packageName, text, "not_payment_text")
-            return
-        }
-
-        forwardIfNew(context, packageName, text, config.sessionId, config.apiBase, config.webhookSecret)
-    }
-
-    fun scanActiveNotifications(context: Context, notifications: Array<StatusBarNotification>) {
-        var bankCount = 0
-        for (sbn in notifications) {
-            if (isBankPackage(sbn.packageName ?: "")) {
-                bankCount += 1
-                handlePosted(context, sbn, "active_scan")
-            }
-        }
-        PaymentNotifyDebug.recordScan(context, bankCount, notifications.size)
-        if (bankCount > 0) {
-            Log.i(TAG, "active scan found $bankCount bank notification(s) out of ${notifications.size}")
-        }
-    }
-
-    private fun isNotificationFreshForSession(context: Context, postTime: Long): Boolean {
-        val sessionStartedAt =
-            context.getSharedPreferences("payment_notify_debug", Context.MODE_PRIVATE)
-                .getLong("session_started_at", 0L)
-        if (sessionStartedAt <= 0L) return true
-        return postTime + 5_000L >= sessionStartedAt
-    }
-
-    private fun forwardIfNew(
+    /** Gate already decided FRESH and beginForward succeeded. HTTP runs off the listener thread. */
+    fun forwardFresh(
         context: Context,
-        packageName: String,
-        text: String,
-        sessionId: String,
-        apiBase: String,
-        webhookSecret: String,
+        sbn: StatusBarNotification,
+        sessionId: String?,
+        onResult: (ForwardOutcome) -> Unit,
     ) {
-        val dedupeKey = "${packageName}:${text.take(180)}"
-        synchronized(recentForwardKeys) {
-            val now = System.currentTimeMillis()
-            recentForwardKeys.entries.removeIf { now - it.value > DEDUPE_WINDOW_MS }
-            if (recentForwardKeys.containsKey(dedupeKey)) {
-                Log.i(TAG, "skip duplicate bank notification pkg=$packageName")
-                return
-            }
-            recentForwardKeys[dedupeKey] = now
+        val packageName = sbn.packageName ?: ""
+        val text = extractNotificationText(sbn, packageName)
+        val config = PaymentNotifyConfig.read(context)
+        val notificationId = "${sbn.key}@${sbn.postTime}"
+
+        if (!config.isReady || text.isBlank()) {
+            Log.w(TAG, "skip forward — config or text not ready pkg=$packageName")
+            onResult(ForwardOutcome(httpOk = false, matched = false, httpCode = 0, body = ""))
+            return
         }
 
         PaymentNotifyDebug.recordForward(context, packageName, text)
         executor.execute {
             val result =
                 PaymentNotifyClient.postBankNotification(
-                    apiBase = apiBase,
-                    webhookSecret = webhookSecret,
+                    apiBase = config.apiBase,
+                    webhookSecret = config.webhookSecret,
                     text = text,
                     packageName = packageName,
-                    sessionId = sessionId.takeIf { it.isNotBlank() },
+                    sessionId = sessionId?.takeIf { it.isNotBlank() },
+                    notificationId = notificationId,
                 )
+            val httpOk = result.httpCode in 200..299
             PaymentNotifyDebug.recordResult(
                 context,
-                sessionId = sessionId,
+                sessionId = sessionId.orEmpty(),
                 matched = result.matched,
                 httpCode = result.httpCode,
                 body = result.body,
             )
-            PaymentNotifyBridge.dispatchResult(context, result.matched, result.httpCode, result.body)
             Log.i(
                 TAG,
-                "notification forwarded pkg=$packageName matched=${result.matched} code=${result.httpCode} session=${sessionId.take(8)} text=${text.take(120)}",
+                "notification forwarded pkg=$packageName matched=${result.matched} code=${result.httpCode} session=${sessionId?.take(8)} id=$notificationId",
+            )
+            onResult(
+                ForwardOutcome(
+                    httpOk = httpOk,
+                    matched = result.matched,
+                    httpCode = result.httpCode,
+                    body = result.body,
+                ),
             )
         }
     }

@@ -9,6 +9,7 @@ const PAYMENT_QR_UPDATED_KEY = "payment_qr_updated_at";
 const PAYMENT_QR_BASE64_KEY = "payment_qr_base64";
 const OMISE_ENABLED_KEY = "omise_enabled";
 const PAYMENT_MODE_KEY = "payment_mode";
+const PAYMENT_SOURCE_KEY = "payment_source";
 
 const PAYMENT_SETTING_KEYS = [
   PAYMENT_AMOUNT_KEY,
@@ -28,6 +29,9 @@ const DEFAULT_PAYMENT_TIERS = [
 const DEFAULT_OMISE_ENABLED = false;
 const PAYMENT_MODES = ["free", "static_qr", "omise"];
 const DEFAULT_PAYMENT_MODE = "static_qr";
+const PAYMENT_SOURCES = ["macrodroid", "listener"];
+const DEFAULT_PAYMENT_SOURCE = "macrodroid";
+const LISTENER_BOOTH_IDS = ["snap-on-receipt"];
 
 function resolveBoothId(boothIdRaw) {
   return boothProfiles.normalizeBoothId(boothIdRaw);
@@ -215,6 +219,29 @@ function buildPaymentQrUrl(boothIdRaw) {
   return `/api/booth/payment-qr?${params.toString()}`;
 }
 
+function normalizePaymentSource(value, fallback = DEFAULT_PAYMENT_SOURCE) {
+  const source = String(value || "").trim().toLowerCase();
+  return PAYMENT_SOURCES.includes(source) ? source : fallback;
+}
+
+async function getPaymentSource(boothIdRaw) {
+  const boothId = resolveBoothId(boothIdRaw);
+  const stored = await getSettingValue(boothId, PAYMENT_SOURCE_KEY, null);
+  if (stored == null || String(stored).trim() === "") {
+    return DEFAULT_PAYMENT_SOURCE;
+  }
+  return normalizePaymentSource(stored);
+}
+
+async function ensureDefaultPaymentSources() {
+  for (const boothId of LISTENER_BOOTH_IDS) {
+    const existing = await getSettingValue(boothId, PAYMENT_SOURCE_KEY, null);
+    if (existing == null || String(existing).trim() === "") {
+      await setSettingValue(boothId, PAYMENT_SOURCE_KEY, "listener");
+    }
+  }
+}
+
 async function getPaymentSettings(boothIdRaw) {
   const boothId = resolveBoothId(boothIdRaw);
   const paymentTiers = await getPaymentTiers(boothId);
@@ -223,6 +250,7 @@ async function getPaymentSettings(boothIdRaw) {
   const buffer = await getPaymentQrBuffer(boothId);
   const paymentMode = await getPaymentMode(boothId);
   const omiseEnabled = paymentMode === "omise";
+  const paymentSource = await getPaymentSource(boothId);
 
   return {
     booth_id: boothId,
@@ -234,6 +262,7 @@ async function getPaymentSettings(boothIdRaw) {
     payment_qr_updated_at: updatedAt,
     omise_enabled: omiseEnabled,
     payment_required: paymentMode !== "free",
+    payment_source: paymentSource,
   };
 }
 
@@ -299,6 +328,8 @@ module.exports = {
   findPaymentTierByAmount,
   normalizePaymentTiers,
   getPaymentMode,
+  getPaymentSource,
+  ensureDefaultPaymentSources,
   setPaymentMode,
   setPaymentAmount,
   setOmisePaymentEnabled,
@@ -311,5 +342,7 @@ module.exports = {
   migrateGlobalPaymentSettings,
   copyGlobalPaymentSettingsToBooth,
   PAYMENT_MODES,
+  PAYMENT_SOURCES,
+  DEFAULT_PAYMENT_SOURCE,
   DEFAULT_PAYMENT_TIERS,
 };

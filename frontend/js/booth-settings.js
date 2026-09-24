@@ -13,6 +13,7 @@ let boothSettingsState = {
   ],
   payment_qr_url: null,
   payment_mode: "static_qr",
+  payment_source: "macrodroid",
   omise_enabled: false,
   payment_required: true,
 };
@@ -56,6 +57,9 @@ async function fetchBoothSettings() {
     const res = await apiFetch(getBoothSettingsUrl(), {
       cache: "no-store",
     });
+    if (res.status === 401) {
+      return;
+    }
     const data = await res.json();
     if (!data.success || !data.settings) return;
 
@@ -84,6 +88,7 @@ async function fetchBoothSettings() {
       }
     }
     resyncNativePaymentNotifyAfterSettings();
+    syncListenerPaymentGateConfig();
   } catch (error) {
     console.warn("[booth-settings] fetch failed", error);
   }
@@ -166,6 +171,17 @@ async function recordBoothPhotoSession({
     });
   } catch (error) {
     console.warn("[booth-settings] photo session record failed", error);
+  }
+}
+
+function syncListenerPaymentGateConfig() {
+  if (boothSettingsState?.payment_source !== "listener") return;
+  const bridge = window.ReceiptClubBridge;
+  if (typeof bridge?.setPaymentConfig !== "function") return;
+  try {
+    bridge.setPaymentConfig("listener", "SCB Connect");
+  } catch (error) {
+    console.warn("[booth-settings] setPaymentConfig failed", error);
   }
 }
 

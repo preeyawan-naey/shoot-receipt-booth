@@ -277,6 +277,7 @@ async function startServer() {
     await storage.ensureSupabaseBuckets();
     const paymentSettings = require("./paymentSettings");
     await paymentSettings.migrateGlobalPaymentSettings();
+    await paymentSettings.ensureDefaultPaymentSources();
   } catch (error) {
     console.error("❌ Database init failed:", error.message);
     process.exit(1);

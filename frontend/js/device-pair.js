@@ -1,6 +1,36 @@
 /**
- * Device pairing — enter admin pairing code after kiosk PIN.
+ * Device pairing gate — Snap on Receipt booth APK only.
+ * Full-screen until EncryptedSharedPreferences has a valid device token.
  */
+
+const DEVICE_PAIR_BOOTH_ID = "snap-on-receipt";
+
+function isReceiptClubNativeApp() {
+  try {
+    const bridge = window.ReceiptClubBridge;
+    return bridge?.isBoothApp?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+function requiresDevicePairingGate() {
+  if (!isReceiptClubNativeApp()) {
+    return false;
+  }
+  const boothId =
+    typeof getBoothId === "function"
+      ? getBoothId()
+      : window.__BOOT_BOOTH_ID__ || DEVICE_PAIR_BOOTH_ID;
+  return normalizePairBoothId(boothId) === DEVICE_PAIR_BOOTH_ID;
+}
+
+function normalizePairBoothId(value) {
+  const id = String(value || "")
+    .trim()
+    .toLowerCase();
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) ? id : DEVICE_PAIR_BOOTH_ID;
+}
 
 function setDeviceTokenOnBridge(token) {
   const bridge = window.ReceiptClubBridge;
@@ -20,39 +50,112 @@ function clearDeviceTokenOnBridge() {
   return false;
 }
 
-function showDevicePairModal() {
-  const modal = document.getElementById("device-pair-modal");
-  const input = document.getElementById("device-pair-input");
-  const error = document.getElementById("device-pair-error");
-  const success = document.getElementById("device-pair-success");
-  if (!modal || !input) {
-    return;
+function readDeviceTokenFromBridgeLocal() {
+  if (typeof readDeviceTokenFromBridge === "function") {
+    return readDeviceTokenFromBridge();
   }
-  input.value = "";
-  if (error) {
-    error.hidden = true;
-    error.textContent = "";
+  try {
+    const bridge = window.ReceiptClubBridge;
+    if (bridge && typeof bridge.getDeviceToken === "function") {
+      const token = String(bridge.getDeviceToken() || "").trim();
+      return token || null;
+    }
+  } catch {
+    /* ignore */
   }
-  if (success) {
-    success.hidden = true;
-    success.textContent = "";
-  }
-  modal.hidden = false;
-  modal.setAttribute("aria-hidden", "false");
-  input.focus();
+  return null;
 }
 
-function hideDevicePairModal() {
-  const modal = document.getElementById("device-pair-modal");
-  if (!modal) {
+let pairingReady = !requiresDevicePairingGate();
+const pairingReadyCallbacks = [];
+
+function whenDevicePairingReady(fn) {
+  if (pairingReady) {
+    fn();
     return;
   }
-  modal.hidden = true;
-  modal.setAttribute("aria-hidden", "true");
+  pairingReadyCallbacks.push(fn);
+}
+
+function markPairingReady() {
+  if (pairingReady) return;
+  pairingReady = true;
+  hideDevicePairGate();
+  const pending = pairingReadyCallbacks.splice(0);
+  pending.forEach((fn) => {
+    try {
+      fn();
+    } catch (error) {
+      console.error("[device-pair] ready callback failed", error);
+    }
+  });
+}
+
+function showDevicePairGate(message = "") {
+  const gate = document.getElementById("device-pair-gate");
+  const screen = document.getElementById("booth-screen");
+  if (!gate) return;
+
+  pairingReady = false;
+  gate.hidden = false;
+  gate.setAttribute("aria-hidden", "false");
+  document.body.classList.add("device-pair-locked");
+  if (screen) {
+    screen.setAttribute("inert", "");
+    screen.setAttribute("aria-hidden", "true");
+  }
+
+  const hint = document.getElementById("device-pair-gate-hint");
+  if (hint) {
+    hint.textContent =
+      message ||
+      "กรอกรหัสจับคู่จากหน้า admin (ใช้ครั้งเดียว · หมดอายุ 24 ชม.)";
+  }
+
+  const input = document.getElementById("device-pair-input");
+  input?.focus();
+}
+
+function hideDevicePairGate() {
+  const gate = document.getElementById("device-pair-gate");
+  const screen = document.getElementById("booth-screen");
+  if (gate) {
+    gate.hidden = true;
+    gate.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("device-pair-locked");
+  if (screen) {
+    screen.removeAttribute("inert");
+    screen.removeAttribute("aria-hidden");
+  }
+}
+
+function getSettingsProbeUrl() {
+  const boothId = DEVICE_PAIR_BOOTH_ID;
+  const params = new URLSearchParams({ booth_id: boothId, t: String(Date.now()) });
+  return `${API_URL}/api/booth/settings?${params.toString()}`;
+}
+
+async function validateDeviceTokenOnServer(token) {
+  const response = await fetch(getSettingsProbeUrl(), {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 401) {
+    return false;
+  }
+  if (!response.ok) {
+    return true;
+  }
+  const data = await response.json().catch(() => ({}));
+  return data.success === true;
 }
 
 async function submitDevicePairCode(codeRaw) {
-  const code = String(codeRaw || "").trim();
+  const code = String(codeRaw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
   if (!code) {
     throw new Error("กรุณากรอกรหัสจับคู่");
   }
@@ -67,61 +170,108 @@ async function submitDevicePairCode(codeRaw) {
     throw new Error(data.message || "จับคู่ไม่สำเร็จ");
   }
 
-  if (!setDeviceTokenOnBridge(data.device_token)) {
-    throw new Error("แอpp นี้ไม่รองรับการเก็บ device token — ใช้ APK booth ล่าสุด");
+  if (data.booth_id && normalizePairBoothId(data.booth_id) !== DEVICE_PAIR_BOOTH_ID) {
+    throw new Error("รหัสนี้ไม่ใช่ของตู้ Snap on Receipt");
   }
 
-  if (data.booth_id && typeof persistBoothId === "function") {
-    persistBoothId(data.booth_id);
+  if (!setDeviceTokenOnBridge(data.device_token)) {
+    throw new Error("แอpp ไม่รองรับการเก็บ token — ใช้ APK booth ล่าสุด");
+  }
+
+  if (typeof persistBoothId === "function") {
+    persistBoothId(DEVICE_PAIR_BOOTH_ID);
   }
 
   return data;
 }
 
-function initDevicePairUi() {
-  document.getElementById("admin-menu-pair-device")?.addEventListener("click", () => {
-    hideAdminDrawer?.();
-    showDevicePairModal();
-  });
+async function bootstrapDevicePairing() {
+  if (!requiresDevicePairingGate()) {
+    markPairingReady();
+    return;
+  }
 
-  document.getElementById("device-pair-cancel")?.addEventListener("click", hideDevicePairModal);
+  const token = readDeviceTokenFromBridgeLocal();
+  if (!token) {
+    showDevicePairGate();
+    return;
+  }
 
-  document.getElementById("device-pair-form")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const input = document.getElementById("device-pair-input");
-    const error = document.getElementById("device-pair-error");
-    const success = document.getElementById("device-pair-success");
-    if (!input) {
+  try {
+    const valid = await validateDeviceTokenOnServer(token);
+    if (!valid) {
+      clearDeviceTokenOnBridge();
+      showDevicePairGate("Token ถูกเพิกถอน — กรอกรหัสจับคู่ใหม่จาก admin");
       return;
     }
+    markPairingReady();
+  } catch (error) {
+    console.warn("[device-pair] token validation failed — allow offline", error);
+    markPairingReady();
+  }
+}
+
+function triggerDevicePairingRequired(reason = "") {
+  if (!requiresDevicePairingGate()) {
+    return;
+  }
+  clearDeviceTokenOnBridge();
+  const message =
+    reason === "revoked"
+      ? "Token ถูกเพิกถอน — กรอกรหัสจับคู่ใหม่จาก admin"
+      : "ต้องจับคู่ตู้ใหม่ — กรอกรหัสจาก admin";
+  showDevicePairGate(message);
+}
+
+function initDevicePairGateUi() {
+  const form = document.getElementById("device-pair-form");
+  const input = document.getElementById("device-pair-input");
+  const error = document.getElementById("device-pair-error");
+  const submitBtn = document.getElementById("device-pair-submit");
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!input) return;
 
     if (error) {
       error.hidden = true;
+      error.textContent = "";
     }
-    if (success) {
-      success.hidden = true;
-    }
+    if (submitBtn) submitBtn.disabled = true;
 
     try {
-      const data = await submitDevicePairCode(input.value);
-      if (success) {
-        success.hidden = false;
-        success.textContent = `จับคู่สำเร็จ — booth: ${data.booth_id}`;
-      }
+      await submitDevicePairCode(input.value);
       input.value = "";
+      markPairingReady();
+      if (typeof fetchBoothSettings === "function") {
+        void fetchBoothSettings();
+      }
+      if (typeof initBoothProfile === "function") {
+        initBoothProfile();
+      }
     } catch (err) {
       if (error) {
         error.hidden = false;
         error.textContent = err.message || "จับคู่ไม่สำเร็จ";
       }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   });
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initDevicePairUi);
-} else {
-  initDevicePairUi();
+function initDevicePairModule() {
+  initDevicePairGateUi();
+  void bootstrapDevicePairing();
 }
 
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initDevicePairModule);
+} else {
+  initDevicePairModule();
+}
+
+window.whenDevicePairingReady = whenDevicePairingReady;
+window.triggerDevicePairingRequired = triggerDevicePairingRequired;
 window.clearDeviceTokenOnBridge = clearDeviceTokenOnBridge;
+window.requiresDevicePairingGate = requiresDevicePairingGate;

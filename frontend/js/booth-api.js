@@ -44,10 +44,20 @@ async function boothApiFetch(url, options = {}) {
     url = appendBoothIdToUrl(url, getBoothId());
   }
 
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
   });
+
+  if (
+    response.status === 401 &&
+    token &&
+    typeof triggerDevicePairingRequired === "function"
+  ) {
+    triggerDevicePairingRequired("revoked");
+  }
+
+  return response;
 }
 
 window.boothApiFetch = boothApiFetch;

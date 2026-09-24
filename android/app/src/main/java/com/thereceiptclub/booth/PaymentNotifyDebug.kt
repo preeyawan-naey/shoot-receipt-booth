@@ -54,11 +54,12 @@ object PaymentNotifyDebug {
             .apply()
     }
 
-    fun recordScan(context: Context, bankCount: Int, totalCount: Int) {
+    fun recordEligibleCount(context: Context, eligibleCount: Int, totalCount: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putLong("last_scan_at", System.currentTimeMillis())
-            .putInt("last_active_bank_count", bankCount)
+            .remove("last_active_bank_count")
+            .putInt("eligible_bank_count", eligibleCount)
             .putInt("last_active_total_count", totalCount)
             .apply()
     }
@@ -128,7 +129,7 @@ object PaymentNotifyDebug {
             .put("last_http_code", prefs.getInt("last_http_code", 0))
             .put("last_http_body", prefs.getString("last_http_body", "") ?: "")
             .put("last_scan_at", prefs.getLong("last_scan_at", 0))
-            .put("last_active_bank_count", prefs.getInt("last_active_bank_count", 0))
+            .put("eligible_bank_count", prefs.getInt("eligible_bank_count", 0))
             .put("last_active_total_count", prefs.getInt("last_active_total_count", 0))
             .put("last_listener_connected_at", prefs.getLong("last_listener_connected_at", 0))
             .put("last_listener_disconnected_at", prefs.getLong("last_listener_disconnected_at", 0))

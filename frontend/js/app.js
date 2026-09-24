@@ -89,7 +89,7 @@ function handleNativePrintResumeOnInit() {
   }
 }
 
-function initApp() {
+function initAppCore() {
   initNavigation();
   handleNativePrintResumeOnInit();
   initLayoutGrid();
@@ -105,6 +105,14 @@ function initApp() {
       logFullyPrintDiagnostics();
     }
   }
+}
+
+function initApp() {
+  if (typeof whenDevicePairingReady === "function") {
+    whenDevicePairingReady(initAppCore);
+    return;
+  }
+  initAppCore();
 }
 
 function initLayoutGrid() {

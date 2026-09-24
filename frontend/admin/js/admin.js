@@ -108,6 +108,86 @@
     return candidate;
   }
 
+  const ADMIN_VIEW_QUERY_KEY = "view";
+  const ADMIN_VIEWS = new Set(["dashboard", "payment", "booths"]);
+
+  function readAdminViewFromUrl() {
+    try {
+      const view = new URLSearchParams(window.location.search).get(ADMIN_VIEW_QUERY_KEY);
+      if (view && ADMIN_VIEWS.has(view)) return view;
+    } catch {
+      /* ignore */
+    }
+    return "dashboard";
+  }
+
+  function syncAdminViewInUrl(viewName, { replace = true } = {}) {
+    const view = ADMIN_VIEWS.has(viewName) ? viewName : "dashboard";
+    state.view = view;
+    const params = new URLSearchParams(window.location.search);
+    if (view === "dashboard") {
+      params.delete(ADMIN_VIEW_QUERY_KEY);
+    } else {
+      params.set(ADMIN_VIEW_QUERY_KEY, view);
+    }
+    const qs = params.toString();
+    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    if (replace) {
+      history.replaceState({ adminView: view }, "", nextUrl);
+    } else {
+      history.pushState({ adminView: view }, "", nextUrl);
+    }
+  }
+
+  function formatBoothIdSlug(boothId) {
+    return String(boothId || "")
+      .split(/[-_]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  function resolveActiveBoothDisplayName(boothId) {
+    if (!boothId) return "—";
+    if (
+      memoryBoothName &&
+      (isBoothScopedAdmin() || state.pathBoothId === boothId || getSessionBoothId() === boothId)
+    ) {
+      return memoryBoothName;
+    }
+    const cached = state.boothsCache.find((row) => row.booth_id === boothId);
+    if (cached?.name) return cached.name;
+
+    for (const selectId of ["dashboard-booth-select", "payment-booth-select"]) {
+      const select = document.getElementById(selectId);
+      if (select?.value === boothId) {
+        const label = select.selectedOptions?.[0]?.textContent?.trim();
+        if (label) return label;
+      }
+    }
+
+    return formatBoothIdSlug(boothId) || boothId;
+  }
+
+  async function ensureActiveBoothProfileLoaded() {
+    const boothId = getActiveBoothId();
+    if (!boothId) return;
+    try {
+      const data = await apiFetch(`/booth-profiles/${encodeURIComponent(boothId)}`);
+      const name = data.profile?.name;
+      if (name) {
+        setAdminSession({
+          token: getApiKey(),
+          role: getSessionRole(),
+          boothId: getSessionBoothId(),
+          boothName: name,
+        });
+      }
+    } catch (error) {
+      console.warn("[admin/booth-profile]", error);
+    }
+  }
+
   function getAdminBasePath() {
     const parts = window.location.pathname.split("/").filter(Boolean);
     const adminIndex = parts.indexOf("admin");
@@ -768,6 +848,7 @@
 
   async function showBoothDetail(boothId) {
     state.boothDetailId = boothId;
+    syncAdminViewInUrl("booths", { replace: true });
     if (!isBoothScopedAdmin()) {
       syncAdminPathBoothId(boothId, { replace: false });
     }
@@ -811,28 +892,224 @@
     }
   }
 
+  let lastGeneratedPairingCode = "";
+  let pairingCountdownTimer = null;
+
+  const PAIRING_SESSION_PREFIX = "admin_pending_pairing:";
+
+  function pairingStorageKey(boothId) {
+    return `${PAIRING_SESSION_PREFIX}${boothId}`;
+  }
+
+  function savePendingPairingLocal(boothId, code, expiresAt, createdAt) {
+    if (!boothId || !code || !expiresAt) return;
+    try {
+      sessionStorage.setItem(
+        pairingStorageKey(boothId),
+        JSON.stringify({
+          code: String(code),
+          expires_at: expiresAt,
+          created_at: createdAt || new Date().toISOString(),
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function loadPendingPairingLocal(boothId) {
+    if (!boothId) return null;
+    try {
+      const raw = sessionStorage.getItem(pairingStorageKey(boothId));
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data?.code || !data?.expires_at) return null;
+      if (new Date(data.expires_at).getTime() <= Date.now()) {
+        sessionStorage.removeItem(pairingStorageKey(boothId));
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearPendingPairingLocal(boothId) {
+    if (!boothId) return;
+    try {
+      sessionStorage.removeItem(pairingStorageKey(boothId));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function formatPairingCountdown(expiresAtIso) {
+    const end = new Date(expiresAtIso).getTime();
+    const ms = end - Date.now();
+    if (Number.isNaN(end) || ms <= 0) return "หมดอายุแล้ว";
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return `เหลือเวลา ${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+
+  function stopPairingCountdown() {
+    if (pairingCountdownTimer) {
+      window.clearInterval(pairingCountdownTimer);
+      pairingCountdownTimer = null;
+    }
+  }
+
+  function hidePairingCodePanel() {
+    stopPairingCountdown();
+    const panel = $("#booth-pairing-panel");
+    if (panel) panel.hidden = true;
+  }
+
+  function showPairingCodePanel({ code, expiresAt, createdAt, boothId }) {
+    const panel = $("#booth-pairing-panel");
+    const codeEl = $("#booth-pairing-panel-code");
+    const countdownEl = $("#booth-pairing-panel-countdown");
+    const metaEl = $("#booth-pairing-panel-meta");
+    if (!panel || !codeEl || !code || !expiresAt) {
+      hidePairingCodePanel();
+      return;
+    }
+
+    const expiryMs = new Date(expiresAt).getTime();
+    if (Number.isNaN(expiryMs) || expiryMs <= Date.now()) {
+      hidePairingCodePanel();
+      if (boothId) clearPendingPairingLocal(boothId);
+      return;
+    }
+
+    lastGeneratedPairingCode = String(code);
+    codeEl.textContent = lastGeneratedPairingCode;
+    if (metaEl) {
+      const createdLabel = createdAt ? formatDate(createdAt) : "—";
+      metaEl.textContent = `สร้างเมื่อ ${createdLabel} · หมดอายุ ${formatDate(expiresAt)} · กด gen ใหม่ = รหัส + เวลาใหม่`;
+    }
+
+    const tick = () => {
+      if (!countdownEl) return;
+      countdownEl.textContent = formatPairingCountdown(expiresAt);
+      if (new Date(expiresAt).getTime() <= Date.now()) {
+        hidePairingCodePanel();
+        if (boothId) clearPendingPairingLocal(boothId);
+      }
+    };
+    tick();
+    stopPairingCountdown();
+    pairingCountdownTimer = window.setInterval(tick, 1000);
+
+    panel.hidden = false;
+  }
+
+  function resolvePendingPairingFromStatus(status, boothId) {
+    const expiresAt = status?.pending_pairing_expires_at || null;
+    let code = status?.pending_pairing_code ? String(status.pending_pairing_code).trim() : "";
+
+    if (code && expiresAt) {
+      return {
+        code,
+        expiresAt,
+        createdAt: status?.pending_pairing_created_at || null,
+      };
+    }
+
+    const local = loadPendingPairingLocal(boothId);
+    if (local?.code && local?.expires_at) {
+      return {
+        code: local.code,
+        expiresAt: local.expires_at,
+        createdAt: local.created_at || null,
+      };
+    }
+
+    if (expiresAt && !code) {
+      return null;
+    }
+
+    return null;
+  }
+
   function renderBoothDeviceAuth(status) {
     const el = $("#booth-detail-device-auth");
     if (!el) return;
 
+    const boothId = state.boothDetailId || status?.booth_id || "";
     const hasToken = status?.has_active_token === true;
     const tokenCreated = status?.active_token_created_at
       ? formatDate(status.active_token_created_at)
       : "—";
+
     const pendingExpiry = status?.pending_pairing_expires_at
       ? formatDate(status.pending_pairing_expires_at)
-      : "—";
+      : null;
+    const pendingNote = pendingExpiry
+      ? `มีรหัสค้าง · หมดอายุ ${pendingExpiry}`
+      : "ไม่มีรหัสค้าง — กดสร้างด้านล่าง";
 
     el.innerHTML = `
       <div class="booth-meta-row"><dt>สถานะ token</dt><dd>${hasToken ? "Active" : "None"}</dd></div>
       <div class="booth-meta-row"><dt>สร้าง token ล่าสุด</dt><dd>${escapeHtml(tokenCreated)}</dd></div>
-      <div class="booth-meta-row"><dt>Pairing code ค้าง (หมดอายุ)</dt><dd>${escapeHtml(pendingExpiry)}</dd></div>
+      <div class="booth-meta-row"><dt>Pairing code</dt><dd>${escapeHtml(pendingNote)}</dd></div>
     `;
 
-    const resultEl = $("#booth-pairing-code-result");
-    if (resultEl) {
-      resultEl.hidden = true;
-      resultEl.textContent = "";
+    const pending = resolvePendingPairingFromStatus(status, boothId);
+    if (pending?.code && pending?.expiresAt) {
+      showPairingCodePanel({ ...pending, boothId });
+    } else {
+      hidePairingCodePanel();
+      if (boothId && !status?.pending_pairing_expires_at) {
+        clearPendingPairingLocal(boothId);
+      }
+    }
+  }
+
+  function showPairingCodeModal(data) {
+    const modal = $("#booth-pairing-code-modal");
+    const display = $("#booth-pairing-code-display");
+    const expires = $("#booth-pairing-code-expires");
+    if (!modal || !display || !data?.pairing_code) return;
+
+    lastGeneratedPairingCode = String(data.pairing_code);
+    display.textContent = lastGeneratedPairingCode;
+    if (expires) {
+      expires.textContent = `หมดอายุ ${formatDate(data.expires_at)} · booth: ${data.booth_id || state.boothDetailId || ""}`;
+    }
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(lastGeneratedPairingCode).catch(() => {});
+    }
+  }
+
+  function hidePairingCodeModal() {
+    const modal = $("#booth-pairing-code-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  async function copyPairingCodeToClipboard() {
+    if (!lastGeneratedPairingCode) return;
+    try {
+      await navigator.clipboard.writeText(lastGeneratedPairingCode);
+      for (const id of ["btn-copy-pairing-code", "btn-copy-pending-pairing-code"]) {
+        const btn = $(`#${id}`);
+        if (!btn) continue;
+        const prev = btn.textContent;
+        btn.textContent = "คัดลอกแล้ว";
+        window.setTimeout(() => {
+          btn.textContent = prev;
+        }, 1500);
+      }
+    } catch {
+      window.prompt("คัดลอกรหัส:", lastGeneratedPairingCode);
     }
   }
 
@@ -845,9 +1122,20 @@
       const data = await apiFetch(`/booths/${encodeURIComponent(boothId)}/pairing-code`, {
         method: "POST",
       });
+      savePendingPairingLocal(boothId, data.pairing_code, data.expires_at);
+      showPairingCodePanel({
+        code: data.pairing_code,
+        expiresAt: data.expires_at,
+        createdAt: new Date().toISOString(),
+        boothId,
+      });
+      if (navigator.clipboard?.writeText && data.pairing_code) {
+        navigator.clipboard.writeText(String(data.pairing_code)).catch(() => {});
+      }
       if (resultEl) {
         resultEl.hidden = false;
-        resultEl.textContent = `Pairing code: ${data.pairing_code} (หมดอายุ ${formatDate(data.expires_at)}) — แสดงครั้งเดียว`;
+        resultEl.textContent =
+          "สร้างรหัสแล้ว — แสดงด้านบนปุ่มตลอด 24 ชม. (gen ใหม่ / จับคู่สำเร็จ = รหัสหาย)";
       }
       const status = await apiFetch(`/booths/${encodeURIComponent(boothId)}/device-auth`);
       renderBoothDeviceAuth(status);
@@ -992,6 +1280,10 @@
 
   function openBoothDetailView(boothId) {
     if (!boothId) return;
+    if (!isBoothScopedAdmin()) {
+      syncAdminPathBoothId(boothId, { replace: false });
+    }
+    syncAdminViewInUrl("booths", { replace: false });
     showAdminView("booths");
     const title = $("#admin-topbar-title");
     if (title) title.textContent = "Booth Detail";
@@ -1050,11 +1342,18 @@
     if (boothCard) boothCard.hidden = scoped;
     if (dashboardFilter) dashboardFilter.hidden = scoped;
 
-    $("#admin-nav-booths")?.toggleAttribute("hidden", scoped);
+    const boothsNav = $("#admin-nav-booths");
+    const boothsNavLabel = $("#admin-nav-booths-label");
+    if (boothsNav) {
+      boothsNav.hidden = isBoothScopedAdmin();
+    }
+    if (boothsNavLabel) {
+      boothsNavLabel.textContent = "Booths";
+    }
     const openBoothNav = $("#admin-nav-open-booth");
     if (openBoothNav) {
-      openBoothNav.hidden = scoped;
-      if (scoped && getActiveBoothId()) {
+      openBoothNav.hidden = isBoothScopedAdmin();
+      if (!isBoothScopedAdmin() && getActiveBoothId()) {
         openBoothNav.href = `/?booth=${encodeURIComponent(getActiveBoothId())}`;
       }
     }
@@ -1087,22 +1386,20 @@
       usernameInput.readOnly = true;
     } else if (usernameInput) {
       usernameInput.readOnly = false;
-    }
-
-    const loginDesc = $("#admin-login-desc");
-    if (loginDesc) {
-      if (state.pathBoothId) {
-        loginDesc.textContent = `เข้าสู่ระบบ booth: ${state.pathBoothId} (username = booth id)`;
-      } else {
-        loginDesc.textContent =
-          `เข้าสู่ระบบด้วย booth id หรือ admin (super) — ลิงก์ตู้: ${buildAdminBoothUrl("snap-on-receipt")}`;
+      if (!getApiKey()) {
+        usernameInput.value = "";
       }
     }
 
     const brandSubtitle = $("#admin-sidebar-booth");
-    const boothLabel = memoryBoothName || getActiveBoothId();
+    const activeId = getActiveBoothId();
+    const boothLabel = resolveActiveBoothDisplayName(activeId);
     if (brandSubtitle) {
-      brandSubtitle.textContent = boothLabel ? `Booth: ${boothLabel}` : "Receipt Booth";
+      brandSubtitle.textContent = activeId ? `Booth: ${boothLabel}` : "Receipt Booth";
+    }
+
+    if (activeId) {
+      syncBoothSelectValues(activeId);
     }
   }
 
@@ -1160,6 +1457,7 @@
     } else if (err) {
       err.hidden = true;
     }
+    updateBoothScopeUi();
   }
 
   function showApp() {
@@ -1266,12 +1564,7 @@
     const data = await apiFetch(`/dashboard?${qs}`);
     const m = data.metrics || {};
     const boothId = getActiveBoothId();
-    const dashboardSelect = $("#dashboard-booth-select");
-    const boothLabel =
-      dashboardSelect?.selectedOptions?.[0]?.textContent?.trim() ||
-      memoryBoothName ||
-      boothId ||
-      "—";
+    const boothLabel = resolveActiveBoothDisplayName(boothId);
 
     setText(
       "kpi-revenue",
@@ -1916,6 +2209,34 @@
     await Promise.all([loadDashboard(), loadPayments()]);
   }
 
+  async function restoreAdminViewAfterLogin() {
+    let viewName = readAdminViewFromUrl();
+    if (isBoothScopedAdmin() && viewName === "booths") {
+      viewName = "dashboard";
+      syncAdminViewInUrl("dashboard", { replace: true });
+    }
+    showAdminView(viewName);
+
+    if (viewName === "booths") {
+      const detailId = isSingleBoothAdminView()
+        ? getActiveBoothId()
+        : state.boothDetailId;
+      if (detailId) {
+        await showBoothDetail(detailId);
+        return;
+      }
+      await loadBoothsAdmin();
+      return;
+    }
+
+    if (viewName === "payment") {
+      await loadPaymentAdmin();
+      return;
+    }
+
+    await refresh();
+  }
+
   async function enterDashboard(key) {
     setAdminSession({
       token: key,
@@ -1930,11 +2251,11 @@
       })(),
     });
     applyAdminPathBoothScope();
+    await ensureActiveBoothProfileLoaded();
     updateBoothScopeUi();
     showApp();
-    showAdminView("dashboard");
     try {
-      await refresh();
+      await restoreAdminViewAfterLogin();
     } catch (err) {
       console.error("[admin refresh]", err);
       setText("table-period-label", `Error loading data: ${err.message}`);
@@ -1981,10 +2302,7 @@
 
     $("#btn-logout")?.addEventListener("click", () => {
       clearApiKey();
-      showLogin();
-      const usernameInput = $("#admin-username-input");
       const passwordInput = $("#admin-password-input");
-      if (usernameInput) usernameInput.value = "";
       if (passwordInput) {
         passwordInput.value = "";
         if (passwordInput.type === "text") {
@@ -2000,6 +2318,7 @@
           if (hideIcon) hideIcon.hidden = true;
         }
       }
+      showLogin();
     });
 
     $("#period-tabs")?.addEventListener("click", (e) => {
@@ -2040,7 +2359,12 @@
       item.addEventListener("click", () => {
         const viewName = item.dataset.view;
         if (!viewName) return;
+        syncAdminViewInUrl(viewName, { replace: false });
         if (viewName === "booths") {
+          if (isSingleBoothAdminView() && getActiveBoothId()) {
+            openBoothDetailView(getActiveBoothId());
+            return;
+          }
           state.boothDetailId = null;
         }
         showAdminView(viewName);
@@ -2187,15 +2511,13 @@
         state.paymentBoothId = state.pathBoothId;
         syncBoothSelectValues(state.pathBoothId);
       }
+      state.view = readAdminViewFromUrl();
+      if (state.view === "booths" && (state.pathBoothId || isBoothScopedAdmin())) {
+        state.boothDetailId = state.pathBoothId || getSessionBoothId() || state.boothDetailId;
+      }
       updateBoothScopeUi();
       if (!getApiKey()) return;
-      if (state.view === "payment") {
-        loadPaymentAdmin().catch(console.error);
-        return;
-      }
-      if (state.view === "dashboard") {
-        refresh().catch(console.error);
-      }
+      restoreAdminViewAfterLogin().catch(console.error);
     });
 
     $("#btn-booth-pairing-code")?.addEventListener("click", () => {
@@ -2205,12 +2527,30 @@
     $("#btn-booth-revoke-token")?.addEventListener("click", () => {
       revokeBoothDeviceToken().catch(console.error);
     });
+
+    $("#btn-copy-pending-pairing-code")?.addEventListener("click", () => {
+      copyPairingCodeToClipboard().catch(console.error);
+    });
+
+    $("#btn-close-pairing-code-modal")?.addEventListener("click", hidePairingCodeModal);
+    $("#btn-copy-pairing-code")?.addEventListener("click", () => {
+      copyPairingCodeToClipboard().catch(console.error);
+    });
+    $("#booth-pairing-code-modal")?.addEventListener("click", (event) => {
+      if (event.target?.id === "booth-pairing-code-modal") {
+        hidePairingCodeModal();
+      }
+    });
   }
 
   async function init() {
     state.pathBoothId = readBoothIdFromPath();
     if (state.pathBoothId) {
       state.paymentBoothId = state.pathBoothId;
+    }
+    state.view = readAdminViewFromUrl();
+    if (state.view === "booths" && (state.pathBoothId || isBoothScopedAdmin())) {
+      state.boothDetailId = state.pathBoothId || getSessionBoothId() || null;
     }
     updateBoothScopeUi();
     bindEvents();

@@ -20,6 +20,7 @@ object PaymentNotifyClient {
         text: String,
         packageName: String,
         sessionId: String?,
+        notificationId: String? = null,
     ): PostResult {
         if (apiBase.isBlank() || webhookSecret.isBlank() || text.isBlank()) {
             return PostResult(false, 0, "missing_config_or_text")
@@ -34,6 +35,9 @@ object PaymentNotifyClient {
 
         if (!sessionId.isNullOrBlank()) {
             payload.put("session_id", sessionId)
+        }
+        if (!notificationId.isNullOrBlank()) {
+            payload.put("notification_id", notificationId)
         }
 
         var connection: HttpURLConnection? = null
