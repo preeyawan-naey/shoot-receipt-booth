@@ -99,8 +99,27 @@ object PaymentNotifyDebug {
             .putBoolean("last_matched", matched)
             .putString(KEY_LAST_MATCHED_SESSION_ID, sessionId)
             .putInt("last_http_code", httpCode)
-            .putString("last_http_body", body.take(240))
+            .putString("last_http_body", compactServerBody(body))
             .apply()
+    }
+
+    fun compactServerBody(body: String): String {
+        return try {
+            val json = JSONObject(body)
+            val compact =
+                JSONObject()
+                    .put("matched", json.optBoolean("matched", false))
+                    .put("reason", json.optString("reason", ""))
+            if (json.has("expected_amount") && !json.isNull("expected_amount")) {
+                compact.put("expected_amount", json.get("expected_amount"))
+            }
+            if (json.has("expected") && !json.isNull("expected")) {
+                compact.put("expected", json.get("expected"))
+            }
+            compact.toString()
+        } catch (_: Exception) {
+            body.take(240)
+        }
     }
 
     fun toJson(context: Context): String {

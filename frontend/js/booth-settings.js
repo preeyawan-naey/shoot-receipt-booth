@@ -89,6 +89,7 @@ async function fetchBoothSettings() {
     }
     resyncNativePaymentNotifyAfterSettings();
     syncListenerPaymentGateConfig();
+    syncLayoutBackButton();
   } catch (error) {
     console.warn("[booth-settings] fetch failed", error);
   }
@@ -123,7 +124,27 @@ function goToBoothBack() {
   goToNameEntry();
 }
 
+function shouldHideSnapLayoutBackButton() {
+  const boothId = typeof getBoothId === "function" ? getBoothId() : "";
+  if (boothId !== "snap-on-receipt") return false;
+  return isBoothPaymentRequired();
+}
+
+function syncLayoutBackButton() {
+  const btn = document.getElementById("btn-layout-back");
+  if (!btn) return;
+  const hide = shouldHideSnapLayoutBackButton();
+  btn.hidden = hide;
+  btn.style.display = hide ? "none" : "";
+  btn.toggleAttribute("aria-hidden", hide);
+  if (hide) btn.disabled = true;
+  else btn.removeAttribute("disabled");
+}
+
 function goToBoothLayoutBack() {
+  if (shouldHideSnapLayoutBackButton()) {
+    return;
+  }
   if (
     typeof isBoothFeatureEnabled === "function" &&
     isBoothFeatureEnabled("guest_name", true)
@@ -211,6 +232,7 @@ function syncNativePaymentNotify(sessionId = null, sessionAmount = null) {
 
 window.goToPostPaymentOrNameStep = goToPostPaymentOrNameStep;
 window.goToBoothLayoutBack = goToBoothLayoutBack;
+window.syncLayoutBackButton = syncLayoutBackButton;
 
 function resyncNativePaymentNotifyAfterSettings() {
   if (!isStaticQrPaymentMode()) return;

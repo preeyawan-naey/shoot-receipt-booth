@@ -21,7 +21,7 @@ object PaymentNotifyBridge {
             JSONObject()
                 .put("matched", matched)
                 .put("httpCode", httpCode)
-                .put("body", body.take(240))
+                .put("body", PaymentNotifyDebug.compactServerBody(body))
                 .toString()
 
         view.post {

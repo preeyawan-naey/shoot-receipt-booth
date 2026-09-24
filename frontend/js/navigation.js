@@ -64,6 +64,9 @@ function getCurrentPage() {
 
 function goToLayoutSelect() {
   navigateTo("layout-select");
+  if (typeof syncLayoutBackButton === "function") {
+    syncLayoutBackButton();
+  }
 }
 
 function goToFrameSelect() {

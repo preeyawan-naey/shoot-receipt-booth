@@ -714,11 +714,7 @@ function formatPaymentNotifyRejectReason(serverResult) {
   if (!serverResult?.reason) return null;
 
   if (serverResult.reason === "amount_not_matched") {
-    const expected = serverResult.expected;
-    if (expected != null) {
-      return `ยอดไม่ตรง — ต้องโอน ${formatPaymentAmount(expected)} บาทพอดี`;
-    }
-    return "ยอดไม่ตรง — โอนให้ตรงกับที่เลือกในแพ็ก";
+    return "ยอดเงินไม่ตรงกับที่ระบุ กรุณาติดต่อพนักงาน";
   }
 
   if (serverResult.reason === "no_pending_session") {
