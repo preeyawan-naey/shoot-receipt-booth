@@ -493,7 +493,7 @@ router.post("/booths/:boothId/revoke-device-token", async (req, res) => {
   }
 });
 
-router.delete("/booths/:boothId/photo-sessions", async (req, res) => {
+async function handleClearBoothPhotoSessions(req, res) {
   try {
     const result = await admin.clearPhotoSessionsForBooth(req.params.boothId);
     return res.json({ success: true, ...result });
@@ -501,6 +501,9 @@ router.delete("/booths/:boothId/photo-sessions", async (req, res) => {
     console.error("[admin/booths/photo-sessions/clear]", error);
     return res.status(500).json({ success: false, message: error.message });
   }
-});
+}
+
+router.delete("/booths/:boothId/photo-sessions", handleClearBoothPhotoSessions);
+router.post("/booths/:boothId/clear-photo-sessions", handleClearBoothPhotoSessions);
 
 module.exports = router;
