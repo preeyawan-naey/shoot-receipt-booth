@@ -713,7 +713,10 @@ function parsePaymentNotifyServerResult(body) {
 function formatPaymentNotifyRejectReason(serverResult) {
   if (!serverResult?.reason) return null;
 
-  if (serverResult.reason === "amount_not_matched") {
+  if (
+    serverResult.reason === "amount_not_matched" ||
+    serverResult.reason === "amount_mismatch"
+  ) {
     return "ยอดเงินไม่ตรงกับที่ระบุ กรุณาติดต่อพนักงาน";
   }
 

@@ -4,6 +4,7 @@ const paymentSettings = require("./paymentSettings");
 const boothProfiles = require("./boothProfiles");
 const photoSessions = require("./photoSessions");
 const omise = require("./omise");
+const { matchListenerBankAmount } = require("./listenerBankAmount");
 
 const SESSION_TTL_MS = Number(process.env.PAYMENT_SESSION_TTL_MS) || 150 * 1000;
 
@@ -426,22 +427,40 @@ async function confirmFromBankNotification({
     return { matched: false, reason: "no_pending_session" };
   }
 
+  let parsedAmount;
   if ((await paymentSettings.getPaymentSource(session.booth_id)) === "listener") {
     const stale = await rejectListenerStaleNotification(session, notificationId);
     if (stale) return stale;
-  }
 
-  const parsedAmount = parseAmountFromNotification(text, session.amount);
-  if (parsedAmount == null) {
-    return {
-      matched: false,
-      reason: "amount_not_matched",
-      session_id: session.id,
-      expected_amount: session.amount,
-      text_preview: String(text || "").slice(0, 120),
-      package_name: packageName || null,
-      source,
-    };
+    const decision = matchListenerBankAmount(text, session.amount);
+    if (!decision.matched) {
+      return {
+        matched: false,
+        reason: decision.reason,
+        session_id: session.id,
+        expected_amount: session.amount,
+        ...(decision.received_amount != null
+          ? { received_amount: decision.received_amount }
+          : {}),
+        text_preview: String(text || "").slice(0, 120),
+        package_name: packageName || null,
+        source,
+      };
+    }
+    parsedAmount = decision.received_amount;
+  } else {
+    parsedAmount = parseAmountFromNotification(text, session.amount);
+    if (parsedAmount == null) {
+      return {
+        matched: false,
+        reason: "amount_not_matched",
+        session_id: session.id,
+        expected_amount: session.amount,
+        text_preview: String(text || "").slice(0, 120),
+        package_name: packageName || null,
+        source,
+      };
+    }
   }
 
   const paidAt = nowIso();
