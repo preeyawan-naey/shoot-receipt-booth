@@ -183,6 +183,16 @@ async function listPhotoHistory({
   };
 }
 
+async function clearPhotoSessionsForBooth(boothIdRaw) {
+  const boothProfiles = require("./boothProfiles");
+  const boothId = boothProfiles.normalizeBoothId(boothIdRaw);
+  const deleted = await db.execute(
+    `DELETE FROM photo_sessions WHERE booth_id = $1`,
+    [boothId]
+  );
+  return { booth_id: boothId, deleted_count: deleted };
+}
+
 function formatPhotoRow(row) {
   const printStatus = row.print_status || "printed";
   return {
@@ -202,5 +212,6 @@ function formatPhotoRow(row) {
 module.exports = {
   getDashboardMetrics,
   listPhotoHistory,
+  clearPhotoSessionsForBooth,
   parsePeriod,
 };

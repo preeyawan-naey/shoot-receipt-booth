@@ -493,4 +493,14 @@ router.post("/booths/:boothId/revoke-device-token", async (req, res) => {
   }
 });
 
+router.delete("/booths/:boothId/photo-sessions", async (req, res) => {
+  try {
+    const result = await admin.clearPhotoSessionsForBooth(req.params.boothId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("[admin/booths/photo-sessions/clear]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
