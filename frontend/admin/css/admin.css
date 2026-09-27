@@ -540,6 +540,14 @@ body {
   color: var(--text-muted);
 }
 
+.admin-panel__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .admin-search {
   padding: 0.5rem 0.85rem;
   border: 1px solid var(--border);

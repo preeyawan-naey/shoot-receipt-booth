@@ -173,6 +173,9 @@
                 type="search"
                 placeholder="ค้นหา layout / session..."
               />
+              <button class="admin-btn admin-btn--ghost admin-btn--sm" id="btn-export-dashboard-csv" type="button">
+                Export CSV
+              </button>
             </div>
           </div>
 
@@ -338,6 +341,25 @@
                 <div class="settings-card__body settings-card__body--stack">
                   <div id="booth-detail-theme-note"></div>
                   <dl class="booth-meta-list" id="booth-detail-meta"></dl>
+                </div>
+              </section>
+
+              <section class="settings-card" data-admin-super-only>
+                <header class="settings-card__header">
+                  <h3 class="settings-card__title">Dashboard data</h3>
+                  <p class="settings-card__subtitle">
+                    ล้างประวัติการถ่าย / รายได้บน Dashboard ก่อนส่งมอบลูกค้า (ไม่ลบรูปบน cloud)
+                  </p>
+                </header>
+                <div class="settings-card__body settings-card__body--stack">
+                  <button
+                    class="admin-btn admin-btn--ghost admin-btn--danger"
+                    id="btn-booth-clear-dashboard"
+                    type="button"
+                  >
+                    ล้างประวัติ Dashboard ของตู้นี้
+                  </button>
+                  <p class="settings-card__hint" id="booth-clear-dashboard-hint" hidden></p>
                 </div>
               </section>
             </div>
@@ -569,6 +591,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=45"></script>
+    <script src="/admin/js/admin.js?v=47"></script>
   </body>
 </html>

@@ -323,11 +323,13 @@
   async function apiFetch(path, options = {}, keyOverride) {
     const key = keyOverride ?? getApiKey();
     const scopedBoothId = getActiveBoothId();
+    const role = getSessionRole();
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
         "x-admin-key": key,
+        ...(role ? { "x-admin-role": role } : {}),
         ...(scopedBoothId ? { "x-admin-booth-id": scopedBoothId } : {}),
         ...(options.headers || {}),
       },
@@ -848,6 +850,8 @@
 
   async function showBoothDetail(boothId) {
     state.boothDetailId = boothId;
+    const clearHint = $("#booth-clear-dashboard-hint");
+    if (clearHint) clearHint.hidden = true;
     syncAdminViewInUrl("booths", { replace: true });
     if (!isBoothScopedAdmin()) {
       syncAdminPathBoothId(boothId, { replace: false });
@@ -1443,6 +1447,138 @@
     if (extra.page) params.set("page", String(extra.page));
     if (extra.limit) params.set("limit", String(extra.limit));
     return params.toString();
+  }
+
+  function buildExportQuery() {
+    const params = new URLSearchParams();
+    params.set("period", state.period);
+    if (state.period === "custom") {
+      if (state.from) params.set("from", state.from);
+      if (state.to) params.set("to", state.to);
+    }
+    if (state.search) params.set("search", state.search);
+
+    if (isSuperAdminSession()) {
+      params.set("all_booths", "1");
+    } else {
+      appendBoothScopeToQuery(params);
+    }
+
+    return params.toString();
+  }
+
+  function parseContentDispositionFilename(headerValue) {
+    if (!headerValue) return "shoot-dashboard-export.csv";
+    const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match) {
+      try {
+        return decodeURIComponent(utf8Match[1]);
+      } catch {
+        return utf8Match[1];
+      }
+    }
+    const plainMatch = headerValue.match(/filename="?([^";]+)"?/i);
+    return plainMatch ? plainMatch[1] : "shoot-dashboard-export.csv";
+  }
+
+  async function exportDashboardCsv() {
+    const btn = $("#btn-export-dashboard-csv");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Exporting...";
+    }
+
+    try {
+      const qs = buildExportQuery();
+      const role = getSessionRole();
+      const boothId = isSuperAdminSession() ? null : getActiveBoothId();
+      const res = await fetch(`${API_BASE}/photos/export?${qs}`, {
+        headers: {
+          "x-admin-key": getApiKey(),
+          ...(role ? { "x-admin-role": role } : {}),
+          ...(boothId ? { "x-admin-booth-id": boothId } : {}),
+        },
+      });
+
+      if (res.status === 401) {
+        clearApiKey();
+        showLogin("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+        throw new Error("Unauthorized");
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || `Export failed (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const filename = parseContentDispositionFilename(res.headers.get("Content-Disposition"));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Export CSV";
+      }
+    }
+  }
+
+  async function clearDashboardForBoothDetail() {
+    if (!canViewSuperAdminPanels()) return;
+
+    const boothId = state.boothDetailId;
+    if (!boothId) {
+      window.alert("เปิดหน้า Booth detail ก่อน");
+      return;
+    }
+
+    const boothLabel =
+      $("#booth-detail-name")?.textContent?.trim() ||
+      resolveActiveBoothDisplayName(boothId) ||
+      boothId;
+    const confirmed = window.confirm(
+      `ลบประวัติ Dashboard ของ "${boothLabel}" (${boothId}) ทั้งหมด?\n\n` +
+        "การกระทำนี้ลบเฉพาะข้อมูลในตารางประวัติ (photo_sessions) — ไม่ลบรูปบน cloud"
+    );
+    if (!confirmed) return;
+
+    const btn = $("#btn-booth-clear-dashboard");
+    const hint = $("#booth-clear-dashboard-hint");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "กำลังลบ...";
+    }
+    if (hint) hint.hidden = true;
+
+    try {
+      const data = await apiFetch(
+        `/booths/${encodeURIComponent(boothId)}/clear-photo-sessions`,
+        { method: "POST" }
+      );
+      const message = `ลบแล้ว ${data.deleted_count ?? 0} รายการ`;
+      if (hint) {
+        hint.textContent = message;
+        hint.hidden = false;
+      } else {
+        window.alert(message);
+      }
+    } catch (error) {
+      if (hint) {
+        hint.textContent = error.message || "ลบไม่สำเร็จ";
+        hint.hidden = false;
+      } else {
+        window.alert(error.message || "ลบไม่สำเร็จ");
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "ล้างประวัติ Dashboard ของตู้นี้";
+      }
+    }
   }
 
   function showLogin(errorMsg) {
@@ -2343,6 +2479,16 @@
       state.to = $("#filter-to")?.value || "";
       state.page = 1;
       refresh().catch(console.error);
+    });
+
+    $("#btn-export-dashboard-csv")?.addEventListener("click", () => {
+      exportDashboardCsv().catch((error) => {
+        window.alert(error.message || "Export ไม่สำเร็จ");
+      });
+    });
+
+    $("#btn-booth-clear-dashboard")?.addEventListener("click", () => {
+      clearDashboardForBoothDetail().catch(console.error);
     });
 
     let searchTimer;

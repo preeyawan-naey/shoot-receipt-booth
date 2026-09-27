@@ -183,6 +183,130 @@ async function listPhotoHistory({
   };
 }
 
+const MAX_EXPORT_ROWS = 50_000;
+
+function csvEscape(value) {
+  const text = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function buildPhotoHistoryCsv(rows) {
+  const header = [
+    "created_at",
+    "booth_id",
+    "layout_id",
+    "frame_id",
+    "print_count",
+    "amount",
+    "payment_mode",
+    "print_status",
+    "print_note",
+    "session_id",
+  ];
+  const lines = [header.join(",")];
+  for (const row of rows) {
+    const formatted = formatPhotoRow(row);
+    lines.push(
+      [
+        formatted.created_at,
+        formatted.booth_id,
+        formatted.layout_id,
+        formatted.frame_id,
+        formatted.print_count,
+        formatted.amount,
+        formatted.payment_mode,
+        formatted.print_status,
+        formatted.print_note || "",
+        formatted.id,
+      ]
+        .map(csvEscape)
+        .join(",")
+    );
+  }
+  return `\uFEFF${lines.join("\n")}\n`;
+}
+
+async function exportPhotoHistory({
+  period,
+  from,
+  to,
+  search = "",
+  boothId = null,
+}) {
+  const range = parsePeriod(period, from, to);
+  if (period === "custom" && !range) {
+    return { ok: false, status: 400, message: "Invalid custom date range" };
+  }
+
+  const where = [];
+  const params = [];
+
+  if (range?.start && range?.end) {
+    const startIdx = params.length + 1;
+    const endIdx = params.length + 2;
+    where.push(`created_at >= $${startIdx} AND created_at <= $${endIdx}`);
+    params.push(range.start.toISOString(), range.end.toISOString());
+  }
+
+  const trimmedSearch = String(search || "").trim();
+  if (trimmedSearch) {
+    const idx = params.length + 1;
+    where.push(
+      `(CAST(id AS TEXT) LIKE $${idx} OR COALESCE(layout_id, '') LIKE $${idx} OR COALESCE(frame_id, '') LIKE $${idx})`
+    );
+    params.push(`%${trimmedSearch}%`);
+  }
+
+  if (boothId) {
+    const idx = params.length + 1;
+    where.push(`booth_id = $${idx}`);
+    params.push(boothId);
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const countRow = await db.queryOne(
+    `SELECT COUNT(*) AS total FROM photo_sessions ${whereClause}`,
+    params
+  );
+  const total = Number(countRow?.total || 0);
+  if (total > MAX_EXPORT_ROWS) {
+    return {
+      ok: false,
+      status: 413,
+      message: `Too many rows (${total}). Narrow the date range (max ${MAX_EXPORT_ROWS}).`,
+    };
+  }
+
+  const listParams = [...params, MAX_EXPORT_ROWS];
+  const limitIdx = params.length + 1;
+
+  const rows = await db.queryAll(
+    `SELECT id, created_at, booth_id, layout_id, frame_id, print_count, amount, payment_mode,
+            download_id, print_status, print_note
+     FROM photo_sessions
+     ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${limitIdx}`,
+    listParams
+  );
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const scope = boothId || "all-booths";
+  const filename = `shoot-dashboard-${scope}-${period || "all"}-${stamp}.csv`;
+
+  return {
+    ok: true,
+    filename,
+    csv: buildPhotoHistoryCsv(rows),
+    rowCount: rows.length,
+    periodLabel: range.label,
+  };
+}
+
 async function clearPhotoSessionsForBooth(boothIdRaw) {
   const boothProfiles = require("./boothProfiles");
   const boothId = boothProfiles.normalizeBoothId(boothIdRaw);
@@ -212,6 +336,7 @@ function formatPhotoRow(row) {
 module.exports = {
   getDashboardMetrics,
   listPhotoHistory,
+  exportPhotoHistory,
   clearPhotoSessionsForBooth,
   parsePeriod,
 };

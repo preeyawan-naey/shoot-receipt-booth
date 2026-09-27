@@ -124,6 +124,17 @@ router.post("/login", async (req, res) => {
 
 router.use(requireAdminKey);
 
+function requireSuperAdminRole(req, res, next) {
+  const role = String(req.get("x-admin-role") || "").trim().toLowerCase();
+  if (role !== "super") {
+    return res.status(403).json({
+      success: false,
+      message: "Super admin only",
+    });
+  }
+  return next();
+}
+
 router.get("/dashboard", async (req, res) => {
   try {
     const { period = "today", from, to } = req.query;
@@ -179,6 +190,65 @@ router.get("/photos", async (req, res) => {
     return res.json({ success: true, ...result });
   } catch (error) {
     console.error("[admin/photos]", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/photos/export", async (req, res) => {
+  try {
+    const { period = "today", from, to, search = "" } = req.query;
+    const role = String(req.get("x-admin-role") || "").trim().toLowerCase();
+    const boothFromQuery = resolveAdminBoothId(req);
+    let boothId = boothFromQuery;
+
+    if (role === "booth") {
+      const sessionBooth =
+        req.get("x-admin-booth-id") ||
+        req.query.booth_id ||
+        req.query.boothId ||
+        null;
+      boothId = sessionBooth ? boothProfiles.normalizeBoothId(sessionBooth) : boothFromQuery;
+      if (!boothId) {
+        return res.status(400).json({
+          success: false,
+          message: "booth_id is required for booth admin export",
+        });
+      }
+    } else if (role !== "super") {
+      boothId = boothFromQuery;
+    } else {
+      const allBooths =
+        req.query.all_booths === "1" ||
+        req.query.all_booths === "true" ||
+        req.query.allBooths === "1";
+      if (allBooths) {
+        boothId = null;
+      }
+    }
+
+    const result = await admin.exportPhotoHistory({
+      period,
+      from,
+      to,
+      search,
+      boothId,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.message,
+      });
+    }
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    return res.send(result.csv);
+  } catch (error) {
+    console.error("[admin/photos/export]", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -503,7 +573,15 @@ async function handleClearBoothPhotoSessions(req, res) {
   }
 }
 
-router.delete("/booths/:boothId/photo-sessions", handleClearBoothPhotoSessions);
-router.post("/booths/:boothId/clear-photo-sessions", handleClearBoothPhotoSessions);
+router.delete(
+  "/booths/:boothId/photo-sessions",
+  requireSuperAdminRole,
+  handleClearBoothPhotoSessions
+);
+router.post(
+  "/booths/:boothId/clear-photo-sessions",
+  requireSuperAdminRole,
+  handleClearBoothPhotoSessions
+);
 
 module.exports = router;
