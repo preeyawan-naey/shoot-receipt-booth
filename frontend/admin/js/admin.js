@@ -366,7 +366,6 @@
   }
 
   function formatSessionPrice(amount, paymentMode) {
-    if (!state.boothPaymentEnabled) return "—";
     if (paymentMode === "free") return "—";
     return formatMoney(amount);
   }
@@ -1702,10 +1701,7 @@
     const boothId = getActiveBoothId();
     const boothLabel = resolveActiveBoothDisplayName(boothId);
 
-    setText(
-      "kpi-revenue",
-      state.boothPaymentEnabled ? formatMoney(m.totalRevenue) : "—"
-    );
+    setText("kpi-revenue", formatMoney(m.totalRevenue ?? 0));
     setText("kpi-cafe-label", "Cafe Share (40%)");
     setText("kpi-receipt-club-label", "The Receipt Club (60%)");
     setText("kpi-cafe", formatMoney(m.cafeShare));

@@ -75,17 +75,32 @@ async function getDashboardMetrics(period, from, to, boothId = null) {
   const aggregate = await db.queryOne(
     `SELECT
        COUNT(*) AS total_sessions,
-       COALESCE(SUM(amount), 0) AS total_revenue,
-       COALESCE(SUM(print_count), 0) AS total_prints
+       COALESCE(SUM(print_count), 0) AS total_prints,
+       COALESCE(
+         SUM(
+           CASE
+             WHEN LOWER(COALESCE(payment_mode, '')) = 'free' THEN 0
+             ELSE amount
+           END
+         ),
+         0
+       ) AS total_revenue,
+       COUNT(
+         CASE
+           WHEN LOWER(COALESCE(payment_mode, '')) != 'free' THEN 1
+         END
+       ) AS paid_sessions
      FROM photo_sessions
      WHERE ${whereParts.join(" AND ")}`,
     params
   );
 
   const totalSessions = Number(aggregate?.total_sessions || 0);
+  const paidSessions = Number(aggregate?.paid_sessions || 0);
   const totalRevenue = Number(aggregate?.total_revenue || 0);
   const totalPrints = Number(aggregate?.total_prints || 0);
-  const ticketPrice = totalSessions > 0 ? Math.round(totalRevenue / totalSessions) : 59;
+  const ticketPrice =
+    paidSessions > 0 ? Math.round(totalRevenue / paidSessions) : 59;
   const cafeShare = Math.round(totalRevenue * CAFE_SHARE_RATE);
   const receiptClubShare = Math.round(totalRevenue * RECEIPT_CLUB_SHARE_RATE);
 
