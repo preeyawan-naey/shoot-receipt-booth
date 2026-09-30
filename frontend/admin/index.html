@@ -593,7 +593,7 @@
               <div>
                 <h2 class="admin-panel__title">Owner accounts</h2>
                 <p class="admin-panel__subtitle">
-                  สร้าง/ลบบัญชี owner ตาม tenant (ร้าน) — username ใช้ล็อกอิน backoffice
+                  สร้าง owner ต่อ tenant ด้วยรหัสคนละบัญชี — เปลี่ยนรหัสได้ที่ตาราง (ไม่ seed owner อัตโนมัติตอน boot)
                 </p>
               </div>
             </div>
@@ -675,6 +675,24 @@
       </div>
     </div>
 
+    <div class="admin-modal" id="owner-password-modal" hidden aria-hidden="true" role="dialog" aria-labelledby="owner-password-modal-title">
+      <div class="admin-modal__card">
+        <h2 class="admin-modal__title" id="owner-password-modal-title">เปลี่ยนรหัส owner</h2>
+        <p class="admin-modal__desc">
+          บัญชี: <code id="owner-password-modal-username">—</code> · session เดิมจะถูก revoke
+        </p>
+        <label class="payment-admin-field">
+          <span class="payment-admin-field__label">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</span>
+          <input class="admin-login__input" id="owner-password-input" type="password" autocomplete="new-password" />
+        </label>
+        <p class="admin-login__error" id="owner-password-error" hidden></p>
+        <div class="admin-modal__actions">
+          <button type="button" class="admin-btn admin-btn--ghost" id="btn-owner-password-cancel">ยกเลิก</button>
+          <button type="button" class="admin-btn admin-btn--primary" id="btn-owner-password-save">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
     <div class="admin-modal" id="booth-pairing-code-modal" hidden aria-hidden="true" role="dialog" aria-labelledby="booth-pairing-code-modal-title">
       <div class="admin-modal__card admin-modal__card--pairing">
         <h2 class="admin-modal__title" id="booth-pairing-code-modal-title">รหัสจับคู่ตู้</h2>
@@ -688,6 +706,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=49"></script>
+    <script src="/admin/js/admin.js?v=50"></script>
   </body>
 </html>

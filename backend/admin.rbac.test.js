@@ -230,6 +230,25 @@ test("super can manage owner accounts; owner cannot", async () => {
   );
   assert.equal(deleteDenied.res.status, 403);
 
+  const patchOk = await jsonFetch(`/api/admin/users/${createOk.data.user.id}/password`, {
+    method: "PATCH",
+    cookie: superCookie,
+    body: { password: "new-shop-a-ops-pass" },
+  });
+  assert.equal(patchOk.res.status, 200);
+
+  const oldLogin = await jsonFetch("/api/admin/auth/login", {
+    method: "POST",
+    body: { username: "shop-a-ops", password: "shop-a-ops-pass" },
+  });
+  assert.equal(oldLogin.res.status, 401);
+
+  const newLogin = await jsonFetch("/api/admin/auth/login", {
+    method: "POST",
+    body: { username: "shop-a-ops", password: "new-shop-a-ops-pass" },
+  });
+  assert.equal(newLogin.res.status, 200);
+
   const deleteOk = await jsonFetch(`/api/admin/users/${createOk.data.user.id}`, {
     method: "DELETE",
     cookie: superCookie,

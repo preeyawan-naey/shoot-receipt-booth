@@ -52,6 +52,16 @@ async function lookupSession(token) {
   };
 }
 
+async function revokeAllSessionsForUser(userId) {
+  if (!userId) return;
+  await db.execute(
+    `UPDATE admin_sessions
+     SET revoked_at = ${db.getDbMode() === "postgres" ? "NOW()" : "datetime('now')"}
+     WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId]
+  );
+}
+
 async function revokeSession(token) {
   if (!token) return;
   const tokenHash = hashToken(token);
@@ -89,6 +99,7 @@ module.exports = {
   COOKIE_NAME,
   createSession,
   lookupSession,
+  revokeAllSessionsForUser,
   revokeSession,
   setSessionCookie,
   clearSessionCookie,

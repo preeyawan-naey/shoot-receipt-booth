@@ -105,6 +105,26 @@ async function listOwners() {
   }));
 }
 
+async function updateOwnerPassword(userId, password) {
+  const row = await findById(userId);
+  if (!row) {
+    return { ok: false, status: 404, message: "User not found" };
+  }
+  if (row.role !== "owner") {
+    return { ok: false, status: 403, message: "Only owner accounts can change password here" };
+  }
+  const nextPassword = String(password ?? "");
+  if (nextPassword.length < 8) {
+    return { ok: false, status: 400, message: "password must be at least 8 characters" };
+  }
+  const passwordHash = await hashPassword(nextPassword);
+  await db.execute(`UPDATE admin_users SET password_hash = $1 WHERE id = $2`, [
+    passwordHash,
+    userId,
+  ]);
+  return { ok: true, user: publicUser(row) };
+}
+
 async function deleteOwnerById(userId) {
   const row = await findById(userId);
   if (!row) {
@@ -141,6 +161,10 @@ async function ensureBootstrapUsers() {
     console.log(`[adminUsers] bootstrap super user: ${superUsername}`);
   }
 
+  if (!config.adminBootstrapOwners) {
+    return;
+  }
+
   const boothProfiles = require("./boothProfiles");
   const profiles = await boothProfiles.listProfilesWithTenant();
   for (const profile of profiles) {
@@ -170,6 +194,7 @@ module.exports = {
   hashPassword,
   createUser,
   listOwners,
+  updateOwnerPassword,
   deleteOwnerById,
   isDuplicateUsernameError,
   publicUser,

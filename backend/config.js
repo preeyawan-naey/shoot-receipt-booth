@@ -61,6 +61,8 @@ const config = {
     process.env.ADMIN_PASSWORD ||
     "",
   legacyAdminLogin: process.env.LEGACY_ADMIN_LOGIN === "true",
+  /** When false (default), only super is bootstrapped; owners are created in backoffice. */
+  adminBootstrapOwners: process.env.ADMIN_BOOTSTRAP_OWNERS === "true",
   adminSessionSecret:
     process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_API_KEY || "dev-session-secret",
   adminSessionCookieName: process.env.ADMIN_SESSION_COOKIE_NAME || "shoot_admin_session",

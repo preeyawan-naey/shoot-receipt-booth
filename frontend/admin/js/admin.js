@@ -26,6 +26,7 @@
     boothPaymentLoadedFor: "",
   };
 
+  let ownerPasswordResetUserId = null;
   let lastPaidPaymentMode = "static_qr";
   let paymentQrPreviewObjectUrl = null;
   let paymentQrPreviewLoadGen = 0;
@@ -1278,7 +1279,10 @@
           <td>${tenantLabel}</td>
           <td>${owner.email ? escapeHtml(owner.email) : "—"}</td>
           <td>${escapeHtml(formatDateShort(owner.created_at))}</td>
-          <td>
+          <td class="admin-table__actions">
+            <button type="button" class="admin-btn admin-btn--ghost btn-reset-owner-password" data-owner-id="${escapeHtml(owner.id)}" data-owner-username="${escapeHtml(owner.username)}">
+              เปลี่ยนรหัส
+            </button>
             <button type="button" class="admin-btn admin-btn--ghost admin-btn--danger btn-delete-owner" data-owner-id="${escapeHtml(owner.id)}" data-owner-username="${escapeHtml(owner.username)}">
               ลบ
             </button>
@@ -1286,6 +1290,12 @@
         </tr>`;
       })
       .join("");
+
+    tbody.querySelectorAll(".btn-reset-owner-password").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openOwnerPasswordModal(btn.dataset.ownerId, btn.dataset.ownerUsername);
+      });
+    });
 
     tbody.querySelectorAll(".btn-delete-owner").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1295,6 +1305,72 @@
         deleteOwnerAccount(id).catch(console.error);
       });
     });
+  }
+
+  function openOwnerPasswordModal(userId, username) {
+    ownerPasswordResetUserId = userId || null;
+    const modal = $("#owner-password-modal");
+    const label = $("#owner-password-modal-username");
+    const input = $("#owner-password-input");
+    const err = $("#owner-password-error");
+    if (label) label.textContent = username || "—";
+    if (input) input.value = "";
+    if (err) err.hidden = true;
+    if (!modal || !ownerPasswordResetUserId) return;
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    input?.focus();
+  }
+
+  function hideOwnerPasswordModal() {
+    ownerPasswordResetUserId = null;
+    const modal = $("#owner-password-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  async function saveOwnerPasswordReset() {
+    const userId = ownerPasswordResetUserId;
+    const password = $("#owner-password-input")?.value || "";
+    const err = $("#owner-password-error");
+    const btn = $("#btn-owner-password-save");
+    if (!userId) return;
+    if (password.length < 8) {
+      if (err) {
+        err.textContent = "รหัสผ่านอย่างน้อย 8 ตัวอักษร";
+        err.hidden = false;
+      }
+      return;
+    }
+    if (err) err.hidden = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "กำลังบันทึก...";
+    }
+    try {
+      await apiFetch(`/users/${encodeURIComponent(userId)}/password`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
+      });
+      hideOwnerPasswordModal();
+      hideOwnerFormMessages();
+      const ok = $("#owner-create-success");
+      if (ok) {
+        ok.textContent = "เปลี่ยนรหัส owner แล้ว";
+        ok.hidden = false;
+      }
+    } catch (error) {
+      if (err) {
+        err.textContent = error.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "บันทึก";
+      }
+    }
   }
 
   async function loadOwnersAdmin() {
@@ -2591,6 +2667,17 @@
 
     $("#btn-create-owner")?.addEventListener("click", () => {
       createOwnerAccount().catch(console.error);
+    });
+
+    $("#btn-owner-password-save")?.addEventListener("click", () => {
+      saveOwnerPasswordReset().catch(console.error);
+    });
+    $("#btn-owner-password-cancel")?.addEventListener("click", hideOwnerPasswordModal);
+    $("#owner-password-input")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveOwnerPasswordReset().catch(console.error);
+    });
+    $("#owner-password-modal")?.addEventListener("click", (event) => {
+      if (event.target?.id === "owner-password-modal") hideOwnerPasswordModal();
     });
 
     $("#btn-save-payment-settings")?.addEventListener("click", () => {

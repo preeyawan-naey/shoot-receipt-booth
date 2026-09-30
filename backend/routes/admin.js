@@ -512,6 +512,24 @@ router.post("/users/owners", requireSuperUser, async (req, res) => {
   }
 });
 
+router.patch("/users/:userId/password", requireSuperUser, async (req, res) => {
+  try {
+    const password = String(req.body?.password ?? "");
+    const result = await adminUsers.updateOwnerPassword(req.params.userId, password);
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        success: false,
+        message: result.message || "Cannot update password",
+      });
+    }
+    await adminSessions.revokeAllSessionsForUser(req.params.userId);
+    return res.json({ success: true, user: result.user });
+  } catch (error) {
+    console.error("[admin/users/password]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.delete("/users/:userId", requireSuperUser, async (req, res) => {
   try {
     const result = await adminUsers.deleteOwnerById(req.params.userId);
