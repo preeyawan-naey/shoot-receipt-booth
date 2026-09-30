@@ -13,10 +13,10 @@ const BOOTH_BUILTIN_PROFILES = {
   [DEFAULT_BOOTH_ID]: {
     booth_id: DEFAULT_BOOTH_ID,
     name: "The Receipt Club",
-    theme: "kiki",
-    home_image: "img/booths/the-receipt-club/index-kiki.png",
-    home_logo: "img/booths/the-receipt-club/logo2.png",
-    layout_set: "kiki",
+    theme: "bloomi",
+    home_image: "img/booths/the-receipt-club/index-bloomi.png",
+    home_logo: "img/booths/the-receipt-club/logo-bloomi.png",
+    layout_set: "bloomi",
     features: {
       receipt_download_qr: true,
       receipt_download_qr_print: true,
@@ -213,9 +213,19 @@ function applyHomeStartButton(boothId) {
     return;
   }
 
+  const profile = boothProfileState || getBuiltinBoothProfile(normalized);
+  const bloomiHome =
+    profile?.theme === "bloomi" ||
+    String(profile?.home_image || "").includes("index-bloomi");
+
   btn.classList.add("start-btn--blink");
-  btn.innerHTML = '<span class="start-btn__highlight">TAP</span> to START';
-  if (overlay) overlay.setAttribute("aria-label", "Tap to START");
+  if (normalized === DEFAULT_BOOTH_ID && bloomiHome) {
+    btn.innerHTML = 'Tab to <span class="start-btn__highlight">Start</span>';
+    if (overlay) overlay.setAttribute("aria-label", "Tab to Start");
+  } else {
+    btn.innerHTML = '<span class="start-btn__highlight">TAP</span> to START';
+    if (overlay) overlay.setAttribute("aria-label", "Tap to START");
+  }
 }
 
 function applyBoothThemeToDom(boothId) {
@@ -229,6 +239,13 @@ function applyBoothThemeToDom(boothId) {
     }
   }
   screen.classList.add(`${BOOTH_THEME_CLASS_PREFIX}${normalized}`);
+  for (const cls of [...screen.classList]) {
+    if (cls.startsWith("booth-event--")) screen.classList.remove(cls);
+  }
+  const eventSkin = boothProfileState?.theme || getBuiltinBoothProfile(normalized)?.theme;
+  if (eventSkin && eventSkin !== "kiki") {
+    screen.classList.add(`booth-event--${eventSkin}`);
+  }
   applyHomeStartButton(normalized);
 }
 

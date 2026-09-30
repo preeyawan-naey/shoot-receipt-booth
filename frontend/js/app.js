@@ -136,6 +136,7 @@ function initLayoutGrid() {
 window.rebuildLayoutSelectGrid = initLayoutGrid;
 
 function buildLayoutCard(layout) {
+  const aspect = layout.selectAspectRatio || "704 / 1433";
   return `
     <button
       class="layout-card"
@@ -147,6 +148,7 @@ function buildLayoutCard(layout) {
         class="layout-card__preview"
         src="${layout.selectImagePath || layout.imagePath}"
         alt="Layout ${layout.id}"
+        style="aspect-ratio: ${aspect}"
       />
     </button>
   `;

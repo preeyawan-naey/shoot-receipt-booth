@@ -31,6 +31,32 @@ function isReceiptDownloadQrPrintEnabled() {
   }
   return PRINT_QR_ON_RECEIPT_ENABLED;
 }
+
+function isBloomiLayoutSet() {
+  return (
+    typeof resolveLayoutSetKey === "function" && resolveLayoutSetKey() === "bloomi"
+  );
+}
+
+/** Preview vs print — Bloomi never shows QR on screen preview. */
+function resolveCompositeReceiptQrUrl(options, frameConfig) {
+  if (!options?.qrCodeUrl) return null;
+
+  const forPrint = options.forPrint === true;
+  const isKikiFrame =
+    typeof isKikiFrameSelectLayout === "function" &&
+    isKikiFrameSelectLayout(frameConfig);
+
+  if (forPrint || options.preview === false) {
+    if (!isReceiptDownloadQrPrintEnabled()) return null;
+    return isKikiFrame || isBloomiLayoutSet() ? options.qrCodeUrl : null;
+  }
+
+  if (isBloomiLayoutSet()) return null;
+
+  if (!isReceiptDownloadQrEnabled()) return null;
+  return isKikiFrame ? options.qrCodeUrl : null;
+}
 /** Crop leftover paper below footer so QR sits closer (percent of frame height). */
 const PRINT_CROP_BOTTOM_PCT = {
   "Layout-1:frame-3": 86.9,
@@ -517,6 +543,41 @@ function getSchoolbellFontUrls() {
   ];
 }
 
+let baskervilleFontLoadPromise = null;
+
+async function ensureBaskervilleFontLoaded(fontSizePx) {
+  if (!document.fonts) return;
+
+  if (!baskervilleFontLoadPromise) {
+    baskervilleFontLoadPromise = (async () => {
+      const probe = '12px "Libre Baskerville"';
+      if (document.fonts.check(probe)) return;
+
+      try {
+        await document.fonts.load('400 12px "Libre Baskerville"');
+        await document.fonts.ready;
+      } catch {
+        /* Google Fonts link or system Baskerville */
+      }
+    })();
+  }
+
+  await baskervilleFontLoadPromise;
+
+  const size = Math.max(12, Math.round(fontSizePx));
+  try {
+    await document.fonts.load(`400 ${size}px "Libre Baskerville"`);
+    await document.fonts.ready;
+  } catch {
+    /* system Baskerville fallback */
+  }
+}
+
+function guestNameUsesBaskerville(slot) {
+  const family = String(slot?.fontFamily || "");
+  return /baskerville/i.test(family);
+}
+
 async function ensureSchoolbellFontLoaded(fontSizePx) {
   if (!document.fonts) return;
 
@@ -584,15 +645,24 @@ async function drawKikiGuestName(ctx, frameConfig, canvasWidth, canvasHeight, op
   const h = (slot.height / 100) * canvasHeight;
 
   const fontSize = getKikiGuestNameFontSize(canvasWidth, slot, h);
-  const textAlign = slot.textAlign || "left";
+  const textAlign = slot.textAlign || "center";
   const designW =
     typeof LAYOUT_NATURAL_WIDTH !== "undefined" ? LAYOUT_NATURAL_WIDTH : 908;
   const padLeft = ((slot.padLeftPx || 0) / designW) * canvasWidth;
   const textX = textAlign === "center" ? x + w / 2 : x + padLeft;
   const textY = y + h / 2;
-  const fontSpec = `${Math.round(fontSize)}px "Schoolbell", cursive`;
+  const fontFamily =
+    slot.fontFamily ||
+    (typeof resolveLayoutSetKey === "function" && resolveLayoutSetKey() === "bloomi"
+      ? '"Libre Baskerville", Baskerville, "Times New Roman", serif'
+      : '"Schoolbell", cursive');
+  const fontSpec = `${Math.round(fontSize)}px ${fontFamily}`;
 
-  await ensureSchoolbellFontLoaded(fontSize);
+  if (guestNameUsesBaskerville(slot) || /bloomi/i.test(fontFamily)) {
+    await ensureBaskervilleFontLoaded(fontSize);
+  } else {
+    await ensureSchoolbellFontLoaded(fontSize);
+  }
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }
@@ -699,24 +769,60 @@ async function drawTheBlumoGuestName(ctx, canvasWidth, canvasHeight, offsetY = 0
   ctx.restore();
 }
 
-async function drawKikiDownloadQR(ctx, frameConfig, canvasWidth, canvasHeight, qrDataUrl) {
-  if (!isReceiptDownloadQrEnabled() || !qrDataUrl) return;
+async function drawKikiDownloadQR(
+  ctx,
+  frameConfig,
+  canvasWidth,
+  canvasHeight,
+  qrDataUrl,
+  options = {}
+) {
+  if (!qrDataUrl) return;
   if (typeof isKikiFrameSelectLayout === "function" && !isKikiFrameSelectLayout(frameConfig)) {
     return;
   }
 
   const layoutId = frameConfig?.id;
-  const centerTopPct =
-    typeof getKikiQrCenterTopPct === "function" ? getKikiQrCenterTopPct(layoutId) : 81.21;
-  const size =
-    typeof getKikiQrSizePx === "function"
+  const bloomi = isBloomiLayoutSet();
+  const centerTopPct = bloomi
+    ? typeof getBloomiQrCenterTopPct === "function"
+      ? getBloomiQrCenterTopPct(layoutId)
+      : 83.2
+    : typeof getKikiQrCenterTopPct === "function"
+      ? getKikiQrCenterTopPct(layoutId)
+      : 81.21;
+  const size = bloomi
+    ? typeof getBloomiQrSizePx === "function"
+      ? getBloomiQrSizePx(canvasWidth)
+      : Math.round((canvasWidth * 2) / 8)
+    : typeof getKikiQrSizePx === "function"
       ? getKikiQrSizePx(canvasWidth)
       : Math.round((canvasWidth * 2) / 8);
   const centerX = (canvasWidth * 50) / 100;
-  const centerY = (centerTopPct / 100) * canvasHeight;
-  const x = centerX - size / 2;
-  const y = centerY - size / 2;
+  const artHeight = canvasHeight;
+  const centerY = (centerTopPct / 100) * artHeight;
+  let y = centerY - size / 2;
 
+  if (bloomi) {
+    const topMarginPx =
+      typeof getBloomiArtTopMarginPx === "function"
+        ? getBloomiArtTopMarginPx(artHeight)
+        : Math.round(artHeight * 0.03065);
+    const bottom = y + size;
+    const targetHeight = Math.ceil(bottom + topMarginPx);
+    if (targetHeight > artHeight) {
+      const canvas = ctx.canvas;
+      const snapshot = ctx.getImageData(0, 0, canvasWidth, artHeight);
+      canvas.height = targetHeight;
+      ctx.putImageData(snapshot, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, artHeight, canvasWidth, targetHeight - artHeight);
+    }
+  } else {
+    y = Math.max(0, Math.min(y, canvasHeight - size));
+  }
+
+  const x = centerX - size / 2;
   await drawQRAt(ctx, qrDataUrl, x, y, size, { background: true });
 }
 
@@ -869,7 +975,9 @@ async function drawFrameAndPhotos(ctx, frameConfig, photos, canvasWidth, canvasH
     ctx.restore();
     await drawKikiGuestName(ctx, frameConfig, canvasWidth, canvasHeight, options);
     if (options.qrCodeUrl) {
-      await drawKikiDownloadQR(ctx, frameConfig, canvasWidth, canvasHeight, options.qrCodeUrl);
+      await drawKikiDownloadQR(ctx, frameConfig, canvasWidth, canvasHeight, options.qrCodeUrl, {
+        forPrint: options.forPrint === true,
+      });
     }
     return;
   }
@@ -1275,24 +1383,25 @@ async function drawComposite(canvas, frameConfig, photos, options = {}) {
 
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const isKikiLayout =
-    typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(frameConfig);
-  const qrCodeUrl =
-    isReceiptDownloadQrEnabled() && options.qrCodeUrl
-      ? isKikiLayout ||
-        (isPreview &&
-          useLayoutMock &&
-          typeof isTheBlumoBoothActive === "function" &&
-          isTheBlumoBoothActive())
-        ? options.qrCodeUrl
-        : null
+  const qrCodeUrl = resolveCompositeReceiptQrUrl(options, frameConfig);
+  const theBlumoPreviewQr =
+    isPreview &&
+    !options.forPrint &&
+    !isBloomiLayoutSet() &&
+    isReceiptDownloadQrEnabled() &&
+    options.qrCodeUrl &&
+    useLayoutMock &&
+    typeof isTheBlumoBoothActive === "function" &&
+    isTheBlumoBoothActive()
+      ? options.qrCodeUrl
       : null;
 
   await drawFrameAndPhotos(ctx, frameConfig, photos, canvas.width, canvas.height, {
     usePreviewSlots: useLayoutMock,
     frameSrc,
     eraseGuestNameBackground: !useLayoutMock,
-    qrCodeUrl,
+    qrCodeUrl: qrCodeUrl || theBlumoPreviewQr,
+    forPrint: options.forPrint === true,
     layoutSelectPreview: options.layoutSelectPreview === true,
   });
 
@@ -1392,7 +1501,8 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   if (typeof isKikiFrameSelectLayout === "function" && isKikiFrameSelectLayout(frameConfig)) {
     await drawComposite(canvas, frameConfig, resolvedPhotos, {
       preview: true,
-      qrCodeUrl: isReceiptDownloadQrEnabled() ? qrDataUrl : null,
+      forPrint: true,
+      qrCodeUrl: qrDataUrl || null,
     });
     return canvas;
   }
@@ -1400,7 +1510,8 @@ async function drawCompositeForPrint(canvas, frameConfig, photos, qrDataUrl, opt
   if (typeof isSnapFrameSelectBooth === "function" && isSnapFrameSelectBooth()) {
     await drawComposite(canvas, frameConfig, resolvedPhotos, {
       preview: true,
-      qrCodeUrl: isReceiptDownloadQrEnabled() ? qrDataUrl : null,
+      forPrint: true,
+      qrCodeUrl: qrDataUrl || null,
     });
     return canvas;
   }
@@ -1714,7 +1825,6 @@ async function preparePrintReceipt() {
     if (!cloneReceiptCanvas(downloadCanvas, previewCanvas)) {
       await drawComposite(downloadCanvas, layout, photos, {
         preview: true,
-        qrCodeUrl,
       });
     }
   } else {

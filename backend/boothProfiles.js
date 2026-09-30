@@ -28,11 +28,11 @@ const DEFAULT_PROFILES = {
   [DEFAULT_BOOTH_ID]: {
     booth_id: DEFAULT_BOOTH_ID,
     name: "The Receipt Club",
-    /** Event skin (KiKi) — not a separate booth; swap home_image / layout_set per event. */
-    theme: "kiki",
-    home_image: "img/booths/the-receipt-club/index-kiki.png",
-    home_logo: "img/booths/the-receipt-club/logo2.png",
-    layout_set: "kiki",
+    /** Event skin — swap home_image / layout_set per event (e.g. bloomi, kiki). */
+    theme: "bloomi",
+    home_image: "img/booths/the-receipt-club/index-bloomi.png",
+    home_logo: "img/booths/the-receipt-club/logo-bloomi.png",
+    layout_set: "bloomi",
     supabase_bucket: "the-receipt-club",
     features: { ...DEFAULT_FEATURES, hide_name_back_after_payment: true },
     is_active: true,
@@ -92,7 +92,11 @@ async function migrateLegacyBoothProfiles() {
     }
 
     if (legacyRow.is_active !== false && legacyRow.is_active !== 0) {
-      await upsertProfile({ booth_id: legacyId, is_active: false });
+      // Legacy ids alias to canonical booth_id in normalizeBoothId — update the legacy row directly.
+      await db.execute(
+        `UPDATE booth_profiles SET is_active = 0, updated_at = ${db.getDbMode() === "postgres" ? "NOW()" : "datetime('now')"} WHERE booth_id = $1`,
+        [legacyId]
+      );
     }
   }
 }

@@ -23,6 +23,76 @@ function getKikiFrameSelectPath(layoutNum) {
   return `${FRAME_SELECT_BASE}/layout${layoutNum}/layout-${layoutNum}kiki.jpg`;
 }
 
+const BLOOMI_LAYOUT_SELECT_BASE = `${LAYOUT_SELECT_BASE}/bloomi`;
+const BLOOMI_LAYOUT_SELECT_ASPECT_RATIO = "454 / 1044";
+
+function getBloomiLayoutSelectPath(layoutNum) {
+  return `${BLOOMI_LAYOUT_SELECT_BASE}/layout${layoutNum}.jpg`;
+}
+
+function getBloomiFrameSelectPath(layoutNum) {
+  return `${FRAME_SELECT_BASE}/layout${layoutNum}/layout${layoutNum}-bloomi.jpg`;
+}
+
+/** Bloomi receipt artboard (layoutN-bloomi.jpg) — 454×1021 */
+const BLOOMI_ARTBOARD_WIDTH = 454;
+const BLOOMI_ARTBOARD_HEIGHT = 1044;
+
+/** Photo bounds — outer gray frame on layoutN-bloomi.jpg (454×1044); slight expand hides hairline gaps */
+const BLOOMI_PHOTO_SLOT = { fit: "cover", noBleed: true, expandPct: 0.35 };
+
+const BLOOMI_GUEST_NAME_SLOT = {
+  left: 5.07,
+  width: 89.87,
+  top: 22,
+  height: 2.2,
+  fontSizePx: 38,
+  fontSizeBandPct: 0.85,
+  textAlign: "center",
+  padLeftPx: 0,
+  fontFamily: '"Libre Baskerville", Baskerville, "Times New Roman", serif',
+};
+
+function buildBloomiLayoutSet() {
+  return [
+    {
+      id: "Layout-1",
+      photoCount: 1,
+      naturalWidth: BLOOMI_ARTBOARD_WIDTH,
+      naturalHeight: BLOOMI_ARTBOARD_HEIGHT,
+      imagePath: getBloomiFrameSelectPath(1),
+      previewImagePath: getBloomiFrameSelectPath(1),
+      selectImagePath: getBloomiLayoutSelectPath(1),
+      selectAspectRatio: BLOOMI_LAYOUT_SELECT_ASPECT_RATIO,
+      guestNameSlot: { ...BLOOMI_GUEST_NAME_SLOT },
+      slots: [
+        {
+          left: 5.07,
+          top: 29,
+          width: 89.70,
+          height: 47,
+          ...BLOOMI_PHOTO_SLOT,
+        },
+      ],
+    },
+    {
+      id: "Layout-2",
+      photoCount: 2,
+      naturalWidth: BLOOMI_ARTBOARD_WIDTH,
+      naturalHeight: BLOOMI_ARTBOARD_HEIGHT,
+      imagePath: getBloomiFrameSelectPath(2),
+      previewImagePath: getBloomiFrameSelectPath(2),
+      selectImagePath: getBloomiLayoutSelectPath(2),
+      selectAspectRatio: BLOOMI_LAYOUT_SELECT_ASPECT_RATIO,
+      guestNameSlot: { ...BLOOMI_GUEST_NAME_SLOT },
+      slots: [
+        { left: 5.07, top: 29, width: 89.70, height: 23, ...BLOOMI_PHOTO_SLOT },
+        { left: 5.07, top: 53.70, width: 89.70, height: 23, ...BLOOMI_PHOTO_SLOT },
+      ],
+    },
+  ];
+}
+
 const SNAP_LAYOUT_THUMBNAIL_BASE = `${SNAP_ON_RECEIPT_IMG_BASE}/thumbnail/layout`;
 
 function getSnapLayoutSelectPath(layoutNum) {
@@ -105,9 +175,9 @@ function isKikiFrameSelectLayout(layoutOrId) {
       : layoutOrId;
   if (!layout) return false;
   const setKey = resolveLayoutSetKey();
-  if (setKey !== "kiki") return false;
+  if (setKey !== "kiki" && setKey !== "bloomi") return false;
   const path = `${layout.previewImagePath || ""} ${layout.imagePath || ""}`;
-  return path.includes("kiki.jpg");
+  return path.includes("kiki.jpg") || path.includes("-bloomi.jpg");
 }
 
 /** Photo slots — gray frame bounds on layout-Nkiki.jpg; expandPct covers stroke edge-to-edge */
@@ -165,11 +235,33 @@ const KIKI_QR_CENTER_TOP_PCT = {
   "Layout-4": 87.44,
 };
 
+/** Bloomi — QR on print only, centered in barcode band above “BLOOM IN YOUR EVERYDAY.” */
+const BLOOMI_QR_CENTER_TOP_PCT = {
+  "Layout-1": 101,
+  "Layout-2": 101,
+};
+
+/** Top white margin on layoutN-bloomi.jpg — match bottom padding under QR on print */
+const BLOOMI_ART_TOP_MARGIN_PX = 32;
+const BLOOMI_ARTBOARD_HEIGHT_REF = 1044;
+
+function getBloomiArtTopMarginPx(artHeight = BLOOMI_ARTBOARD_HEIGHT_REF) {
+  return Math.round((BLOOMI_ART_TOP_MARGIN_PX / BLOOMI_ARTBOARD_HEIGHT_REF) * artHeight);
+}
+
 function getKikiQrCenterTopPct(layoutId) {
   return KIKI_QR_CENTER_TOP_PCT[layoutId] ?? 81.21;
 }
 
+function getBloomiQrCenterTopPct(layoutId) {
+  return BLOOMI_QR_CENTER_TOP_PCT[layoutId] ?? 101;
+}
+
 function getKikiQrSizePx(canvasWidth) {
+  return Math.round((KIKI_QR_SLOT.sizeCm / KIKI_QR_SLOT.paperWidthCm) * canvasWidth);
+}
+
+function getBloomiQrSizePx(canvasWidth) {
   return Math.round((KIKI_QR_SLOT.sizeCm / KIKI_QR_SLOT.paperWidthCm) * canvasWidth);
 }
 
@@ -180,10 +272,10 @@ const KIKI_GUEST_NAME_SLOT = {
   fontSizePx: 92.4,
   /** Fill ~72% of dashed name band height (908px artboard) */
   fontSizeBandPct: 0.716,
-  textAlign: "left",
+  textAlign: "center",
 };
 
-function buildLayoutSet(getSelectPath, getFramePath) {
+function buildLayoutSet(getSelectPath, getFramePath, selectAspectRatio = LAYOUT_SELECT_ASPECT_RATIO) {
   return [
     {
       id: "Layout-1",
@@ -192,7 +284,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
       imagePath: getFramePath(1),
       previewImagePath: getFramePath(1),
       selectImagePath: getSelectPath(1),
-      selectAspectRatio: LAYOUT_SELECT_ASPECT_RATIO,
+      selectAspectRatio,
       guestNameSlot: { ...KIKI_GUEST_NAME_SLOT, top: 19.3, height: 5.84 },
       slots: [{ left: 4.96, top: 26.39, width: 90.09, height: 44.66, ...KIKI_PHOTO_SLOT }],
     },
@@ -203,7 +295,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
       imagePath: getFramePath(2),
       previewImagePath: getFramePath(2),
       selectImagePath: getSelectPath(2),
-      selectAspectRatio: LAYOUT_SELECT_ASPECT_RATIO,
+      selectAspectRatio,
       guestNameSlot: { ...KIKI_GUEST_NAME_SLOT, top: 19.3, height: 5.84 },
       slots: [
         { left: 5.07, top: 26.39, width: 89.98, height: 22.05, ...KIKI_PHOTO_SLOT },
@@ -217,7 +309,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
       imagePath: getFramePath(3),
       previewImagePath: getFramePath(3),
       selectImagePath: getSelectPath(3),
-      selectAspectRatio: LAYOUT_SELECT_ASPECT_RATIO,
+      selectAspectRatio,
       guestNameSlot: { ...KIKI_GUEST_NAME_SLOT, top: 15.18, height: 4.73 },
       slots: [
         { left: 5.07, top: 21.34, width: 89.87, height: 17.84, ...KIKI_PHOTO_SLOT },
@@ -232,7 +324,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
       imagePath: getFramePath(4),
       previewImagePath: getFramePath(4),
       selectImagePath: getSelectPath(4),
-      selectAspectRatio: LAYOUT_SELECT_ASPECT_RATIO,
+      selectAspectRatio,
       guestNameSlot: { ...KIKI_GUEST_NAME_SLOT, top: 12.7, height: 3.96 },
       slots: [
         { left: 5.07, top: 17.86, width: 89.98, height: 14.93, ...KIKI_PHOTO_SLOT },
@@ -246,6 +338,7 @@ function buildLayoutSet(getSelectPath, getFramePath) {
 
 const LAYOUT_SETS = {
   kiki: buildLayoutSet(getKikiLayoutSelectPath, getKikiFrameSelectPath),
+  bloomi: buildBloomiLayoutSet(),
   "snap-on-receipt": buildSnapLayoutSet(),
 };
 
@@ -269,12 +362,16 @@ window.refreshLayoutsForBooth = refreshLayoutsForBooth;
 window.isKikiFrameSelectLayout = isKikiFrameSelectLayout;
 window.getKikiQrCenterTopPct = getKikiQrCenterTopPct;
 window.getKikiQrSizePx = getKikiQrSizePx;
+window.getBloomiQrCenterTopPct = getBloomiQrCenterTopPct;
+window.getBloomiQrSizePx = getBloomiQrSizePx;
+window.getBloomiArtTopMarginPx = getBloomiArtTopMarginPx;
+window.resolveLayoutSetKey = resolveLayoutSetKey;
 window.getLayoutSamplePhotos = getLayoutSamplePhotos;
 
 /** Layout select — ใช้รูป layout-2 ตรงๆ (มี artwork ครบในไฟล์แล้ว ไม่ composite ทับ) */
 function usesStaticLayoutSelectPreviews() {
   const setKey = resolveLayoutSetKey();
-  return setKey === "kiki" || setKey === "snap-on-receipt";
+  return setKey === "kiki" || setKey === "bloomi" || setKey === "snap-on-receipt";
 }
 
 async function renderLayoutSelectPreviews() {
@@ -372,10 +469,11 @@ async function showPreviewPage(capturedPhotosArray, selectedLayoutId) {
 
   dispenser?.classList.add("preview-dispenser--preparing");
 
-  const qrCodeUrl =
-    typeof ensurePreviewQrCodeUrl === "function" ? await ensurePreviewQrCodeUrl() : null;
+  if (typeof ensurePreviewQrCodeUrl === "function") {
+    await ensurePreviewQrCodeUrl();
+  }
 
-  await drawComposite(canvas, layoutConfig, capturedPhotosArray, { qrCodeUrl });
+  await drawComposite(canvas, layoutConfig, capturedPhotosArray, { preview: true });
 
   let cached = {};
   try {

@@ -193,11 +193,14 @@ function getTheBlumoPrintCropBottomPct(layoutId) {
   return getTheBlumoPreviewBottomPct(layoutId);
 }
 
-function getCaptureSizeForSlot(slot, naturalHeight = LAYOUT_NATURAL_HEIGHT) {
+function getCaptureSizeForSlot(slot, naturalHeight = LAYOUT_NATURAL_HEIGHT, naturalWidth) {
   const fallback = { width: 960, height: 720, ratio: 960 / 720 };
   if (!slot || slot.noCaptureCrop) return fallback;
 
-  const pixelW = (slot.width / 100) * LAYOUT_NATURAL_WIDTH;
+  const artboardW =
+    naturalWidth ??
+    (typeof LAYOUT_NATURAL_WIDTH !== "undefined" ? LAYOUT_NATURAL_WIDTH : 908);
+  const pixelW = (slot.width / 100) * artboardW;
   const pixelH = (slot.height / 100) * naturalHeight;
   let slotRatio = pixelW / pixelH;
   // Rotated slots: capture portrait at composite aspect (rotation applied when drawing)
@@ -222,7 +225,12 @@ function getCaptureSizeForLayout(layout, shotIndex = 0) {
       ? getActivePhotoSlots(layout)
       : layout?.slots;
   const naturalHeight = layout?.naturalHeight ?? LAYOUT_NATURAL_HEIGHT;
-  return getCaptureSizeForSlot(slots?.[shotIndex] || slots?.[0], naturalHeight);
+  const naturalWidth = layout?.naturalWidth;
+  return getCaptureSizeForSlot(
+    slots?.[shotIndex] || slots?.[0],
+    naturalHeight,
+    naturalWidth
+  );
 }
 
 function getLayoutFrameDir(layoutId) {
