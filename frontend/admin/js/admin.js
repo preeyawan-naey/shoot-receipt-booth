@@ -1,5 +1,7 @@
 (function () {
   const API_BASE = "/api/admin";
+  /** Only this booth uses the shared /?booth=… customer app from backoffice nav. */
+  const OPEN_BOOTH_NAV_BOOTH_ID = "the-receipt-club";
 
   let memoryAdminUser = null;
   let memoryRole = "";
@@ -1570,10 +1572,11 @@
     }
     const openBoothNav = $("#admin-nav-open-booth");
     if (openBoothNav) {
-      openBoothNav.hidden = Boolean(state.pathBoothId && canViewSuperAdminPanels());
       const activeForBoothLink = getActiveBoothId();
-      if (activeForBoothLink) {
-        openBoothNav.href = `/?booth=${encodeURIComponent(activeForBoothLink)}`;
+      const showOpenBooth = activeForBoothLink === OPEN_BOOTH_NAV_BOOTH_ID;
+      openBoothNav.hidden = !showOpenBooth;
+      if (showOpenBooth) {
+        openBoothNav.href = `/?booth=${encodeURIComponent(OPEN_BOOTH_NAV_BOOTH_ID)}`;
       }
     }
 
