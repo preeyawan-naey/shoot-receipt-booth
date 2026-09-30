@@ -191,6 +191,44 @@ async function migrateReceiptClubAssetPaths() {
   }
 }
 
+/** KiKi event row still stored in DB — upgrade to current built-in event skin (e.g. Bloomi). */
+function isReceiptClubKikiEventRow(row) {
+  if (!row) return false;
+  const theme = String(row.theme || "kiki").trim();
+  const layoutSet = String(row.layout_set || "kiki").trim();
+  if (theme !== "kiki" || layoutSet !== "kiki") return false;
+
+  const home = String(row.home_image || "").trim();
+  return (
+    home === "img/booths/the-receipt-club/index-kiki.png" ||
+    home === "img/index-kiki.png" ||
+    home.endsWith("/index-kiki.png")
+  );
+}
+
+async function migrateReceiptClubKikiEventToBuiltinDefault() {
+  const row = await getProfileRow(DEFAULT_BOOTH_ID);
+  if (!row || !isReceiptClubKikiEventRow(row)) return;
+
+  const target = DEFAULT_PROFILES[DEFAULT_BOOTH_ID];
+  if (
+    row.theme === target.theme &&
+    row.layout_set === target.layout_set &&
+    row.home_image === target.home_image &&
+    row.home_logo === target.home_logo
+  ) {
+    return;
+  }
+
+  await upsertProfile({
+    booth_id: DEFAULT_BOOTH_ID,
+    theme: target.theme,
+    layout_set: target.layout_set,
+    home_image: target.home_image,
+    home_logo: target.home_logo,
+  });
+}
+
 async function migrateSnapOnReceiptGuestNameDisabled() {
   const row = await getProfileRow(SNAP_ON_RECEIPT_BOOTH_ID);
   if (!row) return;
@@ -234,6 +272,7 @@ async function ensureDefaultProfiles() {
   await migrateLegacyBoothProfiles();
   await migrateSupabaseBucketDefaults();
   await migrateReceiptClubAssetPaths();
+  await migrateReceiptClubKikiEventToBuiltinDefault();
   await migrateSnapOnReceiptGuestNameDisabled();
   await migrateReceiptClubHideNameBackAfterPayment();
   await migrateSnapOnReceiptFrameSelectEnabled();
