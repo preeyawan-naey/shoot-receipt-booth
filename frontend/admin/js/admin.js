@@ -248,6 +248,41 @@
     return getSessionRole() === "owner";
   }
 
+  function normalizeOwnerUsername(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase();
+  }
+
+  /** Prefer booth_id matching owner username (e.g. snap-on-receipt), else sole tenant booth. */
+  function resolveOwnerPrimaryBoothId(profiles) {
+    const list = Array.isArray(profiles) ? profiles : [];
+    if (!list.length) return null;
+    const username = normalizeOwnerUsername(memoryAdminUser?.username);
+    if (username) {
+      const match = list.find((p) => p.booth_id === username);
+      if (match) return match.booth_id;
+    }
+    if (list.length === 1) return list[0].booth_id || null;
+    const sorted = [...list].sort((a, b) =>
+      String(a.booth_id || "").localeCompare(String(b.booth_id || ""))
+    );
+    return sorted[0]?.booth_id || null;
+  }
+
+  async function ensureOwnerBoothScopeFromSession() {
+    if (!isBoothScopedAdmin() || state.pathBoothId) return;
+    try {
+      const profiles = await fetchBoothProfileOptions();
+      const boothId = resolveOwnerPrimaryBoothId(profiles);
+      if (!boothId) return;
+      state.paymentBoothId = boothId;
+      syncAdminPathBoothId(boothId, { replace: true });
+    } catch (error) {
+      console.warn("[admin/owner-booth-scope]", error);
+    }
+  }
+
   /** /admin/{booth_id} — scoped to one booth in the URL */
   function isSingleBoothAdminView() {
     return Boolean(state.pathBoothId);
@@ -366,7 +401,11 @@
       return state.pathBoothId;
     }
     const select = $("#payment-booth-select");
-    const value = select?.value || state.paymentBoothId || "the-receipt-club";
+    let fallback = state.paymentBoothId || "the-receipt-club";
+    if (isBoothScopedAdmin() && select?.options?.length) {
+      fallback = select.value || fallback;
+    }
+    const value = select?.value || fallback;
     state.paymentBoothId = value;
     return value;
   }
@@ -1531,9 +1570,10 @@
     }
     const openBoothNav = $("#admin-nav-open-booth");
     if (openBoothNav) {
-      openBoothNav.hidden = Boolean(state.pathBoothId);
-      if (!isBoothScopedAdmin() && getActiveBoothId()) {
-        openBoothNav.href = `/?booth=${encodeURIComponent(getActiveBoothId())}`;
+      openBoothNav.hidden = Boolean(state.pathBoothId && canViewSuperAdminPanels());
+      const activeForBoothLink = getActiveBoothId();
+      if (activeForBoothLink) {
+        openBoothNav.href = `/?booth=${encodeURIComponent(activeForBoothLink)}`;
       }
     }
 
@@ -1586,7 +1626,10 @@
     try {
       const profiles = await fetchBoothProfileOptions();
       if (!profiles.length) return;
-      const boothId = renderBoothSelectOptions(select, profiles, state.paymentBoothId);
+      const preferred = isBoothScopedAdmin()
+        ? resolveOwnerPrimaryBoothId(profiles)
+        : state.paymentBoothId;
+      const boothId = renderBoothSelectOptions(select, profiles, preferred);
       syncBoothSelectValues(boothId);
     } catch (error) {
       console.warn("[admin/payment-booths]", error);
@@ -1600,7 +1643,10 @@
     try {
       const profiles = await fetchBoothProfileOptions();
       if (!profiles.length) return;
-      const boothId = renderBoothSelectOptions(select, profiles, getSelectedPaymentBoothId());
+      const preferred = isBoothScopedAdmin()
+        ? resolveOwnerPrimaryBoothId(profiles)
+        : getSelectedPaymentBoothId();
+      const boothId = renderBoothSelectOptions(select, profiles, preferred);
       syncBoothSelectValues(boothId);
     } catch (error) {
       console.warn("[admin/dashboard-booths]", error);
@@ -2533,6 +2579,7 @@
   }
 
   async function enterDashboard() {
+    await ensureOwnerBoothScopeFromSession();
     applyAdminPathBoothScope();
     await ensureActiveBoothProfileLoaded();
     updateBoothScopeUi();
