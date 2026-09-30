@@ -1749,7 +1749,7 @@
       boothId;
     const confirmed = window.confirm(
       `ลบประวัติ Dashboard ของ "${boothLabel}" (${boothId}) ทั้งหมด?\n\n` +
-        "การกระทำนี้ลบเฉพาะข้อมูลในตารางประวัติ (photo_sessions) — ไม่ลบรูปบน cloud"
+        "ลบ photo_sessions + payment_sessions ของตู้นี้ (ไม่ลบรูปบน cloud) — ป้องกันประวัติกลับหลัง deploy/restart"
     );
     if (!confirmed) return;
 
@@ -1766,7 +1766,8 @@
         `/booths/${encodeURIComponent(boothId)}/clear-photo-sessions`,
         { method: "POST" }
       );
-      const message = `ลบแล้ว ${data.deleted_count ?? 0} รายการ`;
+      const paymentN = data.payment_sessions_deleted ?? 0;
+      const message = `ลบแล้ว ${data.deleted_count ?? 0} photo_sessions, ${paymentN} payment_sessions`;
       if (hint) {
         hint.textContent = message;
         hint.hidden = false;

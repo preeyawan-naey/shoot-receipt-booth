@@ -343,11 +343,21 @@ async function exportPhotoHistory({
 async function clearPhotoSessionsForBooth(boothIdRaw) {
   const boothProfiles = require("./boothProfiles");
   const boothId = boothProfiles.normalizeBoothId(boothIdRaw);
-  const deleted = await db.execute(
+  const photoDeleted = await db.execute(
     `DELETE FROM photo_sessions WHERE booth_id = $1`,
     [boothId]
   );
-  return { booth_id: boothId, deleted_count: deleted };
+  // Paid rows in payment_sessions are re-inserted into photo_sessions on every server boot
+  // (db link backfill) unless removed here too.
+  const paymentDeleted = await db.execute(
+    `DELETE FROM payment_sessions WHERE booth_id = $1`,
+    [boothId]
+  );
+  return {
+    booth_id: boothId,
+    deleted_count: photoDeleted,
+    payment_sessions_deleted: paymentDeleted,
+  };
 }
 
 function formatPhotoRow(row) {

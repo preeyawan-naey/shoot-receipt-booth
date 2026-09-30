@@ -333,8 +333,6 @@ function runSqlitePhotoSessionConsolidation() {
     SET print_status = 'printed'
     WHERE print_status IS NULL OR print_status = ''
   `);
-
-  linkPaidSessionsWithoutPhotoHistory();
 }
 
 function linkPaidSessionsWithoutPhotoHistory() {
@@ -520,8 +518,6 @@ async function runPostgresPhotoSessionConsolidation() {
     SET print_status = 'printed'
     WHERE print_status IS NULL OR print_status = ''
   `);
-
-  await linkPostgresPaidSessionsWithoutPhotoHistory();
 }
 
 async function linkPostgresPaidSessionsWithoutPhotoHistory() {

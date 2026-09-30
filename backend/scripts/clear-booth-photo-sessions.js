@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-off: DELETE photo_sessions for a booth (dashboard history only).
+ * One-off: clear dashboard history for a booth (photo_sessions + payment_sessions).
  * Usage: DATABASE_URL=... DATABASE_SSL=true node scripts/clear-booth-photo-sessions.js snap-on-receipt
  */
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
@@ -23,14 +23,21 @@ async function main() {
         : undefined,
   });
 
-  const countBefore = await pool.query(
+  const photoBefore = await pool.query(
     "SELECT COUNT(*)::int AS n FROM photo_sessions WHERE booth_id = $1",
     [boothId]
   );
-  const del = await pool.query("DELETE FROM photo_sessions WHERE booth_id = $1", [
+  const paymentBefore = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM payment_sessions WHERE booth_id = $1",
+    [boothId]
+  );
+  const photoDel = await pool.query("DELETE FROM photo_sessions WHERE booth_id = $1", [
     boothId,
   ]);
-  const countAfter = await pool.query(
+  const paymentDel = await pool.query("DELETE FROM payment_sessions WHERE booth_id = $1", [
+    boothId,
+  ]);
+  const photoAfter = await pool.query(
     "SELECT COUNT(*)::int AS n FROM photo_sessions WHERE booth_id = $1",
     [boothId]
   );
@@ -38,9 +45,15 @@ async function main() {
   console.log(
     JSON.stringify({
       booth_id: boothId,
-      before: countBefore.rows[0]?.n ?? 0,
-      deleted_count: del.rowCount ?? 0,
-      after: countAfter.rows[0]?.n ?? 0,
+      photo_sessions: {
+        before: photoBefore.rows[0]?.n ?? 0,
+        deleted_count: photoDel.rowCount ?? 0,
+        after: photoAfter.rows[0]?.n ?? 0,
+      },
+      payment_sessions: {
+        before: paymentBefore.rows[0]?.n ?? 0,
+        deleted_count: paymentDel.rowCount ?? 0,
+      },
     })
   );
 
