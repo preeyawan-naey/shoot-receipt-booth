@@ -99,12 +99,15 @@
   }
 
   const ADMIN_VIEW_QUERY_KEY = "view";
-  const ADMIN_VIEWS = new Set(["dashboard", "payment", "booths"]);
+  const ADMIN_VIEWS = new Set(["dashboard", "payment", "booths", "owners"]);
 
   function readAdminViewFromUrl() {
     try {
       const view = new URLSearchParams(window.location.search).get(ADMIN_VIEW_QUERY_KEY);
-      if (view && ADMIN_VIEWS.has(view)) return view;
+      if (view && ADMIN_VIEWS.has(view)) {
+        if (view === "owners" && !canViewSuperAdminPanels()) return "dashboard";
+        return view;
+      }
     } catch {
       /* ignore */
     }
@@ -1227,6 +1230,157 @@
     }
   }
 
+  let ownersTenantCache = [];
+
+  function tenantDisplayName(tenantId) {
+    const row = ownersTenantCache.find((t) => t.id === tenantId);
+    return row?.name || tenantId || "—";
+  }
+
+  function hideOwnerFormMessages() {
+    const err = $("#owner-create-error");
+    const ok = $("#owner-create-success");
+    if (err) err.hidden = true;
+    if (ok) ok.hidden = true;
+  }
+
+  function renderOwnerTenantOptions(tenants) {
+    const select = $("#owner-create-tenant");
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML =
+      '<option value="">— เลือก tenant —</option>' +
+      tenants
+        .map(
+          (t) =>
+            `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name || t.id)}</option>`
+        )
+        .join("");
+    if (previous && tenants.some((t) => t.id === previous)) {
+      select.value = previous;
+    }
+  }
+
+  function renderOwnersList(owners) {
+    const tbody = $("#owners-tbody");
+    if (!tbody) return;
+    if (!owners.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" class="admin-table__empty">ยังไม่มี owner</td></tr>';
+      return;
+    }
+    tbody.innerHTML = owners
+      .map((owner) => {
+        const tenantLabel = escapeHtml(tenantDisplayName(owner.tenant_id));
+        return `
+        <tr>
+          <td><code>${escapeHtml(owner.username)}</code></td>
+          <td>${tenantLabel}</td>
+          <td>${owner.email ? escapeHtml(owner.email) : "—"}</td>
+          <td>${escapeHtml(formatDateShort(owner.created_at))}</td>
+          <td>
+            <button type="button" class="admin-btn admin-btn--ghost admin-btn--danger btn-delete-owner" data-owner-id="${escapeHtml(owner.id)}" data-owner-username="${escapeHtml(owner.username)}">
+              ลบ
+            </button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+
+    tbody.querySelectorAll(".btn-delete-owner").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.ownerId;
+        const username = btn.dataset.ownerUsername || id;
+        if (!window.confirm(`ลบ owner "${username}"? session ที่เปิดอยู่จะใช้ไม่ได้`)) return;
+        deleteOwnerAccount(id).catch(console.error);
+      });
+    });
+  }
+
+  async function loadOwnersAdmin() {
+    const tbody = $("#owners-tbody");
+    if (tbody) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" class="admin-table__empty">กำลังโหลด...</td></tr>';
+    }
+    hideOwnerFormMessages();
+    try {
+      const [tenantsData, ownersData] = await Promise.all([
+        apiFetch("/tenants"),
+        apiFetch("/users/owners"),
+      ]);
+      ownersTenantCache = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
+      renderOwnerTenantOptions(ownersTenantCache);
+      const owners = Array.isArray(ownersData.owners) ? ownersData.owners : [];
+      renderOwnersList(owners);
+    } catch (error) {
+      console.error("[admin/owners]", error);
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="5" class="admin-table__empty">โหลดไม่สำเร็จ: ${escapeHtml(error.message)}</td></tr>`;
+      }
+    }
+  }
+
+  async function createOwnerAccount() {
+    hideOwnerFormMessages();
+    const username = ($("#owner-create-username")?.value || "").trim();
+    const password = $("#owner-create-password")?.value || "";
+    const tenant_id = $("#owner-create-tenant")?.value || "";
+    const email = ($("#owner-create-email")?.value || "").trim();
+    const err = $("#owner-create-error");
+    const ok = $("#owner-create-success");
+    const btn = $("#btn-create-owner");
+
+    if (!username || !password || !tenant_id) {
+      if (err) {
+        err.textContent = "กรอก username, password และ tenant";
+        err.hidden = false;
+      }
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "กำลังสร้าง...";
+    }
+    try {
+      const data = await apiFetch("/users/owners", {
+        method: "POST",
+        body: JSON.stringify({
+          username,
+          password,
+          tenant_id,
+          email: email || undefined,
+        }),
+      });
+      const passInput = $("#owner-create-password");
+      const userInput = $("#owner-create-username");
+      if (passInput) passInput.value = "";
+      if (userInput) userInput.value = "";
+      if (ok) {
+        ok.textContent = `สร้าง owner "${data.user?.username || username}" แล้ว`;
+        ok.hidden = false;
+      }
+      await loadOwnersAdmin();
+    } catch (error) {
+      if (err) {
+        err.textContent = error.message;
+        err.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "สร้าง owner";
+      }
+    }
+  }
+
+  async function deleteOwnerAccount(userId) {
+    hideOwnerFormMessages();
+    await apiFetch(`/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+    await loadOwnersAdmin();
+  }
+
   function openBoothDetailView(boothId) {
     if (!boothId) return;
     if (!isBoothScopedAdmin()) {
@@ -1739,6 +1893,7 @@
     const dashboardView = $("#view-dashboard");
     const paymentView = $("#view-payment");
     const boothsView = $("#view-booths");
+    const ownersView = $("#view-owners");
 
     document.querySelectorAll(".admin-nav__item[data-view]").forEach((item) => {
       item.classList.toggle("admin-nav__item--active", item.dataset.view === viewName);
@@ -1747,6 +1902,7 @@
     if (dashboardView) dashboardView.hidden = viewName !== "dashboard";
     if (paymentView) paymentView.hidden = viewName !== "payment";
     if (boothsView) boothsView.hidden = viewName !== "booths";
+    if (ownersView) ownersView.hidden = viewName !== "owners";
 
     const eyebrow = $("#admin-topbar-eyebrow");
     const title = $("#admin-topbar-title");
@@ -1756,6 +1912,9 @@
     } else if (viewName === "booths") {
       if (eyebrow) eyebrow.textContent = "Backoffice / Booths";
       if (title) title.textContent = state.boothDetailId ? "Booth Detail" : "Booth Overview";
+    } else if (viewName === "owners") {
+      if (eyebrow) eyebrow.textContent = "Backoffice / Owners";
+      if (title) title.textContent = "Owner Accounts";
     } else {
       if (eyebrow) eyebrow.textContent = "Backoffice / Dashboard";
       if (title) title.textContent = "Control Tower";
@@ -2234,6 +2393,16 @@
       await loadPaymentAdmin();
       return;
     }
+    if (state.view === "owners") {
+      if (!canViewSuperAdminPanels()) {
+        showAdminView("dashboard");
+        syncAdminViewInUrl("dashboard", { replace: true });
+        await refresh();
+        return;
+      }
+      await loadOwnersAdmin();
+      return;
+    }
     if (state.view === "booths") {
       if (state.boothDetailId) {
         await showBoothDetail(state.boothDetailId);
@@ -2270,6 +2439,17 @@
 
     if (viewName === "payment") {
       await loadPaymentAdmin();
+      return;
+    }
+
+    if (viewName === "owners") {
+      if (!canViewSuperAdminPanels()) {
+        showAdminView("dashboard");
+        syncAdminViewInUrl("dashboard", { replace: true });
+        await refresh();
+        return;
+      }
+      await loadOwnersAdmin();
       return;
     }
 
@@ -2407,6 +2587,10 @@
         showAdminView(viewName);
         refresh().catch(console.error);
       });
+    });
+
+    $("#btn-create-owner")?.addEventListener("click", () => {
+      createOwnerAccount().catch(console.error);
     });
 
     $("#btn-save-payment-settings")?.addEventListener("click", () => {

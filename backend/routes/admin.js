@@ -425,6 +425,109 @@ router.get("/booth-profiles", async (req, res) => {
   }
 });
 
+router.get("/tenants", requireSuperUser, async (_req, res) => {
+  try {
+    const db = require("../db");
+    const tenants = await db.queryAll(
+      `SELECT id, name, created_at FROM tenants ORDER BY name ASC`
+    );
+    return res.json({ success: true, tenants });
+  } catch (error) {
+    console.error("[admin/tenants]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/users/owners", requireSuperUser, async (_req, res) => {
+  try {
+    const owners = await adminUsers.listOwners();
+    return res.json({ success: true, owners });
+  } catch (error) {
+    console.error("[admin/users/owners/list]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/users/owners", requireSuperUser, async (req, res) => {
+  try {
+    const username = adminUsers.normalizeUsername(req.body?.username);
+    const password = String(req.body?.password ?? "");
+    const tenantId = String(req.body?.tenant_id ?? "").trim();
+    const emailRaw = req.body?.email;
+    const email =
+      emailRaw === undefined || emailRaw === null || String(emailRaw).trim() === ""
+        ? null
+        : String(emailRaw).trim();
+
+    if (!username || !password || !tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: "username, password, and tenant_id are required",
+      });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "password must be at least 8 characters",
+      });
+    }
+    if (!adminUsers.isValidUsername(username)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid username (lowercase letters, numbers, _ and -)",
+      });
+    }
+
+    const db = require("../db");
+    const tenant = await db.queryOne(`SELECT id FROM tenants WHERE id = $1`, [tenantId]);
+    if (!tenant) {
+      return res.status(400).json({ success: false, message: "Unknown tenant_id" });
+    }
+
+    const existing = await adminUsers.findByUsername(username);
+    if (existing) {
+      return res.status(409).json({ success: false, message: "Username already taken" });
+    }
+
+    let user;
+    try {
+      user = await adminUsers.createUser({
+        username,
+        password,
+        role: "owner",
+        tenant_id: tenantId,
+        email,
+      });
+    } catch (error) {
+      if (adminUsers.isDuplicateUsernameError(error)) {
+        return res.status(409).json({ success: false, message: "Username already taken" });
+      }
+      throw error;
+    }
+
+    return res.status(201).json({ success: true, user: adminUsers.publicUser(user) });
+  } catch (error) {
+    console.error("[admin/users/owners/create]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/users/:userId", requireSuperUser, async (req, res) => {
+  try {
+    const result = await adminUsers.deleteOwnerById(req.params.userId);
+    if (!result.ok) {
+      return res.status(result.status || 400).json({
+        success: false,
+        message: result.message || "Cannot delete user",
+      });
+    }
+    return res.json({ success: true, deleted: result.user });
+  } catch (error) {
+    console.error("[admin/users/delete]", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.get("/app-info", requireSuperUser, (_req, res) => {
   return res.json({
     success: true,

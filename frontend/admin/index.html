@@ -86,6 +86,17 @@
             <span class="admin-nav__icon">฿</span>
             Payment
           </button>
+          <button
+            class="admin-nav__item"
+            type="button"
+            data-view="owners"
+            id="admin-nav-owners"
+            data-admin-super-only
+            hidden
+          >
+            <span class="admin-nav__icon">👤</span>
+            Owners
+          </button>
           <a
             class="admin-nav__item admin-nav__item--link"
             id="admin-nav-open-booth"
@@ -575,6 +586,92 @@
             </footer>
           </div>
         </div>
+
+        <div id="view-owners" hidden>
+          <section class="admin-panel">
+            <div class="admin-panel__header">
+              <div>
+                <h2 class="admin-panel__title">Owner accounts</h2>
+                <p class="admin-panel__subtitle">
+                  สร้าง/ลบบัญชี owner ตาม tenant (ร้าน) — username ใช้ล็อกอิน backoffice
+                </p>
+              </div>
+            </div>
+
+            <section class="settings-card">
+              <header class="settings-card__header">
+                <h3 class="settings-card__title">สร้าง owner</h3>
+                <p class="settings-card__subtitle">รหัสผ่านอย่างน้อย 8 ตัวอักษร</p>
+              </header>
+              <div class="settings-card__body settings-card__body--stack payment-admin-form">
+                <label class="payment-admin-field">
+                  <span class="payment-admin-field__label">Username</span>
+                  <input
+                    class="admin-login__input"
+                    id="owner-create-username"
+                    type="text"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    placeholder="เช่น shop-a-admin"
+                  />
+                </label>
+                <label class="payment-admin-field">
+                  <span class="payment-admin-field__label">Password</span>
+                  <input
+                    class="admin-login__input"
+                    id="owner-create-password"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="••••••••"
+                  />
+                </label>
+                <label class="payment-admin-field">
+                  <span class="payment-admin-field__label">Tenant (ร้าน)</span>
+                  <select class="admin-login__input" id="owner-create-tenant">
+                    <option value="">— เลือก tenant —</option>
+                  </select>
+                </label>
+                <label class="payment-admin-field">
+                  <span class="payment-admin-field__label">Email (ไม่บังคับ)</span>
+                  <input
+                    class="admin-login__input"
+                    id="owner-create-email"
+                    type="email"
+                    autocomplete="off"
+                    placeholder="ops@example.com"
+                  />
+                </label>
+                <div class="payment-admin-actions">
+                  <button class="admin-btn admin-btn--primary" id="btn-create-owner" type="button">
+                    สร้าง owner
+                  </button>
+                </div>
+                <p class="admin-login__error" id="owner-create-error" hidden></p>
+                <p class="admin-modal__result" id="owner-create-success" hidden></p>
+              </div>
+            </section>
+
+            <div class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Tenant</th>
+                    <th>Email</th>
+                    <th>สร้างเมื่อ</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="owners-tbody">
+                  <tr>
+                    <td colspan="5" class="admin-table__empty">กำลังโหลด...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
 
@@ -591,6 +688,6 @@
       </div>
     </div>
 
-    <script src="/admin/js/admin.js?v=48"></script>
+    <script src="/admin/js/admin.js?v=49"></script>
   </body>
 </html>

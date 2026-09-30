@@ -92,6 +92,36 @@ function publicUser(row) {
   };
 }
 
+async function listOwners() {
+  const rows = await db.queryAll(
+    `SELECT id, username, email, role, tenant_id, created_at
+     FROM admin_users
+     WHERE role = 'owner'
+     ORDER BY username ASC`
+  );
+  return rows.map((row) => ({
+    ...publicUser(row),
+    created_at: row.created_at || null,
+  }));
+}
+
+async function deleteOwnerById(userId) {
+  const row = await findById(userId);
+  if (!row) {
+    return { ok: false, status: 404, message: "User not found" };
+  }
+  if (row.role !== "owner") {
+    return { ok: false, status: 403, message: "Only owner accounts can be deleted here" };
+  }
+  await db.execute(`DELETE FROM admin_users WHERE id = $1`, [userId]);
+  return { ok: true, user: publicUser(row) };
+}
+
+function isDuplicateUsernameError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("unique") || msg.includes("duplicate");
+}
+
 async function ensureBootstrapUsers() {
   const bootstrapPassword =
     config.adminBootstrapPassword || config.adminPassword || config.adminApiKey;
@@ -139,6 +169,9 @@ module.exports = {
   verifyPassword,
   hashPassword,
   createUser,
+  listOwners,
+  deleteOwnerById,
+  isDuplicateUsernameError,
   publicUser,
   ensureBootstrapUsers,
 };

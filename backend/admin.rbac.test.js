@@ -194,6 +194,52 @@ test("unsold booth visible to super not owner", async () => {
   assert.ok(!ownerSummary.data.booths.some((b) => b.booth_id === "the-receipt-club"));
 });
 
+test("super can manage owner accounts; owner cannot", async () => {
+  const superCookie = await login("superadmin", "test-admin-pass");
+  const ownerCookie = await login("owner-a", "owner-a-pass");
+
+  const listDenied = await jsonFetch("/api/admin/users/owners", { cookie: ownerCookie });
+  assert.equal(listDenied.res.status, 403);
+
+  const createDenied = await jsonFetch("/api/admin/users/owners", {
+    method: "POST",
+    cookie: ownerCookie,
+    body: { username: "hack-owner", password: "long-enough-pass", tenant_id: TENANT_A },
+  });
+  assert.equal(createDenied.res.status, 403);
+
+  const createOk = await jsonFetch("/api/admin/users/owners", {
+    method: "POST",
+    cookie: superCookie,
+    body: {
+      username: "shop-a-ops",
+      password: "shop-a-ops-pass",
+      tenant_id: TENANT_A,
+    },
+  });
+  assert.equal(createOk.res.status, 201, createOk.data?.message);
+  assert.equal(createOk.data.user.username, "shop-a-ops");
+
+  const listOk = await jsonFetch("/api/admin/users/owners", { cookie: superCookie });
+  assert.equal(listOk.res.status, 200);
+  assert.ok(listOk.data.owners.some((o) => o.username === "shop-a-ops"));
+
+  const deleteDenied = await jsonFetch(
+    `/api/admin/users/${createOk.data.user.id}`,
+    { method: "DELETE", cookie: ownerCookie }
+  );
+  assert.equal(deleteDenied.res.status, 403);
+
+  const deleteOk = await jsonFetch(`/api/admin/users/${createOk.data.user.id}`, {
+    method: "DELETE",
+    cookie: superCookie,
+  });
+  assert.equal(deleteOk.res.status, 200);
+
+  const listAfter = await jsonFetch("/api/admin/users/owners", { cookie: superCookie });
+  assert.ok(!listAfter.data.owners.some((o) => o.username === "shop-a-ops"));
+});
+
 test("x-admin-role super header does not elevate owner session", async () => {
   const cookie = await login("owner-a", "owner-a-pass");
   const clear = await jsonFetch("/api/admin/booths/shop-a-booth/clear-photo-sessions", {
