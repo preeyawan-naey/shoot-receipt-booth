@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const QRCode = require("qrcode");
 const { randomUUID } = require("crypto");
 const path = require("path");
@@ -18,6 +19,7 @@ const cronRoutes = require("./routes/cron");
 const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
 
 const app = express();
+app.set("trust proxy", 1);
 
 function resolveRequestBaseUrl(req) {
   const envUrl = process.env.PUBLIC_URL?.replace(/\/$/, "");
@@ -48,7 +50,8 @@ function resolveRequestBaseUrl(req) {
   return config.publicUrl;
 }
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/server-info", async (_req, res) => {
@@ -238,10 +241,27 @@ adminApp.get("/", (_req, res) => {
 adminApp.use("/css", express.static(path.join(adminDir, "css"), { redirect: false, maxAge: 0 }));
 adminApp.use("/js", express.static(path.join(adminDir, "js"), { redirect: false, maxAge: 0 }));
 
-adminApp.get("/:boothId", (req, res, next) => {
+adminApp.get("/:boothId", async (req, res, next) => {
   const boothId = String(req.params.boothId || "").trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(boothId)) {
     return next();
+  }
+  try {
+    const adminSessions = require("./adminSessions");
+    const adminAccess = require("./adminAccess");
+    const token = adminSessions.readSessionToken(req);
+    if (token) {
+      const session = await adminSessions.lookupSession(token);
+      if (session?.user?.role === "owner") {
+        const access = await adminAccess.assertOwnerBoothPageAccess(session.user, boothId);
+        if (!access.ok) {
+          res.status(404);
+          return res.sendFile(path.join(adminDir, "404.html"));
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[admin/spa/booth-scope]", error);
   }
   sendAdminIndex(res);
 });
@@ -274,6 +294,8 @@ async function startServer() {
     await db.initDb();
     const boothProfiles = require("./boothProfiles");
     await boothProfiles.ensureDefaultProfiles();
+    const adminUsers = require("./adminUsers");
+    await adminUsers.ensureBootstrapUsers();
     await storage.ensureSupabaseBuckets();
     const paymentSettings = require("./paymentSettings");
     await paymentSettings.migrateGlobalPaymentSettings();
@@ -309,4 +331,8 @@ async function startServer() {
   });
 }
 
-startServer();
+module.exports = { app, startServer };
+
+if (require.main === module) {
+  startServer();
+}

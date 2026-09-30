@@ -236,6 +236,29 @@ function runSqliteMigration() {
     sqlite.exec("ALTER TABLE booth_pairing_codes ADD COLUMN code_plain TEXT");
   }
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('super', 'owner')),
+      tenant_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_users_tenant_id ON admin_users (tenant_id);
+
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_user_id ON admin_sessions (user_id);
+  `);
+
   runSqlitePhotoSessionConsolidation();
 }
 

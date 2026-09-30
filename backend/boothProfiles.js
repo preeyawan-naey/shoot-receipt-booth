@@ -133,6 +133,7 @@ function profileFromRow(row) {
     supabase_bucket: row.supabase_bucket || defaultSupabaseBucketForBooth(row.booth_id),
     features: parseFeatures(row.features),
     is_active: row.is_active !== false && row.is_active !== 0,
+    tenant_id: row.tenant_id || null,
     created_at: row.created_at || null,
     updated_at: row.updated_at || null,
   };
@@ -154,11 +155,24 @@ function mergeWithBuiltinDefaults(profile, boothId) {
 
 async function getProfileRow(boothId) {
   return db.queryOne(
-    `SELECT booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, created_at, updated_at
+    `SELECT booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, tenant_id, created_at, updated_at
      FROM booth_profiles
      WHERE booth_id = $1`,
     [boothId]
   );
+}
+
+async function getProfileRowWithTenant(boothId) {
+  return getProfileRow(boothId);
+}
+
+async function listProfilesWithTenant() {
+  const rows = await db.queryAll(
+    `SELECT booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, tenant_id, created_at, updated_at
+     FROM booth_profiles
+     ORDER BY booth_id ASC`
+  );
+  return rows.filter((row) => !isLegacyBoothId(row.booth_id));
 }
 
 async function migrateSupabaseBucketDefaults() {
@@ -294,7 +308,7 @@ async function getProfile(boothIdRaw) {
 
 async function listProfiles() {
   const rows = await db.queryAll(
-    `SELECT booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, created_at, updated_at
+    `SELECT booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, tenant_id, created_at, updated_at
      FROM booth_profiles
      ORDER BY booth_id ASC`
   );
@@ -326,6 +340,12 @@ async function upsertProfile(input) {
       : existing?.is_active !== undefined
         ? existing.is_active !== false && existing.is_active !== 0
         : true;
+  const tenantId =
+    input?.tenant_id !== undefined
+      ? input.tenant_id === null || input.tenant_id === ""
+        ? null
+        : String(input.tenant_id)
+      : existing?.tenant_id ?? null;
 
   if (existing) {
     await db.execute(
@@ -338,6 +358,7 @@ async function upsertProfile(input) {
            supabase_bucket = $7,
            features = $8,
            is_active = $9,
+           tenant_id = $10,
            updated_at = ${db.getDbMode() === "postgres" ? "NOW()" : "datetime('now')"}
        WHERE booth_id = $1`,
       [
@@ -350,13 +371,14 @@ async function upsertProfile(input) {
         supabaseBucket,
         serializeFeatures(features),
         isActive ? 1 : 0,
+        tenantId,
       ]
     );
   } else {
     await db.execute(
       `INSERT INTO booth_profiles
-         (booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${db.getDbMode() === "postgres" ? "NOW(), NOW()" : "datetime('now'), datetime('now')"})`,
+         (booth_id, name, theme, home_image, home_logo, layout_set, supabase_bucket, features, is_active, tenant_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${db.getDbMode() === "postgres" ? "NOW(), NOW()" : "datetime('now'), datetime('now')"})`,
       [
         boothId,
         name,
@@ -367,6 +389,7 @@ async function upsertProfile(input) {
         supabaseBucket,
         serializeFeatures(features),
         isActive ? 1 : 0,
+        tenantId,
       ]
     );
   }
@@ -385,6 +408,8 @@ module.exports = {
   ensureDefaultProfiles,
   migrateLegacyBoothProfiles,
   getProfile,
+  getProfileRowWithTenant,
   listProfiles,
+  listProfilesWithTenant,
   upsertProfile,
 };

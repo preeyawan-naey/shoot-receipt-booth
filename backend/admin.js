@@ -59,7 +59,31 @@ function appendBoothFilter(boothId, whereParts, params) {
   params.push(boothId);
 }
 
-async function getDashboardMetrics(period, from, to, boothId = null) {
+function appendBoothIdsFilter(boothIds, whereParts, params) {
+  const ids = Array.isArray(boothIds) ? boothIds.filter(Boolean) : [];
+  if (!ids.length) return;
+  if (ids.length === 1) {
+    appendBoothFilter(ids[0], whereParts, params);
+    return;
+  }
+  const start = params.length + 1;
+  const placeholders = ids.map((_, index) => `$${start + index}`).join(", ");
+  whereParts.push(`booth_id IN (${placeholders})`);
+  params.push(...ids);
+}
+
+function applyMetricsBoothScope(scope, whereParts, params) {
+  if (!scope) return;
+  if (scope.boothId) {
+    appendBoothFilter(scope.boothId, whereParts, params);
+    return;
+  }
+  if (scope.boothIds?.length) {
+    appendBoothIdsFilter(scope.boothIds, whereParts, params);
+  }
+}
+
+async function getDashboardMetrics(period, from, to, scope = null) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
     return { ok: false, status: 400, message: "Invalid custom date range" };
@@ -70,7 +94,7 @@ async function getDashboardMetrics(period, from, to, boothId = null) {
   const { clause, params: dateParams } = buildCreatedAtFilter(range, 1);
   whereParts.push(clause);
   params.push(...dateParams);
-  appendBoothFilter(boothId, whereParts, params);
+  applyMetricsBoothScope(scope, whereParts, params);
 
   const aggregate = await db.queryOne(
     `SELECT
@@ -128,7 +152,7 @@ async function listPhotoHistory({
   search = "",
   page = 1,
   limit = 10,
-  boothId = null,
+  scope = null,
 }) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
@@ -158,11 +182,7 @@ async function listPhotoHistory({
     params.push(`%${trimmedSearch}%`);
   }
 
-  if (boothId) {
-    const idx = params.length + 1;
-    where.push(`booth_id = $${idx}`);
-    params.push(boothId);
-  }
+  applyMetricsBoothScope(scope, where, params);
 
   const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -249,7 +269,7 @@ async function exportPhotoHistory({
   from,
   to,
   search = "",
-  boothId = null,
+  scope = null,
 }) {
   const range = parsePeriod(period, from, to);
   if (period === "custom" && !range) {
@@ -275,11 +295,7 @@ async function exportPhotoHistory({
     params.push(`%${trimmedSearch}%`);
   }
 
-  if (boothId) {
-    const idx = params.length + 1;
-    where.push(`booth_id = $${idx}`);
-    params.push(boothId);
-  }
+  applyMetricsBoothScope(scope, where, params);
 
   const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -310,8 +326,10 @@ async function exportPhotoHistory({
   );
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const scope = boothId || "all-booths";
-  const filename = `shoot-dashboard-${scope}-${period || "all"}-${stamp}.csv`;
+  const scopeLabel =
+    scope?.boothId ||
+    (scope?.boothIds?.length === 1 ? scope.boothIds[0] : "scoped-booths");
+  const filename = `shoot-dashboard-${scopeLabel || "all-booths"}-${period || "all"}-${stamp}.csv`;
 
   return {
     ok: true,

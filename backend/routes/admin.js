@@ -9,6 +9,14 @@ const paymentSettings = require("../paymentSettings");
 const paymentSessions = require("../paymentSessions");
 const omise = require("../omise");
 const deviceTokens = require("../deviceTokens");
+const adminUsers = require("../adminUsers");
+const adminSessions = require("../adminSessions");
+const adminAccess = require("../adminAccess");
+const {
+  loadAdminSession,
+  requireAdminSession,
+  requireSuperUser,
+} = require("../middleware/adminSession");
 
 const router = express.Router();
 
@@ -21,140 +29,126 @@ function safeEqualString(a, b) {
   return crypto.timingSafeEqual(left, right);
 }
 
-function requireAdminKey(req, res, next) {
-  const key =
-    req.get("x-admin-key") ||
-    req.query.key ||
-    req.body?.admin_key;
-
-  if (!config.adminApiKey) {
-    return res.status(503).json({
-      success: false,
-      message: "Admin API is not configured (set ADMIN_API_KEY in .env)",
-    });
+function resolveAdminBoothId(req) {
+  const raw =
+    req.query.booth_id ||
+    req.query.boothId ||
+    req.body?.booth_id ||
+    req.body?.boothId ||
+    null;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return null;
   }
-
-  if (!key || key !== config.adminApiKey) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-
-  next();
+  return boothProfiles.normalizeBoothId(raw);
 }
 
-router.post("/login", async (req, res) => {
-  if (!config.adminApiKey) {
-    return res.status(503).json({
-      success: false,
-      message: "Admin login is not configured (set ADMIN_API_KEY in .env)",
-    });
-  }
+function sendAccessError(res, access) {
+  return res.status(access.status || 403).json({
+    success: false,
+    message: access.message || "Forbidden",
+  });
+}
 
-  if (!config.adminPassword) {
-    return res.status(503).json({
-      success: false,
-      message: "Admin login is not configured (set ADMIN_PASSWORD in .env)",
-    });
-  }
+async function scopeForMetrics(req) {
+  const boothId = resolveAdminBoothId(req);
+  const resolved = await adminAccess.resolveMetricsScope(req.adminUser, boothId);
+  if (resolved.error) return { error: resolved.error };
+  if (resolved.boothId) return { scope: { boothId: resolved.boothId } };
+  return { scope: { boothIds: resolved.boothIds } };
+}
 
-  const usernameRaw = String(req.body?.username ?? "").trim();
-  const username = usernameRaw.toLowerCase();
-  const password = String(req.body?.password ?? "");
-  const pathBoothId = req.body?.path_booth_id
-    ? boothProfiles.normalizeBoothId(req.body.path_booth_id)
-    : null;
+async function assertBoothOperationalAccess(req, boothIdRaw) {
+  const access = await adminAccess.assertOwnerBoothPageAccess(req.adminUser, boothIdRaw);
+  return access;
+}
 
-  if (!safeEqualString(password, config.adminPassword)) {
-    return res.status(401).json({
-      success: false,
-      message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
-    });
-  }
+router.use(loadAdminSession);
 
-  if (safeEqualString(username, config.adminUsername)) {
-    return res.json({
-      success: true,
-      token: config.adminApiKey,
-      role: "super",
-      booth_id: pathBoothId,
-    });
-  }
-
-  const boothId = boothProfiles.normalizeBoothId(username);
-  if (username !== boothId) {
-    return res.status(401).json({
-      success: false,
-      message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
-    });
-  }
-
-  if (pathBoothId && pathBoothId !== boothId) {
-    return res.status(401).json({
-      success: false,
-      message: "Username ต้องตรงกับ booth ของหน้านี้",
-    });
-  }
-
+router.post("/auth/login", async (req, res) => {
   try {
-    const profile = await boothProfiles.getProfile(boothId);
-    if (!profile?.is_active) {
-      return res.status(401).json({
+    const username = adminUsers.normalizeUsername(req.body?.username);
+    const password = String(req.body?.password ?? "");
+
+    if (!username || !password) {
+      return res.status(400).json({
         success: false,
-        message: "Booth นี้ถูกปิดใช้งาน",
+        message: "username and password are required",
       });
     }
 
+    let user = await adminUsers.findByUsername(username);
+
+    if (
+      !user &&
+      config.legacyAdminLogin &&
+      safeEqualString(username, config.adminUsername) &&
+      config.adminPassword &&
+      safeEqualString(password, config.adminPassword)
+    ) {
+      user = await adminUsers.findByUsername(config.adminUsername);
+      if (!user) {
+        return res.status(503).json({
+          success: false,
+          message: "Super user not bootstrapped — set ADMIN_PASSWORD and restart",
+        });
+      }
+    }
+
+    if (!user || !(await adminUsers.verifyPassword(user, password))) {
+      return res.status(401).json({
+        success: false,
+        message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+      });
+    }
+
+    const { token } = await adminSessions.createSession(user.id);
+    adminSessions.setSessionCookie(res, token);
+
     return res.json({
       success: true,
-      token: config.adminApiKey,
-      role: "booth",
-      booth_id: boothId,
-      booth_name: profile.name || boothId,
+      user: adminUsers.publicUser(user),
     });
   } catch (error) {
-    console.error("[admin/login/booth]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("[admin/auth/login]", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
-router.use(requireAdminKey);
-
-function requireSuperAdminRole(req, res, next) {
-  const role = String(req.get("x-admin-role") || "").trim().toLowerCase();
-  if (role !== "super") {
-    return res.status(403).json({
-      success: false,
-      message: "Super admin only",
-    });
+router.post("/auth/logout", async (req, res) => {
+  try {
+    const token = adminSessions.readSessionToken(req);
+    await adminSessions.revokeSession(token);
+    adminSessions.clearSessionCookie(res);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("[admin/auth/logout]", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
-  return next();
-}
+});
+
+router.get("/auth/me", requireAdminSession, (req, res) => {
+  return res.json({ success: true, user: req.adminUser });
+});
+
+router.use(requireAdminSession);
 
 router.get("/dashboard", async (req, res) => {
   try {
     const { period = "today", from, to } = req.query;
-    const boothId = resolveAdminBoothId(req);
-    const result = await admin.getDashboardMetrics(period, from, to, boothId);
+    const scoped = await scopeForMetrics(req);
+    if (scoped.error) return sendAccessError(res, scoped.error);
 
+    const result = await admin.getDashboardMetrics(period, from, to, scoped.scope);
     if (!result.ok) {
       return res.status(result.status).json({
         success: false,
         message: result.message,
       });
     }
-
     return res.json({ success: true, ...result });
   } catch (error) {
     console.error("[admin/dashboard]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -169,7 +163,9 @@ router.get("/photos", async (req, res) => {
       limit = "10",
     } = req.query;
 
-    const boothId = resolveAdminBoothId(req);
+    const scoped = await scopeForMetrics(req);
+    if (scoped.error) return sendAccessError(res, scoped.error);
+
     const result = await admin.listPhotoHistory({
       period,
       from,
@@ -177,7 +173,7 @@ router.get("/photos", async (req, res) => {
       search,
       page,
       limit,
-      boothId,
+      scope: scoped.scope,
     });
 
     if (!result.ok) {
@@ -186,55 +182,25 @@ router.get("/photos", async (req, res) => {
         message: result.message,
       });
     }
-
     return res.json({ success: true, ...result });
   } catch (error) {
     console.error("[admin/photos]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
 router.get("/photos/export", async (req, res) => {
   try {
     const { period = "today", from, to, search = "" } = req.query;
-    const role = String(req.get("x-admin-role") || "").trim().toLowerCase();
-    const boothFromQuery = resolveAdminBoothId(req);
-    let boothId = boothFromQuery;
-
-    if (role === "booth") {
-      const sessionBooth =
-        req.get("x-admin-booth-id") ||
-        req.query.booth_id ||
-        req.query.boothId ||
-        null;
-      boothId = sessionBooth ? boothProfiles.normalizeBoothId(sessionBooth) : boothFromQuery;
-      if (!boothId) {
-        return res.status(400).json({
-          success: false,
-          message: "booth_id is required for booth admin export",
-        });
-      }
-    } else if (role !== "super") {
-      boothId = boothFromQuery;
-    } else {
-      const allBooths =
-        req.query.all_booths === "1" ||
-        req.query.all_booths === "true" ||
-        req.query.allBooths === "1";
-      if (allBooths) {
-        boothId = null;
-      }
-    }
+    const scoped = await scopeForMetrics(req);
+    if (scoped.error) return sendAccessError(res, scoped.error);
 
     const result = await admin.exportPhotoHistory({
       period,
       from,
       to,
       search,
-      boothId,
+      scope: scoped.scope,
     });
 
     if (!result.ok) {
@@ -249,38 +215,22 @@ router.get("/photos/export", async (req, res) => {
     return res.send(result.csv);
   } catch (error) {
     console.error("[admin/photos/export]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
-
-function resolveAdminBoothId(req) {
-  const raw =
-    req.query.booth_id ||
-    req.query.boothId ||
-    req.body?.booth_id ||
-    req.body?.boothId ||
-    req.get("x-admin-booth-id") ||
-    null;
-  if (raw === undefined || raw === null || String(raw).trim() === "") {
-    return null;
-  }
-  return boothProfiles.normalizeBoothId(raw);
-}
 
 router.get("/settings", async (req, res) => {
   try {
     const boothId = resolveAdminBoothId(req);
+    if (boothId) {
+      const access = await assertBoothOperationalAccess(req, boothId);
+      if (!access.ok) return sendAccessError(res, access);
+    }
     const settings = await boothSettings.getSettings(boothId);
     return res.json({ success: true, settings });
   } catch (error) {
     console.error("[admin/settings]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -315,23 +265,29 @@ async function buildAdminPaymentPayload(boothIdRaw) {
 router.get("/payment", async (req, res) => {
   try {
     const boothId = resolveAdminBoothId(req);
+    if (!boothId) {
+      return res.status(400).json({ success: false, message: "booth_id is required" });
+    }
+    const access = await assertBoothOperationalAccess(req, boothId);
+    if (!access.ok) return sendAccessError(res, access);
+
     const payment = await buildAdminPaymentPayload(boothId);
-    return res.json({
-      success: true,
-      payment,
-    });
+    return res.json({ success: true, payment });
   } catch (error) {
     console.error("[admin/payment]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
 router.patch("/payment", async (req, res) => {
   try {
     const boothId = resolveAdminBoothId(req);
+    if (!boothId) {
+      return res.status(400).json({ success: false, message: "booth_id is required" });
+    }
+    const access = await assertBoothOperationalAccess(req, boothId);
+    if (!access.ok) return sendAccessError(res, access);
+
     const amount = req.body?.payment_amount;
     const paymentTiersRaw = req.body?.payment_tiers;
     const omiseEnabledRaw = req.body?.omise_enabled;
@@ -352,6 +308,17 @@ router.patch("/payment", async (req, res) => {
     let paymentMode = hasPaymentMode
       ? await paymentSettings.setPaymentMode(boothId, paymentModeRaw)
       : await paymentSettings.getPaymentMode(boothId);
+
+    if (req.adminUser.role === "owner" && hasPaymentMode && paymentModeRaw === "omise") {
+      return res.status(403).json({
+        success: false,
+        message: "Omise mode is super admin only",
+      });
+    }
+
+    if (hasOmiseToggle && !hasPaymentMode && req.adminUser.role !== "super") {
+      return res.status(403).json({ success: false, message: "Super admin only" });
+    }
 
     if (hasOmiseToggle && !hasPaymentMode) {
       paymentMode = Boolean(omiseEnabledRaw)
@@ -393,16 +360,19 @@ router.patch("/payment", async (req, res) => {
     return res.json({ success: true, payment });
   } catch (error) {
     console.error("[admin/payment]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
 router.post("/payment/qr", async (req, res) => {
   try {
     const boothId = resolveAdminBoothId(req);
+    if (!boothId) {
+      return res.status(400).json({ success: false, message: "booth_id is required" });
+    }
+    const access = await assertBoothOperationalAccess(req, boothId);
+    if (!access.ok) return sendAccessError(res, access);
+
     const imageBase64 = req.body?.image_base64 || req.body?.imageBase64 || "";
     const normalized = String(imageBase64).trim();
     if (!normalized) {
@@ -417,10 +387,7 @@ router.post("/payment/qr", async (req, res) => {
     try {
       buffer = Buffer.from(payload, "base64");
     } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid base64 image",
-      });
+      return res.status(400).json({ success: false, message: "Invalid base64 image" });
     }
 
     if (!buffer.length || buffer.length > 4 * 1024 * 1024) {
@@ -439,16 +406,18 @@ router.post("/payment/qr", async (req, res) => {
     });
   } catch (error) {
     console.error("[admin/payment/qr]", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
-router.get("/booth-profiles", async (_req, res) => {
+router.get("/booth-profiles", async (req, res) => {
   try {
-    const profiles = await boothProfiles.listProfiles();
+    let profiles = await boothProfiles.listProfiles();
+    if (req.adminUser.role === "owner") {
+      profiles = profiles.filter((profile) =>
+        adminAccess.ownerCanSeeBooth(req.adminUser, profile.tenant_id)
+      );
+    }
     return res.json({ success: true, profiles });
   } catch (error) {
     console.error("[admin/booth-profiles/list]", error);
@@ -456,7 +425,7 @@ router.get("/booth-profiles", async (_req, res) => {
   }
 });
 
-router.get("/app-info", (_req, res) => {
+router.get("/app-info", requireSuperUser, (_req, res) => {
   return res.json({
     success: true,
     app: getAndroidAppInfo(),
@@ -464,7 +433,7 @@ router.get("/app-info", (_req, res) => {
   });
 });
 
-router.get("/booths/summary", async (_req, res) => {
+router.get("/booths/summary", async (req, res) => {
   try {
     const profiles = (await boothProfiles.listProfiles()).filter(
       (profile) => !boothProfiles.isLegacyBoothId(profile.booth_id)
@@ -478,13 +447,15 @@ router.get("/booths/summary", async (_req, res) => {
           is_active: profile.is_active !== false,
           theme: profile.theme,
           layout_set: profile.layout_set,
+          tenant_id: profile.tenant_id || null,
           features: profile.features || boothProfiles.DEFAULT_FEATURES,
           payment_mode: paymentMode,
           payment_enabled: paymentMode !== "free",
         };
       })
     );
-    return res.json({ success: true, booths });
+    const filtered = await adminAccess.filterBoothsSummaryForUser(req.adminUser, booths);
+    return res.json({ success: true, booths: filtered });
   } catch (error) {
     console.error("[admin/booths/summary]", error);
     return res.status(500).json({ success: false, message: error.message });
@@ -493,6 +464,8 @@ router.get("/booths/summary", async (_req, res) => {
 
 router.get("/booth-profiles/:boothId", async (req, res) => {
   try {
+    const access = await assertBoothOperationalAccess(req, req.params.boothId);
+    if (!access.ok) return sendAccessError(res, access);
     const profile = await boothProfiles.getProfile(req.params.boothId);
     return res.json({ success: true, profile });
   } catch (error) {
@@ -503,6 +476,16 @@ router.get("/booth-profiles/:boothId", async (req, res) => {
 
 router.put("/booth-profiles/:boothId", async (req, res) => {
   try {
+    const access = await assertBoothOperationalAccess(req, req.params.boothId);
+    if (!access.ok) return sendAccessError(res, access);
+    if (req.adminUser.role === "owner") {
+      const allowed = { features: req.body?.features };
+      const profile = await boothProfiles.upsertProfile({
+        booth_id: req.params.boothId,
+        features: allowed.features,
+      });
+      return res.json({ success: true, profile });
+    }
     const profile = await boothProfiles.upsertProfile({
       ...req.body,
       booth_id: req.params.boothId,
@@ -514,7 +497,7 @@ router.put("/booth-profiles/:boothId", async (req, res) => {
   }
 });
 
-router.post("/booth-profiles", async (req, res) => {
+router.post("/booth-profiles", requireSuperUser, async (req, res) => {
   try {
     const boothId = req.body?.booth_id;
     if (!boothId) {
@@ -530,6 +513,8 @@ router.post("/booth-profiles", async (req, res) => {
 
 router.get("/booths/:boothId/device-auth", async (req, res) => {
   try {
+    const access = await assertBoothOperationalAccess(req, req.params.boothId);
+    if (!access.ok) return sendAccessError(res, access);
     const status = await deviceTokens.getDeviceTokenStatus(req.params.boothId);
     return res.json({ success: true, ...status });
   } catch (error) {
@@ -540,6 +525,8 @@ router.get("/booths/:boothId/device-auth", async (req, res) => {
 
 router.post("/booths/:boothId/pairing-code", async (req, res) => {
   try {
+    const access = await assertBoothOperationalAccess(req, req.params.boothId);
+    if (!access.ok) return sendAccessError(res, access);
     const result = await deviceTokens.createPairingCode(req.params.boothId);
     return res.status(201).json({
       success: true,
@@ -555,6 +542,8 @@ router.post("/booths/:boothId/pairing-code", async (req, res) => {
 
 router.post("/booths/:boothId/revoke-device-token", async (req, res) => {
   try {
+    const access = await assertBoothOperationalAccess(req, req.params.boothId);
+    if (!access.ok) return sendAccessError(res, access);
     const result = await deviceTokens.revokeDeviceTokens(req.params.boothId);
     return res.json({ success: true, ...result });
   } catch (error) {
@@ -575,12 +564,12 @@ async function handleClearBoothPhotoSessions(req, res) {
 
 router.delete(
   "/booths/:boothId/photo-sessions",
-  requireSuperAdminRole,
+  requireSuperUser,
   handleClearBoothPhotoSessions
 );
 router.post(
   "/booths/:boothId/clear-photo-sessions",
-  requireSuperAdminRole,
+  requireSuperUser,
   handleClearBoothPhotoSessions
 );
 

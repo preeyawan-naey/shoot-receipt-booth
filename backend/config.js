@@ -50,15 +50,23 @@ const config = {
   publicUrl: resolvePublicUrl(),
   lanIp: getLocalIP(),
   databaseUrl: process.env.DATABASE_URL || "",
-  sqlitePath: path.join(__dirname, "data", "tickets.db"),
+  sqlitePath: process.env.SQLITE_PATH || path.join(__dirname, "data", "tickets.db"),
   databaseSsl:
     process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
   adminApiKey: process.env.ADMIN_API_KEY || "",
   adminUsername: process.env.ADMIN_USERNAME || "admin",
-  adminPassword:
+  adminPassword: process.env.ADMIN_PASSWORD || "",
+  adminBootstrapPassword:
+    process.env.ADMIN_BOOTSTRAP_PASSWORD ||
     process.env.ADMIN_PASSWORD ||
-    process.env.ADMIN_API_KEY ||
     "",
+  legacyAdminLogin: process.env.LEGACY_ADMIN_LOGIN === "true",
+  adminSessionSecret:
+    process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_API_KEY || "dev-session-secret",
+  adminSessionCookieName: process.env.ADMIN_SESSION_COOKIE_NAME || "shoot_admin_session",
+  adminSessionTtlMs: Number(process.env.ADMIN_SESSION_TTL_MS) || 7 * 24 * 60 * 60 * 1000,
+  internalTenantId:
+    process.env.INTERNAL_TENANT_ID || "00000000-0000-4000-8000-000000000001",
   bankWebhookSecret: process.env.BANK_WEBHOOK_SECRET || "",
   omisePublicKey:
     process.env.OMISE_PUBLIC_KEY || process.env.PUBLIC_KEY || "",
