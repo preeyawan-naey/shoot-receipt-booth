@@ -12,7 +12,9 @@
     to: "",
     search: "",
     page: 1,
-    limit: 20,
+    limit: 10,
+    boothListSearch: "",
+    boothDetailTab: "overview",
     view: "dashboard",
     paymentBoothId: "the-receipt-club",
     pathBoothId: null,
@@ -26,6 +28,8 @@
     boothDetailPayment: null,
     boothPaymentEnabled: true,
     boothPaymentLoadedFor: "",
+    paymentSettingsSaved: null,
+    paymentQrPendingFile: null,
   };
 
   let ownerPasswordResetUserId = null;
@@ -108,6 +112,9 @@
     try {
       const view = new URLSearchParams(window.location.search).get(ADMIN_VIEW_QUERY_KEY);
       if (view && ADMIN_VIEWS.has(view)) {
+        if (!canViewSuperAdminPanels() && (view === "owners" || view === "booths")) {
+          return "dashboard";
+        }
         if (view === "owners" && !canViewSuperAdminPanels()) return "dashboard";
         return view;
       }
@@ -303,6 +310,41 @@
     memoryAdminUser = user ? { ...user } : null;
     memoryRole = user?.role || "";
     memoryBoothName = "";
+    updateSidebarSessionUi();
+  }
+
+  function getUserInitials(username) {
+    const raw = String(username || "").trim();
+    if (!raw) return "—";
+    const parts = raw.split(/[^a-z0-9]+/i).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return raw.slice(0, 2).toUpperCase();
+  }
+
+  function updateSidebarSessionUi() {
+    const avatar = $("#admin-sidebar-avatar");
+    const usernameEl = $("#admin-sidebar-username");
+    const roleEl = $("#admin-sidebar-role");
+    const username = memoryAdminUser?.username || "";
+    if (avatar) avatar.textContent = getUserInitials(username);
+    if (usernameEl) usernameEl.textContent = username || "—";
+    if (roleEl) {
+      roleEl.textContent = isSuperAdminSession() ? "Super admin" : "Booth owner";
+    }
+
+    const boothCard = $("#admin-sidebar-booth-card");
+    const boothNameEl = $("#admin-sidebar-booth-name");
+    const boothIdEl = $("#admin-sidebar-booth-id");
+    const showOwnerCard = isBoothScopedAdmin() && isLoggedIn();
+    if (boothCard) boothCard.hidden = !showOwnerCard;
+    if (showOwnerCard) {
+      const boothId = getActiveBoothId();
+      const boothName = resolveActiveBoothDisplayName(boothId);
+      if (boothNameEl) boothNameEl.textContent = boothName || boothId || "—";
+      if (boothIdEl) boothIdEl.textContent = boothId || "—";
+    }
   }
 
   async function logoutAdminSession() {
@@ -443,6 +485,26 @@
     return `อัปโหลด QR แล้ว · booth: ${boothId}`;
   }
 
+  function formatPendingPaymentQrMeta() {
+    const boothId = getSelectedPaymentBoothId();
+    return `อัปโหลดแล้ว — ${formatDate(new Date().toISOString())} (ยังไม่บันทึก) · booth: ${boothId}`;
+  }
+
+  function setPaymentQrPreviewVisible(hasImage) {
+    const frame = $("#payment-qr-frame");
+    const qrPreview = $("#payment-qr-preview");
+    const placeholder = $("#payment-qr-placeholder");
+    if (frame) frame.classList.toggle("payment-qr-upload__frame--filled", hasImage);
+    if (qrPreview) qrPreview.hidden = !hasImage;
+    if (placeholder) placeholder.hidden = hasImage;
+  }
+
+  function clearPendingPaymentQrFile() {
+    state.paymentQrPendingFile = null;
+    const fileInput = $("#payment-qr-file");
+    if (fileInput) fileInput.value = "";
+  }
+
   async function renderPaymentQrPreview(payment) {
     const qrPreview = $("#payment-qr-preview");
     const qrStatus = $("#payment-qr-status");
@@ -450,16 +512,17 @@
     if (!src || !qrPreview) {
       clearPaymentQrPreviewObjectUrl();
       if (qrPreview) {
-        qrPreview.hidden = true;
         qrPreview.removeAttribute("src");
       }
-      if (qrStatus) qrStatus.textContent = "ยังไม่ได้อัปโหลด QR";
+      setPaymentQrPreviewVisible(false);
+      const ph = $("#payment-qr-placeholder");
+      if (ph) ph.textContent = "ยังไม่มี QR";
+      if (qrStatus) qrStatus.textContent = "ยังไม่ได้อัปโหลด";
       return;
     }
 
     paymentQrPreviewLoadGen += 1;
     const loadId = paymentQrPreviewLoadGen;
-    qrPreview.hidden = false;
 
     try {
       const res = await fetch(src, { cache: "no-store" });
@@ -472,9 +535,13 @@
       clearPaymentQrPreviewObjectUrl();
       paymentQrPreviewObjectUrl = URL.createObjectURL(blob);
       qrPreview.src = paymentQrPreviewObjectUrl;
+      setPaymentQrPreviewVisible(true);
       if (qrStatus) qrStatus.textContent = formatPaymentQrStatus(payment);
     } catch (error) {
       console.warn("[admin] payment qr preview failed:", error.message, src);
+      setPaymentQrPreviewVisible(false);
+      const ph = $("#payment-qr-placeholder");
+      if (ph) ph.textContent = "QR PromptPay\n(โหลด preview ไม่สำเร็จ)";
       if (qrStatus) {
         qrStatus.textContent = `โหลด preview ไม่สำเร็จ (${error.message}) — ลอง refresh`;
       }
@@ -487,11 +554,11 @@
     if (!qrPreview || !dataUrl) return;
     clearPaymentQrPreviewObjectUrl();
     qrPreview.src = dataUrl;
-    qrPreview.hidden = false;
+    setPaymentQrPreviewVisible(true);
     if (qrStatus) {
       qrStatus.textContent = payment
         ? formatPaymentQrStatus(payment)
-        : "บันทึกแล้ว — แสดง QR จากไฟล์ที่อัปโหลด";
+        : formatPendingPaymentQrMeta();
     }
   }
 
@@ -521,18 +588,18 @@
     const steps = ["Home / START"];
 
     if (paymentEnabled) {
-      steps.push("Package", "Payment");
+      steps.push("เลือก Package", "ชำระเงิน");
     }
     if (resolveBoothFeature(features, "guest_name")) {
-      steps.push("Enter name");
+      steps.push("กรอกชื่อ");
     }
-    steps.push("Layout");
+    steps.push("เลือก Layout");
     if (resolveBoothFeature(features, "frame_select")) {
-      steps.push("Frame");
+      steps.push("เลือก Frame");
     }
-    steps.push("Camera", "Preview / Print");
+    steps.push("ถ่ายรูป ⇄ Preview (ถ่ายใหม่ได้)", "ปริ้น");
     if (resolveBoothFeature(features, "receipt_download_qr")) {
-      steps.push("QR Download");
+      steps.push("QR ดาวน์โหลด");
     }
     return steps;
   }
@@ -540,11 +607,11 @@
   function renderBoothFlowSteps(steps) {
     return steps
       .map((step, index) => {
-        const arrow =
-          index < steps.length - 1
-            ? '<span class="booth-flow__arrow" aria-hidden="true">→</span>'
-            : "";
-        return `<li class="booth-flow__step">${escapeHtml(step)}</li>${arrow}`;
+        const isLast = index === steps.length - 1;
+        return `<li class="booth-flow-v__item${isLast ? " booth-flow-v__item--last" : ""}">
+          <span class="booth-flow-v__num">${index + 1}</span>
+          <span class="booth-flow-v__label">${escapeHtml(step)}</span>
+        </li>`;
       })
       .join("");
   }
@@ -563,24 +630,25 @@
       const meta = BOOTH_FEATURE_META[key] || { label: key, hint: "" };
       const enabled = resolveBoothFeature(features, key);
       const disabledAttr = editable ? "" : " disabled";
+      const stateLabel = enabled ? "เปิด" : "ปิด";
       return `
-        <div class="booth-feature-row">
-          <div>
+        <div class="booth-feature-row" data-booth-feature-row="${escapeHtml(key)}">
+          <div class="booth-feature-row__copy">
             <p class="booth-feature-row__label">${escapeHtml(meta.label)}</p>
             <p class="booth-feature-row__hint">${escapeHtml(meta.hint)}</p>
           </div>
-          <label class="admin-toggle admin-toggle--compact booth-feature-toggle">
-            <input
-              type="checkbox"
-              data-booth-feature="${escapeHtml(key)}"
-              data-booth-id="${escapeHtml(boothId)}"
-              ${enabled ? "checked" : ""}${disabledAttr}
-            />
-            <span class="admin-toggle__track" aria-hidden="true"></span>
-            <span class="admin-toggle__text">
-              <span class="admin-toggle__label">${enabled ? "เปิด" : "ปิด"}</span>
-            </span>
-          </label>
+          <div class="booth-feature-row__control">
+            <span class="booth-feature-row__state" data-booth-feature-state="${escapeHtml(key)}">${stateLabel}</span>
+            <label class="admin-toggle admin-toggle--handoff booth-feature-toggle">
+              <input
+                type="checkbox"
+                data-booth-feature="${escapeHtml(key)}"
+                data-booth-id="${escapeHtml(boothId)}"
+                ${enabled ? "checked" : ""}${disabledAttr}
+              />
+              <span class="admin-toggle__track" aria-hidden="true"></span>
+            </label>
+          </div>
         </div>
       `;
     }).join("");
@@ -601,10 +669,56 @@
     state.boothDetailFeatures = { ...next };
   }
 
-  function updateBoothFeaturesSaveBar() {
+  let boothFeaturesSaveMsgTimer = null;
+  let paymentSaveMsgTimer = null;
+
+  function syncAdminSaveDocks() {
+    const featuresDock = $("#booth-features-dock");
+    const paymentDock = $("#payment-save-dock");
+    const detailPanel = $("#booth-detail-panel");
+    const showFeaturesDock =
+      state.view === "booths" &&
+      Boolean(state.boothDetailId) &&
+      detailPanel &&
+      !detailPanel.hidden &&
+      state.boothDetailTab === "flow";
+    const showPaymentDock = state.view === "payment";
+
+    if (featuresDock) featuresDock.hidden = !showFeaturesDock;
+    if (paymentDock) paymentDock.hidden = !showPaymentDock;
+    document.body.classList.toggle("admin-body--save-dock", showFeaturesDock || showPaymentDock);
+  }
+
+  function updateBoothFeaturesSaveBar(options = {}) {
     const bar = $("#booth-features-save-bar");
+    const msgEl = $("#booth-features-save-msg");
+    const saveBtn = $("#btn-booth-features-save");
+    const cancelBtn = $("#btn-booth-features-cancel");
     if (!bar) return;
-    bar.hidden = !boothFeaturesAreDirty();
+
+    syncAdminSaveDocks();
+
+    const dirty = boothFeaturesAreDirty();
+    bar.classList.toggle("admin-save-bar--dirty", dirty);
+    bar.classList.remove("admin-save-bar--warn");
+
+    if (msgEl && !options.preserveMessage) {
+      msgEl.textContent = dirty ? "มีการเปลี่ยนแปลงที่ยังไม่บันทึก" : "บันทึกล่าสุดแล้ว";
+    }
+
+    if (saveBtn) saveBtn.disabled = !dirty;
+    if (cancelBtn) cancelBtn.disabled = !dirty;
+  }
+
+  function flashBoothFeaturesSavedMessage() {
+    const msgEl = $("#booth-features-save-msg");
+    if (!msgEl) return;
+    if (boothFeaturesSaveMsgTimer) window.clearTimeout(boothFeaturesSaveMsgTimer);
+    msgEl.textContent = "บันทึก features แล้ว — หน้าบูธ sync ภายใน ~15 วินาที";
+    boothFeaturesSaveMsgTimer = window.setTimeout(() => {
+      updateBoothFeaturesSaveBar();
+      boothFeaturesSaveMsgTimer = null;
+    }, 2200);
   }
 
   function updateBoothFlowPreview(features) {
@@ -706,7 +820,7 @@
         url: `${origin}/?booth=${encodedBoothId}`,
       },
       {
-        label: "Backoffice ตู้นี้",
+        label: "The Receipt Club ตู้นี้",
         url: `${origin}/admin/${encodedBoothId}`,
       },
       {
@@ -836,10 +950,13 @@
     const detailPanel = $("#booth-detail-panel");
     if (listPanel) listPanel.hidden = false;
     if (detailPanel) detailPanel.hidden = true;
+    showAdminView("booths");
+    syncAdminSaveDocks();
   }
 
   async function showBoothDetail(boothId) {
     state.boothDetailId = boothId;
+    state.boothDetailTab = "overview";
     const clearHint = $("#booth-clear-dashboard-hint");
     if (clearHint) clearHint.hidden = true;
     syncAdminViewInUrl("booths", { replace: true });
@@ -850,6 +967,8 @@
     const detailPanel = $("#booth-detail-panel");
     if (listPanel) listPanel.hidden = true;
     if (detailPanel) detailPanel.hidden = false;
+    showAdminView("booths");
+    syncAdminSaveDocks();
 
     const cached = state.boothsCache.find((booth) => booth.booth_id === boothId);
     if (cached) {
@@ -1175,6 +1294,13 @@
     setText("booth-detail-name", name);
     setText("booth-detail-id", `booth_id: ${boothId}`);
 
+    const openFrontend = $("#btn-booth-open-frontend");
+    if (openFrontend) {
+      openFrontend.href = `/?booth=${encodeURIComponent(boothId)}`;
+    }
+
+    setBoothDetailTab(state.boothDetailTab || "overview");
+
     const badges = $("#booth-detail-badges");
     if (badges) {
       badges.innerHTML = `
@@ -1223,28 +1349,45 @@
     const tbody = $("#booths-tbody");
     if (!tbody) return;
 
-    const rows = filterBoothsForSession(booths);
+    const allRows = filterBoothsForSession(booths);
+    const titleEl = $("#booths-list-title");
+    if (titleEl) {
+      titleEl.textContent = `Booth ทั้งหมด · ${allRows.length}`;
+    }
+
+    const q = String(state.boothListSearch || "").trim().toLowerCase();
+    let rows = allRows;
+    if (q) {
+      rows = allRows.filter((booth) => {
+        const name = String(booth.name || "").toLowerCase();
+        const id = String(booth.booth_id || "").toLowerCase();
+        return name.includes(q) || id.includes(q);
+      });
+    }
+
     if (!rows.length) {
-      tbody.innerHTML =
-        '<tr><td colspan="5" class="admin-table__empty">ไม่พบ booth</td></tr>';
+      tbody.innerHTML = q
+        ? `<tr><td colspan="4" class="admin-table__empty">ไม่พบตู้ที่ตรงกับ “${escapeHtml(q)}”</td></tr>`
+        : '<tr><td colspan="4" class="admin-table__empty">ไม่พบ booth</td></tr>';
       return;
     }
 
     tbody.innerHTML = rows
       .map((booth) => {
-        const statusClass = booth.is_active !== false ? "status-badge--paid" : "status-badge--expired";
-        const statusLabel = booth.is_active !== false ? "Active" : "Inactive";
+        const isActive = booth.is_active !== false;
+        const statusClass = isActive ? "status-badge--paid" : "status-badge--expired";
+        const statusLabel = isActive ? "Active" : "Inactive";
         const paymentLabel = paymentModeLabel(booth.payment_mode);
         return `
           <tr data-booth-id="${escapeHtml(booth.booth_id)}">
-            <td><strong>${escapeHtml(booth.name || booth.booth_id)}</strong></td>
-            <td><code>${escapeHtml(booth.booth_id)}</code></td>
-            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-            <td><span class="status-badge status-badge--${escapeHtml(booth.payment_mode || "static_qr")}">${escapeHtml(paymentLabel)}</span></td>
             <td>
-              <button class="admin-table__action-btn" type="button" data-booth-open="${escapeHtml(booth.booth_id)}">
-                ดูรายละเอียด
-              </button>
+              <strong>${escapeHtml(booth.name || booth.booth_id)}</strong>
+              <span class="admin-table__booth-sub">${escapeHtml(booth.booth_id)}</span>
+            </td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td><span class="status-badge status-badge--outline">${escapeHtml(paymentLabel)}</span></td>
+            <td class="admin-table__cell-action">
+              <span class="admin-table__link-detail">ดูรายละเอียด →</span>
             </td>
           </tr>
         `;
@@ -1257,7 +1400,7 @@
     const tbody = $("#booths-tbody");
     if (tbody) {
       tbody.innerHTML =
-        '<tr><td colspan="5" class="admin-table__empty">กำลังโหลด...</td></tr>';
+        '<tr><td colspan="4" class="admin-table__empty">กำลังโหลด...</td></tr>';
     }
 
     try {
@@ -1267,7 +1410,7 @@
     } catch (error) {
       console.error("[admin/booths]", error);
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="5" class="admin-table__empty">โหลดไม่สำเร็จ: ${escapeHtml(error.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="admin-table__empty">โหลดไม่สำเร็จ: ${escapeHtml(error.message)}</td></tr>`;
       }
     }
   }
@@ -1305,6 +1448,10 @@
 
   function renderOwnersList(owners) {
     const tbody = $("#owners-tbody");
+    const titleEl = $("#owners-list-title");
+    if (titleEl) {
+      titleEl.textContent = `Owner accounts · ${owners.length}`;
+    }
     if (!tbody) return;
     if (!owners.length) {
       tbody.innerHTML =
@@ -1479,6 +1626,7 @@
         ok.hidden = false;
       }
       await loadOwnersAdmin();
+      closeOwnerDrawer();
     } catch (error) {
       if (err) {
         err.textContent = error.message;
@@ -1517,8 +1665,109 @@
     }
   }
 
+  function appendDashboardBoothScopeToQuery(params) {
+    if (state.pathBoothId) {
+      params.set("booth_id", state.pathBoothId);
+      return;
+    }
+    const select = $("#dashboard-booth-select");
+    const value = select?.value;
+    if (value && value !== "__all__") {
+      params.set("booth_id", value);
+    }
+  }
+
+  function isDashboardAllBooths() {
+    if (state.pathBoothId) return false;
+    const value = $("#dashboard-booth-select")?.value;
+    return !value || value === "__all__";
+  }
+
+  function getDashboardScopeLabel() {
+    if (state.pathBoothId) {
+      return resolveActiveBoothDisplayName(state.pathBoothId) || state.pathBoothId;
+    }
+    const value = $("#dashboard-booth-select")?.value;
+    if (!value || value === "__all__") return "ทุกตู้";
+    return resolveActiveBoothDisplayName(value) || value;
+  }
+
+  function formatHistoryTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    if (state.period === "today") {
+      return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleString("th-TH", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function formatLayoutCell(row) {
+    const layout = row.layout_id || "—";
+    if (!isDashboardAllBooths()) {
+      return escapeHtml(layout);
+    }
+    const boothName = resolveActiveBoothDisplayName(row.booth_id) || row.booth_id || "—";
+    return escapeHtml(`${layout} · ${boothName}`);
+  }
+
+  function formatSessionId(id) {
+    if (id == null || id === "") return "—";
+    return escapeHtml(String(id));
+  }
+
+  function setBoothDetailTab(tab) {
+    const next = tab || "overview";
+    state.boothDetailTab = next;
+    document.querySelectorAll(".booth-detail-tabs__item").forEach((btn) => {
+      btn.classList.toggle("booth-detail-tabs__item--active", btn.dataset.boothTab === next);
+    });
+    ["overview", "flow", "device", "config"].forEach((name) => {
+      const panel = document.getElementById(`booth-tab-${name}`);
+      if (panel) panel.hidden = name !== next;
+    });
+    syncAdminSaveDocks();
+  }
+
+  function updateTopbarActions(viewName) {
+    const el = $("#admin-topbar-actions");
+    if (!el) return;
+    if (viewName === "owners" && isSuperAdminSession()) {
+      el.innerHTML =
+        '<button class="admin-btn admin-btn--primary" type="button" id="btn-open-owner-drawer">+ สร้าง owner</button>';
+    } else {
+      el.innerHTML = "";
+    }
+  }
+
+  function openOwnerDrawer() {
+    hideOwnerFormMessages();
+    const drawer = $("#owner-create-drawer");
+    const backdrop = $("#owner-drawer-backdrop");
+    if (drawer) {
+      drawer.hidden = false;
+      drawer.setAttribute("aria-hidden", "false");
+    }
+    if (backdrop) backdrop.hidden = false;
+  }
+
+  function closeOwnerDrawer() {
+    const drawer = $("#owner-create-drawer");
+    const backdrop = $("#owner-drawer-backdrop");
+    if (drawer) {
+      drawer.hidden = true;
+      drawer.setAttribute("aria-hidden", "true");
+    }
+    if (backdrop) backdrop.hidden = true;
+  }
+
   function syncBoothSelectValues(boothId) {
-    if (!boothId) return;
+    if (!boothId || boothId === "__all__") return;
     state.paymentBoothId = boothId;
     const paymentSelect = $("#payment-booth-select");
     const dashboardSelect = $("#dashboard-booth-select");
@@ -1565,20 +1814,22 @@
     const boothsNav = $("#admin-nav-booths");
     const boothsNavLabel = $("#admin-nav-booths-label");
     if (boothsNav) {
-      boothsNav.hidden = Boolean(state.pathBoothId);
+      boothsNav.hidden = isBoothScopedAdmin();
     }
     if (boothsNavLabel) {
       boothsNavLabel.textContent = "Booths";
     }
     const openBoothNav = $("#admin-nav-open-booth");
     if (openBoothNav) {
-      const activeForBoothLink = getActiveBoothId();
-      const showOpenBooth = activeForBoothLink === OPEN_BOOTH_NAV_BOOTH_ID;
+      const showOpenBooth =
+        canViewSuperAdminPanels() && getActiveBoothId() === OPEN_BOOTH_NAV_BOOTH_ID;
       openBoothNav.hidden = !showOpenBooth;
       if (showOpenBooth) {
         openBoothNav.href = `/?booth=${encodeURIComponent(OPEN_BOOTH_NAV_BOOTH_ID)}`;
       }
     }
+
+    updateSidebarSessionUi();
 
     document.querySelectorAll("[data-admin-super-only]").forEach((el) => {
       el.hidden = !superAdmin;
@@ -1599,9 +1850,6 @@
     const paymentToggle = $("#payment-enabled-toggle");
     if (paymentToggle) paymentToggle.disabled = false;
 
-    const paymentFooter = document.querySelector(".payment-settings__footer");
-    if (paymentFooter) paymentFooter.hidden = false;
-
     const usernameInput = $("#admin-username-input");
     if (usernameInput) {
       usernameInput.readOnly = false;
@@ -1610,15 +1858,8 @@
       }
     }
 
-    const brandSubtitle = $("#admin-sidebar-booth");
-    const activeId = getActiveBoothId();
-    const boothLabel = resolveActiveBoothDisplayName(activeId);
-    if (brandSubtitle) {
-      brandSubtitle.textContent = activeId ? `Booth: ${boothLabel}` : "Receipt Booth";
-    }
-
-    if (activeId) {
-      syncBoothSelectValues(activeId);
+    if (getActiveBoothId()) {
+      syncBoothSelectValues(getActiveBoothId());
     }
   }
 
@@ -1646,11 +1887,21 @@
     try {
       const profiles = await fetchBoothProfileOptions();
       if (!profiles.length) return;
-      const preferred = isBoothScopedAdmin()
-        ? resolveOwnerPrimaryBoothId(profiles)
-        : getSelectedPaymentBoothId();
-      const boothId = renderBoothSelectOptions(select, profiles, preferred);
-      syncBoothSelectValues(boothId);
+      const previous = select.value || "__all__";
+      select.innerHTML =
+        `<option value="__all__">ทุกตู้</option>` +
+        profiles
+          .map((profile) => {
+            const boothId = profile.booth_id || "";
+            const label = profile.name || boothId;
+            return `<option value="${escapeHtml(boothId)}">${escapeHtml(label)}</option>`;
+          })
+          .join("");
+      if (previous === "__all__" || profiles.some((p) => p.booth_id === previous)) {
+        select.value = previous;
+      } else {
+        select.value = "__all__";
+      }
     } catch (error) {
       console.warn("[admin/dashboard-booths]", error);
     }
@@ -1664,7 +1915,7 @@
       if (state.to) params.set("to", state.to);
     }
     if (state.search) params.set("search", state.search);
-    appendBoothScopeToQuery(params);
+    appendDashboardBoothScopeToQuery(params);
     if (extra.page) params.set("page", String(extra.page));
     if (extra.limit) params.set("limit", String(extra.limit));
     return params.toString();
@@ -1679,7 +1930,7 @@
     }
     if (state.search) params.set("search", state.search);
 
-    appendBoothScopeToQuery(params);
+    appendDashboardBoothScopeToQuery(params);
     return params.toString();
   }
 
@@ -1885,21 +2136,14 @@
     const qs = buildQuery();
     const data = await apiFetch(`/dashboard?${qs}`);
     const m = data.metrics || {};
-    const boothId = getActiveBoothId();
-    const boothLabel = resolveActiveBoothDisplayName(boothId);
+    const boothLabel = getDashboardScopeLabel();
 
     setText("kpi-revenue", formatMoney(m.totalRevenue ?? 0));
-    setText("kpi-cafe-label", "Cafe Share (40%)");
-    setText("kpi-receipt-club-label", "The Receipt Club (60%)");
-    setText("kpi-cafe", formatMoney(m.cafeShare));
-    setText("kpi-receipt-club", formatMoney(m.receiptClubShare ?? m.noeyShare));
     setText("kpi-sessions", String(m.totalSessions ?? "—"));
     setText("kpi-prints", String(m.totalPrints ?? "—"));
     const periodLabel = data.periodLabel || state.period;
-    setText(
-      "table-period-label",
-      boothId ? `${periodLabel} · Booth: ${boothLabel}` : periodLabel
-    );
+    setText("kpi-revenue-hint", periodLabel);
+    setText("table-period-label", `${periodLabel} · Booth: ${boothLabel}`);
   }
 
   async function loadPayments() {
@@ -1911,17 +2155,18 @@
     const items = data.photos || [];
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="admin-table__empty">ยังไม่มีประวัติการถ่ายรูป</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="admin-table__empty">ยังไม่มีประวัติการถ่ายรูป</td></tr>`;
     } else {
       tbody.innerHTML = items
         .map(
           (row) => `
         <tr>
-          <td>${formatDate(row.created_at)}</td>
-          <td>${escapeHtml(row.layout_id || "—")}</td>
+          <td>${formatHistoryTime(row.created_at)}</td>
+          <td class="admin-table__cell-session">${formatSessionId(row.id)}</td>
+          <td>${formatLayoutCell(row)}</td>
           <td>${escapeHtml(row.frame_id || "—")}</td>
-          <td>${escapeHtml(String(row.print_count ?? 0))}</td>
-          <td>${formatSessionPrice(row.amount, row.payment_mode)}</td>
+          <td class="admin-table__cell-num">${escapeHtml(String(row.print_count ?? 0))}</td>
+          <td class="admin-table__cell-num">${formatSessionPrice(row.amount, row.payment_mode)}</td>
           <td><span class="status-badge status-badge--${escapeHtml(row.payment_mode || "omise")}">${escapeHtml(paymentModeLabel(row.payment_mode))}</span></td>
           <td class="admin-table__cell-print-status">${renderPrintStatusCell(row)}</td>
         </tr>`
@@ -1949,7 +2194,7 @@
       "pagination-info",
       total === 0
         ? "แสดง 0 จากทั้งหมด 0"
-        : `แสดง ${start} - ${end} จากทั้งหมด ${total}`
+        : `แสดง ${start}–${end} จากทั้งหมด ${total}`
     );
 
     const controls = $("#pagination-controls");
@@ -2030,20 +2275,35 @@
     if (boothsView) boothsView.hidden = viewName !== "booths";
     if (ownersView) ownersView.hidden = viewName !== "owners";
 
-    const eyebrow = $("#admin-topbar-eyebrow");
+    const crumb = $("#admin-topbar-crumb");
     const title = $("#admin-topbar-title");
     if (viewName === "payment") {
-      if (eyebrow) eyebrow.textContent = "Backoffice / Payment";
+      if (crumb) crumb.textContent = "Payment";
       if (title) title.textContent = "Payment Settings";
-    } else if (viewName === "booths") {
-      if (eyebrow) eyebrow.textContent = "Backoffice / Booths";
+    } else     if (viewName === "booths") {
+      if (crumb) {
+        if (state.boothDetailId) {
+          const boothLabel =
+            resolveActiveBoothDisplayName(state.boothDetailId) || state.boothDetailId;
+          crumb.textContent = `Booths / ${boothLabel}`;
+        } else {
+          crumb.textContent = "Booths";
+        }
+      }
       if (title) title.textContent = state.boothDetailId ? "Booth Detail" : "Booth Overview";
     } else if (viewName === "owners") {
-      if (eyebrow) eyebrow.textContent = "Backoffice / Owners";
+      if (crumb) crumb.textContent = "Owners";
       if (title) title.textContent = "Owner Accounts";
     } else {
-      if (eyebrow) eyebrow.textContent = "Backoffice / Dashboard";
-      if (title) title.textContent = "Control Tower";
+      if (crumb) crumb.textContent = "Dashboard";
+      if (title) {
+        title.textContent = isBoothScopedAdmin() ? "Dashboard" : "Dashboard";
+      }
+    }
+    updateTopbarActions(viewName);
+    syncAdminSaveDocks();
+    if (viewName === "payment") {
+      updatePaymentSaveBar();
     }
   }
 
@@ -2056,9 +2316,9 @@
   }
 
   function printStatusLabel(status) {
-    if (status === "pending") return "รอปริ้น";
-    if (status === "failed") return "ปริ้นไม่สำเร็จ";
-    return "สำเร็จ";
+    if (status === "pending") return "รอพิมพ์";
+    if (status === "failed") return "ล้มเหลว";
+    return "พิมพ์แล้ว";
   }
 
   function renderPrintStatusCell(row) {
@@ -2185,6 +2445,85 @@
 
   function isPaymentEnabledInForm() {
     return Boolean($("#payment-enabled-toggle")?.checked);
+  }
+
+  function readPaymentFormSnapshot() {
+    const paymentEnabled = isPaymentEnabledInForm();
+    let mode = paymentEnabled ? $("#payment-mode-select")?.value || "static_qr" : "free";
+    if (paymentEnabled && !canViewSuperAdminPanels()) {
+      mode = "static_qr";
+    }
+    return {
+      enabled: paymentEnabled,
+      mode,
+      pricingMode: getSelectedPricingMode(),
+      tiers: readPaymentTierFormValues(),
+    };
+  }
+
+  function setPaymentSettingsSavedFromForm() {
+    state.paymentSettingsSaved = readPaymentFormSnapshot();
+  }
+
+  function paymentSettingsAreDirty() {
+    if (state.paymentQrPendingFile) return true;
+    if (!state.paymentSettingsSaved) return false;
+    return JSON.stringify(readPaymentFormSnapshot()) !== JSON.stringify(state.paymentSettingsSaved);
+  }
+
+  function paymentFormHasPriceError() {
+    if (!isPaymentEnabledInForm()) return false;
+    const snapshot = readPaymentFormSnapshot();
+    const minAmount = snapshot.mode === "omise" ? 20 : 1;
+    const tiers = snapshot.tiers;
+    return (
+      tiers.length === 0 ||
+      tiers.some((tier) => !Number.isFinite(tier.amount) || tier.amount < minAmount)
+    );
+  }
+
+  function updatePaymentSaveBar(options = {}) {
+    const bar = $("#payment-save-bar");
+    const msgEl = $("#payment-save-msg");
+    const saveBtn = $("#btn-save-payment-settings");
+    const cancelBtn = $("#btn-cancel-payment-settings");
+    if (!bar) return;
+
+    syncAdminSaveDocks();
+
+    const dirty = paymentSettingsAreDirty();
+    const priceBad = paymentFormHasPriceError();
+    bar.classList.toggle("admin-save-bar--dirty", dirty && !priceBad);
+    bar.classList.toggle("admin-save-bar--warn", priceBad);
+
+    if (msgEl && !options.preserveMessage) {
+      if (priceBad) {
+        const mode = readPaymentFormSnapshot().mode;
+        msgEl.textContent =
+          mode === "omise"
+            ? "ราคาต้องไม่ต่ำกว่า 20 บาท (Omise)"
+            : "ราคาต้องไม่ต่ำกว่า 1 บาท";
+      } else if (dirty) {
+        msgEl.textContent = "มีการเปลี่ยนแปลงที่ยังไม่บันทึก";
+      } else {
+        msgEl.textContent = "บันทึกล่าสุดแล้ว";
+      }
+    }
+
+    const blocked = !dirty || priceBad;
+    if (saveBtn) saveBtn.disabled = blocked;
+    if (cancelBtn) cancelBtn.disabled = !dirty;
+  }
+
+  function flashPaymentSavedMessage() {
+    const msgEl = $("#payment-save-msg");
+    if (!msgEl) return;
+    if (paymentSaveMsgTimer) window.clearTimeout(paymentSaveMsgTimer);
+    msgEl.textContent = "บันทึกการตั้งค่าแล้ว — booth sync ภายใน ~15 วินาที";
+    paymentSaveMsgTimer = window.setTimeout(() => {
+      updatePaymentSaveBar();
+      paymentSaveMsgTimer = null;
+    }, 2200);
   }
 
   function updatePaymentFormAvailability() {
@@ -2343,6 +2682,10 @@
         providerHint.textContent = "ตั้ง OMISE_SECRET_KEY บน server";
       }
     }
+
+    clearPendingPaymentQrFile();
+    setPaymentSettingsSavedFromForm();
+    updatePaymentSaveBar();
   }
 
   let paymentAdminSuccessHideTimer = null;
@@ -2421,6 +2764,11 @@
     }
 
     try {
+      if (state.paymentQrPendingFile) {
+        await postPaymentQrFile(state.paymentQrPendingFile);
+        clearPendingPaymentQrFile();
+      }
+
       const payload = { payment_mode: mode };
       if (paymentEnabled) {
         payload.payment_tiers = tiers;
@@ -2432,86 +2780,48 @@
         body: JSON.stringify({ ...payload, booth_id: getSelectedPaymentBoothId() }),
       });
 
-      showPaymentAdminSuccess(
-        paymentEnabled
-          ? "บันทึกการตั้งค่าแล้ว — booth sync ภายใน ~15 วินาที"
-          : "ปิดการเรียกเก็บเงินแล้ว — booth sync ภายใน ~15 วินาที"
-      );
       await loadPaymentAdmin();
+      flashPaymentSavedMessage();
     } catch (saveErr) {
       if (err) {
         err.textContent = saveErr.message;
         err.hidden = false;
       }
     } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "บันทึก";
-      }
+      if (btn) btn.textContent = "บันทึก";
+      updatePaymentSaveBar();
     }
   }
 
-  async function uploadPaymentQr() {
-    const err = $("#payment-admin-error");
-    const success = $("#payment-admin-success");
-    const btn = $("#btn-upload-payment-qr");
-    const fileInput = $("#payment-qr-file");
-    const file = fileInput?.files?.[0];
+  async function postPaymentQrFile(file) {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Cannot read file"));
+      reader.readAsDataURL(file);
+    });
 
-    if (err) err.hidden = true;
-    if (success) success.hidden = true;
+    return apiFetch(buildPaymentApiPath("/payment/qr"), {
+      method: "POST",
+      body: JSON.stringify({
+        image_base64: base64,
+        booth_id: getSelectedPaymentBoothId(),
+      }),
+    });
+  }
 
-    if (!file) {
-      if (err) {
-        err.textContent = "เลือกไฟล์ QR ก่อน";
-        err.hidden = false;
-      }
-      return;
-    }
-
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Uploading...";
-    }
-
-    try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("Cannot read file"));
-        reader.readAsDataURL(file);
-      });
-
-      const uploadData = await apiFetch(buildPaymentApiPath("/payment/qr"), {
-        method: "POST",
-        body: JSON.stringify({
-          image_base64: base64,
-          booth_id: getSelectedPaymentBoothId(),
-        }),
-      });
-
-      if (uploadData.payment) {
-        renderPaymentQrPreviewFromDataUrl(base64, uploadData.payment);
-      } else {
-        renderPaymentQrPreviewFromDataUrl(base64);
-        await loadPaymentAdmin();
-      }
-
-      showPaymentAdminSuccess(
-        `บันทึก QR แล้ว (booth: ${uploadData.payment?.booth_id || getSelectedPaymentBoothId()}) — ตรวจว่าตู้ใช้ booth_id เดียวกัน`
-      );
-      if (fileInput) fileInput.value = "";
-    } catch (saveErr) {
-      if (err) {
-        err.textContent = saveErr.message;
-        err.hidden = false;
-      }
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "บันทึก QR";
-      }
-    }
+  function handlePaymentQrFileSelected(file) {
+    if (!file) return;
+    state.paymentQrPendingFile = file;
+    const reader = new FileReader();
+    reader.onload = () => {
+      renderPaymentQrPreviewFromDataUrl(String(reader.result || ""));
+      updatePaymentSaveBar();
+    };
+    reader.onerror = () => {
+      window.alert("อ่านไฟล์ QR ไม่สำเร็จ");
+    };
+    reader.readAsDataURL(file);
   }
 
   async function refresh() {
@@ -2545,10 +2855,19 @@
 
   async function restoreAdminViewAfterLogin() {
     let viewName = readAdminViewFromUrl();
-    if (isBoothScopedAdmin() && viewName === "booths") {
-      viewName = "dashboard";
-      syncAdminViewInUrl("dashboard", { replace: true });
+    const params = new URLSearchParams(window.location.search);
+    const hasExplicitView = params.has(ADMIN_VIEW_QUERY_KEY);
+
+    if (isBoothScopedAdmin()) {
+      if (viewName === "booths" || viewName === "owners") {
+        viewName = "dashboard";
+        syncAdminViewInUrl("dashboard", { replace: true });
+      }
+    } else if (canViewSuperAdminPanels() && !hasExplicitView && !isSingleBoothAdminView()) {
+      viewName = "booths";
+      syncAdminViewInUrl("booths", { replace: true });
     }
+
     showAdminView(viewName);
 
     if (viewName === "booths") {
@@ -2739,12 +3058,18 @@
       loadPaymentAdmin().catch(console.error);
     });
 
+    const markPaymentFormDirty = () => updatePaymentSaveBar();
+
     $("#payment-enabled-toggle")?.addEventListener("change", () => {
       updatePaymentFormAvailability();
+      markPaymentFormDirty();
     });
 
     document.querySelectorAll('input[name="pricing-mode"]').forEach((input) => {
-      input.addEventListener("change", updatePricingModePanels);
+      input.addEventListener("change", () => {
+        updatePricingModePanels();
+        markPaymentFormDirty();
+      });
     });
 
     $("#payment-mode-select")?.addEventListener("change", () => {
@@ -2755,10 +3080,21 @@
       }
       updatePaymentModeHint(mode, {});
       updatePaymentFormAvailability();
+      markPaymentFormDirty();
     });
 
-    $("#btn-upload-payment-qr")?.addEventListener("click", () => {
-      uploadPaymentQr().catch(console.error);
+    document
+      .querySelectorAll(
+        "#tier-amount-single, #tier-amount-1, #tier-amount-2, #tier-amount-3, #payment-booth-select"
+      )
+      .forEach((el) => {
+        el.addEventListener("input", markPaymentFormDirty);
+        el.addEventListener("change", markPaymentFormDirty);
+      });
+
+    $("#payment-qr-file")?.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      handlePaymentQrFileSelected(file);
     });
 
     $("#payment-booth-select")?.addEventListener("change", () => {
@@ -2777,10 +3113,43 @@
 
     $("#dashboard-booth-select")?.addEventListener("change", () => {
       state.boothPaymentLoadedFor = "";
-      syncBoothSelectValues($("#dashboard-booth-select")?.value || "");
+      const value = $("#dashboard-booth-select")?.value || "";
+      if (value && value !== "__all__") {
+        syncBoothSelectValues(value);
+      }
       state.page = 1;
       refresh().catch(console.error);
     });
+
+    $("#booth-list-search")?.addEventListener("input", (event) => {
+      state.boothListSearch = event.target.value || "";
+      renderBoothsList(state.boothsCache);
+    });
+
+    document.querySelector(".booth-detail-tabs")?.addEventListener("click", (event) => {
+      const tabBtn = event.target.closest("[data-booth-tab]");
+      if (!tabBtn) return;
+      setBoothDetailTab(tabBtn.dataset.boothTab);
+    });
+
+    $("#btn-booth-id-copy")?.addEventListener("click", async () => {
+      const boothId = state.boothDetailId;
+      if (!boothId) return;
+      try {
+        await navigator.clipboard.writeText(boothId);
+      } catch (error) {
+        console.warn("[admin/copy-booth-id]", error);
+      }
+    });
+
+    $("#admin-topbar-actions")?.addEventListener("click", (event) => {
+      if (event.target.closest("#btn-open-owner-drawer")) {
+        openOwnerDrawer();
+      }
+    });
+
+    $("#btn-close-owner-drawer")?.addEventListener("click", closeOwnerDrawer);
+    $("#owner-drawer-backdrop")?.addEventListener("click", closeOwnerDrawer);
 
     $("#booths-tbody")?.addEventListener("click", (event) => {
       const actionBtn = event.target.closest("[data-booth-open]");
@@ -2806,10 +3175,8 @@
       }
     });
 
-    $("#booth-detail-features")?.addEventListener("change", (event) => {
-      const input = event.target.closest("[data-booth-feature]");
+    function applyBoothFeatureToggle(input) {
       if (!input || input.disabled) return;
-
       const featureKey = input.dataset.boothFeature;
       if (!featureKey) return;
 
@@ -2819,11 +3186,28 @@
         [featureKey]: enabled,
       };
 
-      const labelEl = input.closest(".admin-toggle")?.querySelector(".admin-toggle__label");
-      if (labelEl) labelEl.textContent = enabled ? "เปิด" : "ปิด";
+      const stateEl = document.querySelector(`[data-booth-feature-state="${featureKey}"]`);
+      if (stateEl) stateEl.textContent = enabled ? "เปิด" : "ปิด";
 
       updateBoothFeaturesSaveBar();
       updateBoothFlowPreview(state.boothFeaturesDraft);
+    }
+
+    $("#booth-detail-features")?.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-booth-feature-row]");
+      if (!row) return;
+      const input = row.querySelector("[data-booth-feature]");
+      if (!input || input.disabled) return;
+      if (event.target.closest("label.admin-toggle")) return;
+
+      input.checked = !input.checked;
+      applyBoothFeatureToggle(input);
+    });
+
+    $("#booth-detail-features")?.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-booth-feature]");
+      if (!input) return;
+      applyBoothFeatureToggle(input);
     });
 
     $("#btn-booth-features-save")?.addEventListener("click", async () => {
@@ -2839,12 +3223,13 @@
         await saveBoothFeatures(boothId, state.boothFeaturesDraft);
         renderBoothFeatureToggles(boothId, state.boothFeaturesDraft);
         updateBoothFlowPreview(state.boothFeaturesDraft);
+        flashBoothFeaturesSavedMessage();
       } catch (error) {
         console.error("[admin/booth-features-save]", error);
         window.alert(`บันทึกไม่สำเร็จ: ${error.message}`);
       } finally {
-        if (saveBtn) saveBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+        if (saveBtn) saveBtn.textContent = "บันทึก";
+        updateBoothFeaturesSaveBar();
       }
     });
 

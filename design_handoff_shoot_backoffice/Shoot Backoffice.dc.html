@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F5F3;color:#1C1917;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#DC2626;text-decoration:none}a:hover{color:#B91C1C}
+input,select,button{font-family:inherit}
+</style>
+</helmet>
+<div style="display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh">
+  <aside style="position:sticky;top:0;height:100vh;background:#FFFFFF;border-right:1px solid #E7E5E4;display:flex;flex-direction:column">
+    <div style="padding:22px 20px 18px;display:flex;align-items:center;gap:10px">
+      <div style="width:30px;height:30px;border-radius:8px;background:#DC2626;color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px">S</div>
+      <div style="display:flex;flex-direction:column;line-height:1.2">
+        <span style="font-weight:700;letter-spacing:.06em;color:#DC2626;font-size:15px">SHOOT</span>
+        <span style="font-size:12px;color:#78716C">Backoffice</span>
+      </div>
+    </div>
+    <sc-if value="{{ isOwnerRole }}" hint-placeholder-val="{{ false }}">
+      <div style="margin:0 12px 14px;padding:10px 12px;border:1px solid #FECACA;border-radius:10px;background:#FEF2F2">
+        <div style="font-size:11px;color:#B91C1C;text-transform:uppercase;letter-spacing:.06em">Booth</div>
+        <div style="font-size:14px;font-weight:600;margin-top:2px">{{ ctxBooth.name }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#78716C;margin-top:1px">{{ ctxBooth.id }}</div>
+      </div>
+    </sc-if>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:0 12px">
+      <div style="font-size:11px;color:#A8A29E;text-transform:uppercase;letter-spacing:.08em;padding:8px 10px 6px">เมนู</div>
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+        <button onClick="{{ item.go }}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;cursor:pointer;padding:9px 10px;border-radius:8px;font-size:14px;font-weight:{{ item.weight }};background:{{ item.bg }};color:{{ item.color }}">
+          <span style="width:6px;height:6px;border-radius:50%;background:{{ item.dot }}"></span>{{ item.label }}
+        </button>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;padding:12px;border-top:1px solid #E7E5E4;display:flex;flex-direction:column;gap:2px">
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 10px">
+        <span style="width:30px;height:30px;border-radius:50%;background:#1C1917;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600">{{ userInitial }}</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25;min-width:0">
+          <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ userName }}</span>
+          <span style="font-size:11.5px;color:#78716C">{{ userRole }}</span>
+        </span>
+      </div>
+      <sc-if value="{{ isSuper }}" hint-placeholder-val="{{ true }}">
+        <a href="#" style="display:flex;justify-content:space-between;padding:9px 10px;border-radius:8px;font-size:14px;color:#44403C">Open Booth <span style="color:#A8A29E">↗</span></a>
+      </sc-if>
+      <button style="display:flex;justify-content:space-between;border:0;background:transparent;cursor:pointer;padding:9px 10px;border-radius:8px;font-size:14px;color:#44403C">Logout <span style="color:#A8A29E">→</span></button>
+    </div>
+  </aside>
+
+  <main style="min-width:0;padding:28px 40px 64px">
+    <div style="max-width:1160px;margin:0 auto">
+      <header style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;color:#78716C;display:flex;gap:6px"><span>Backoffice</span><span style="color:#D6D3D1">/</span><span>{{ crumb }}</span></div>
+          <h1 style="margin:4px 0 0;font-size:28px;font-weight:700;letter-spacing:-.01em">{{ title }}</h1>
+        </div>
+        <sc-if value="{{ isOwners }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ openDrawer }}" style="border:0;background:#DC2626;color:#fff;font-weight:600;font-size:14px;padding:10px 16px;border-radius:8px;cursor:pointer" style-hover="background:#B91C1C">+ สร้าง owner</button>
+        </sc-if>
+      </header>
+
+      <sc-if value="{{ isBooths }}" hint-placeholder-val="{{ true }}">
+        <section style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid #E7E5E4;flex-wrap:wrap">
+            <div>
+              <div style="font-size:16px;font-weight:600">Booth ทั้งหมด <span style="color:#A8A29E;font-weight:500">· {{ boothCount }}</span></div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">คลิกแต่ละตู้เพื่อดู flow และ features</div>
+            </div>
+            <input value="{{ q }}" onChange="{{ setQ }}" placeholder="ค้นหาชื่อหรือ booth_id" style="width:260px;max-width:100%;padding:9px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;outline:none;background:#FAFAF9">
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 140px;padding:10px 20px;font-size:12px;font-weight:600;color:#78716C;text-transform:uppercase;letter-spacing:.05em;background:#FAFAF9;border-bottom:1px solid #E7E5E4">
+            <span>Booth</span><span>สถานะ</span><span>Payment</span><span></span>
+          </div>
+          <sc-for list="{{ boothRows }}" as="b" hint-placeholder-count="2">
+            <div onClick="{{ b.open }}" style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 140px;align-items:center;padding:16px 20px;border-bottom:1px solid #F5F5F4;cursor:pointer" style-hover="background:#FEF2F2">
+              <div style="min-width:0">
+                <div style="font-weight:600;font-size:15px">{{ b.name }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#78716C;margin-top:2px">{{ b.id }}</div>
+              </div>
+              <span style="display:flex;align-items:center;gap:8px;font-size:14px"><span style="width:8px;height:8px;border-radius:50%;background:#16A34A"></span>{{ b.status }}</span>
+              <span><span style="display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid #E7E5E4;background:#FAFAF9;font-size:13px;color:#44403C">{{ b.payment }}</span></span>
+              <span style="text-align:right;font-size:14px;font-weight:600;color:#DC2626">ดูรายละเอียด →</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noBooths }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:40px;text-align:center;color:#78716C;font-size:14px">ไม่พบตู้ที่ตรงกับ “{{ q }}”</div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <section style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;padding:20px 24px 0">
+          <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start">
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <button onClick="{{ goBooths }}" style="width:34px;height:34px;border-radius:8px;border:1px solid #E7E5E4;background:#fff;cursor:pointer;font-size:15px;color:#44403C">←</button>
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <h2 style="margin:0;font-size:22px;font-weight:700">{{ booth.name }}</h2>
+                  <span style="display:flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;background:#F0FDF4;color:#15803D;font-size:12.5px;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>{{ booth.status }}</span>
+                  <span style="padding:2px 10px;border-radius:999px;border:1px solid #E7E5E4;font-size:12.5px;color:#44403C">{{ booth.payment }}</span>
+                </div>
+                <button onClick="{{ copyId }}" style="margin-top:4px;border:0;background:transparent;padding:0;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#78716C">booth_id: {{ booth.id }} <span style="color:#A8A29E">⧉</span></button>
+              </div>
+            </div>
+            <a href="#" style="padding:9px 14px;border-radius:8px;border:1px solid #FECACA;background:#FEF2F2;font-size:14px;font-weight:600">เปิดหน้าบูธ ↗</a>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:20px;overflow-x:auto">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+              <button onClick="{{ t.go }}" style="border:0;background:transparent;cursor:pointer;padding:10px 14px;font-size:14px;white-space:nowrap;font-weight:{{ t.weight }};color:{{ t.color }};border-bottom:2px solid {{ t.line }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+        </section>
+
+        <sc-if value="{{ tabOverview }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;margin-top:16px">
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                <div style="font-weight:600">Local links</div>
+                <div style="font-size:13px;color:#78716C;margin-top:2px">ลิงก์เปิดหน้าบูธ / backoffice / API</div>
+              </div>
+              <sc-for list="{{ links }}" as="l" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:150px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #F5F5F4">
+                  <span style="font-size:13px;font-weight:600;color:#44403C">{{ l.label }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#57534E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ l.url }}">{{ l.url }}</span>
+                  <span style="display:flex;gap:6px">
+                    <a href="#" style="padding:5px 10px;border:1px solid #E7E5E4;border-radius:6px;font-size:12.5px;color:#44403C">เปิด</a>
+                    <button onClick="{{ l.copy }}" style="padding:5px 10px;border:1px solid #E7E5E4;border-radius:6px;font-size:12.5px;background:#fff;cursor:pointer;color:#44403C">Copy</button>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden;align-self:start">
+              <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-weight:600">APK</div>
+                  <div style="font-size:13px;color:#78716C;margin-top:2px">Android shell (WebView) ที่ติดตั้งบนตู้</div>
+                </div>
+                <span style="padding:2px 8px;border-radius:6px;background:#FEF3C7;color:#92400E;font-size:12px;font-weight:600">unavailable</span>
+              </div>
+              <div style="padding:6px 20px 14px">
+                <sc-for list="{{ apk }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #E7E5E4;font-size:13px">
+                    <span style="color:#78716C">{{ r.k }}</span><span style="text-align:right">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabFlow }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px;margin-top:16px;align-items:start">
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;padding:16px 20px">
+              <div style="font-weight:600">Customer flow</div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">ลำดับหน้าที่ลูกค้าเห็นบนตู้นี้ · อัปเดตตาม features</div>
+              <div style="display:flex;flex-direction:column;margin-top:16px">
+                <sc-for list="{{ flow }}" as="s" hint-placeholder-count="6">
+                  <div style="display:flex;gap:12px">
+                    <div style="display:flex;flex-direction:column;align-items:center">
+                      <span style="width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;background:{{ s.bg }};color:{{ s.fg }}">{{ s.n }}</span>
+                      <span style="flex:1;width:2px;min-height:14px;background:{{ s.line }}"></span>
+                    </div>
+                    <div style="padding:3px 0 16px;font-size:14px;font-weight:500">{{ s.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                <div style="font-weight:600">Features</div>
+                <div style="font-size:13px;color:#78716C;margin-top:2px">เปิด/ปิดขั้นตอนใน flow ของตู้ — กดบันทึกเมื่อแก้เสร็จ (หน้าบูธ refresh แล้วใช้ค่าใหม่)</div>
+              </div>
+              <sc-for list="{{ featureRows }}" as="f" hint-placeholder-count="6">
+                <div onClick="{{ f.toggle }}" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;border-bottom:1px solid #F5F5F4;cursor:pointer" style-hover="background:#FAFAF9">
+                  <div>
+                    <div style="font-size:14px;font-weight:600">{{ f.label }}</div>
+                    <div style="font-size:13px;color:#78716C;margin-top:2px">{{ f.desc }}</div>
+                  </div>
+                  <span style="display:flex;align-items:center;gap:10px">
+                    <span style="font-size:12.5px;color:#78716C;width:22px;text-align:right">{{ f.stateLabel }}</span>
+                    <span style="width:40px;height:22px;border-radius:999px;position:relative;transition:background .15s;background:{{ f.track }}">
+                      <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:{{ f.knob }}"></span>
+                    </span>
+                  </span>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:{{ saveBarBg }}">
+                <span style="font-size:13px;color:{{ saveBarFg }}">{{ saveMsg }}</span>
+                <span style="display:flex;gap:8px">
+                  <button onClick="{{ resetFeatures }}" disabled="{{ notDirty }}" style="padding:8px 14px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:13.5px;cursor:pointer;color:#44403C">ยกเลิก</button>
+                  <button onClick="{{ saveFeatures }}" disabled="{{ notDirty }}" style="padding:8px 16px;border:0;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;color:#fff;background:{{ saveBtnBg }}">บันทึก</button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabDevice }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;margin-top:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+              <div style="font-weight:600">Device token</div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">สร้างรหัสจับคู่ให้ tablet — token แสดงบนตู้ครั้งเดียวหลังจับคู่สำเร็จ</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;padding:20px">
+              <div style="border:1px solid #E7E5E4;border-radius:10px;padding:14px 16px">
+                <div style="font-size:12.5px;color:#78716C">สถานะ token</div>
+                <div style="font-size:16px;font-weight:600;margin-top:4px">{{ tokenStatus }}</div>
+              </div>
+              <div style="border:1px solid #E7E5E4;border-radius:10px;padding:14px 16px">
+                <div style="font-size:12.5px;color:#78716C">สร้าง token ล่าสุด</div>
+                <div style="font-size:16px;font-weight:600;margin-top:4px">{{ tokenAt }}</div>
+              </div>
+              <div style="border:1px solid #E7E5E4;border-radius:10px;padding:14px 16px;background:#FAFAF9">
+                <div style="font-size:12.5px;color:#78716C">Pairing code</div>
+                <sc-if value="{{ hasPairing }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:500;letter-spacing:.2em;color:#DC2626;margin-top:2px">{{ pairing }}</div>
+                </sc-if>
+                <sc-if value="{{ noPairing }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:14px;margin-top:4px;color:#57534E">ไม่มีรหัสค้าง — กดสร้างด้านล่าง</div>
+                </sc-if>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;padding:0 20px 20px">
+              <button onClick="{{ genPairing }}" style="padding:9px 16px;border:0;border-radius:8px;background:#DC2626;color:#fff;font-weight:600;font-size:14px;cursor:pointer" style-hover="background:#B91C1C">สร้าง pairing code</button>
+              <button onClick="{{ revoke }}" style="padding:9px 16px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;color:#44403C">เพิกถอน token</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabConfig }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;margin-top:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+              <div style="font-weight:600">Config</div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">ค่าพื้นฐานของตู้</div>
+            </div>
+            <sc-if value="{{ hasNote }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:16px 20px 0;padding:12px 14px;border-radius:10px;background:#FEF2F2;border:1px solid #FECACA;font-size:13px;color:#7F1D1D;line-height:1.6">KiKi ไม่ใช่ตู้แยก — เป็นแค่ธีม/รูป event ของ <b>The Receipt Club</b> (<code style="font-family:'IBM Plex Mono',monospace">booth_id: the-receipt-club</code>) เปลี่ยน <code style="font-family:'IBM Plex Mono',monospace">theme, home_image, layout_set</code> ตามงานได้</div>
+            </sc-if>
+            <div style="padding:8px 20px 16px">
+              <sc-for list="{{ config }}" as="c" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;padding:11px 0;border-bottom:1px solid #F5F5F4;font-size:14px">
+                  <span style="color:#78716C">{{ c.k }}</span><span style="word-break:break-word">{{ c.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #FECACA;border-radius:14px;margin-top:16px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600;color:#B91C1C">Dashboard data</div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">ล้างประวัติการถ่าย + payment ของตู้ (ไม่ลบรูป cloud) — กันแถวกลับหลัง restart</div>
+            </div>
+            <sc-if value="{{ notConfirming }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ askClear }}" style="padding:9px 16px;border:1px solid #FECACA;border-radius:8px;background:#fff;color:#DC2626;font-weight:600;font-size:14px;cursor:pointer" style-hover="background:#FEF2F2">ล้างประวัติ Dashboard ของตู้นี้</button>
+            </sc-if>
+            <sc-if value="{{ confirmClear }}" hint-placeholder-val="{{ false }}">
+              <span style="display:flex;gap:8px;align-items:center">
+                <span style="font-size:13px;color:#57534E">ยืนยันการล้าง?</span>
+                <button onClick="{{ cancelClear }}" style="padding:9px 14px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:14px;cursor:pointer">ยกเลิก</button>
+                <button onClick="{{ doClear }}" style="padding:9px 14px;border:0;border-radius:8px;background:#DC2626;color:#fff;font-weight:600;font-size:14px;cursor:pointer">ล้างเลย</button>
+              </span>
+            </sc-if>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ isOwners }}" hint-placeholder-val="{{ false }}">
+        <section style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+          <div style="padding:18px 20px;border-bottom:1px solid #E7E5E4">
+            <div style="font-size:16px;font-weight:600">Owner accounts <span style="color:#A8A29E;font-weight:500">· {{ ownerCount }}</span></div>
+            <div style="font-size:13px;color:#78716C;margin-top:2px">สร้าง owner ต่อ tenant ด้วยรหัสคนละบัญชี — เปลี่ยนรหัสได้ที่ตาราง (ไม่ seed owner อัตโนมัติตอน boot)</div>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 190px;padding:10px 20px;font-size:12px;font-weight:600;color:#78716C;text-transform:uppercase;letter-spacing:.05em;background:#FAFAF9;border-bottom:1px solid #E7E5E4">
+            <span>Username</span><span>Tenant</span><span>Email</span><span>สร้างเมื่อ</span><span></span>
+          </div>
+          <sc-for list="{{ ownerRows }}" as="o" hint-placeholder-count="2">
+            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 190px;align-items:center;padding:14px 20px;border-bottom:1px solid #F5F5F4;font-size:14px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px">{{ o.username }}</span>
+              <span>{{ o.tenant }}</span>
+              <span style="color:#78716C">{{ o.email }}</span>
+              <span style="color:#57534E">{{ o.created }}</span>
+              <span style="display:flex;gap:6px;justify-content:flex-end">
+                <button onClick="{{ o.reset }}" style="padding:6px 12px;border:1px solid #E7E5E4;border-radius:6px;background:#fff;font-size:13px;cursor:pointer;color:#44403C">เปลี่ยนรหัส</button>
+                <button onClick="{{ o.remove }}" style="padding:6px 12px;border:1px solid #FECACA;border-radius:6px;background:#fff;font-size:13px;cursor:pointer;color:#DC2626">ลบ</button>
+              </span>
+            </div>
+          </sc-for>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;gap:4px;padding:4px;background:#fff;border:1px solid #E7E5E4;border-radius:10px;flex-wrap:wrap">
+            <sc-for list="{{ ranges }}" as="r" hint-placeholder-count="5">
+              <button onClick="{{ r.go }}" style="border:0;cursor:pointer;padding:7px 14px;border-radius:7px;font-size:13.5px;font-weight:{{ r.weight }};background:{{ r.bg }};color:{{ r.color }}">{{ r.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ isSuper }}" hint-placeholder-val="{{ true }}">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#78716C">Booth
+              <select value="{{ dashBooth }}" onChange="{{ setDashBooth }}" style="padding:8px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;background:#fff;min-width:200px">
+                <sc-for list="{{ dashBoothOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.id }}" selected="{{ o.sel }}">{{ o.name }}</option></sc-for>
+              </select>
+            </label>
+          </sc-if>
+        </div>
+        <sc-if value="{{ isCustom }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;color:#78716C">
+            <input type="date" value="2026-09-29" style="padding:7px 10px;border:1px solid #E7E5E4;border-radius:8px;font-size:13.5px;background:#fff">
+            <span>ถึง</span>
+            <input type="date" value="2026-10-02" style="padding:7px 10px;border:1px solid #E7E5E4;border-radius:8px;font-size:13.5px;background:#fff">
+          </div>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+          <div style="background:#DC2626;color:#fff;border-radius:14px;padding:16px 18px">
+            <div style="font-size:13px;opacity:.9">Total Revenue</div>
+            <div style="font-size:28px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums">{{ kRevenue }}</div>
+            <div style="font-size:12.5px;opacity:.85;margin-top:2px">{{ rangeLabel }}</div>
+          </div>
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;padding:16px 18px">
+              <div style="font-size:13px;color:#78716C">{{ k.label }}</div>
+              <div style="font-size:28px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums">{{ k.value }}</div>
+              <div style="font-size:12.5px;color:#A8A29E;margin-top:2px">{{ k.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <section style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden;margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #E7E5E4;flex-wrap:wrap">
+            <div>
+              <div style="font-size:16px;font-weight:600">ประวัติการถ่ายรูป</div>
+              <div style="font-size:13px;color:#78716C;margin-top:2px">{{ rangeLabel }} · Booth: {{ dashBoothName }}</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <input value="{{ dq }}" onChange="{{ setDq }}" placeholder="ค้นหา layout / session" style="width:220px;padding:8px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:13.5px;background:#FAFAF9;outline:none">
+              <button onClick="{{ exportCsv }}" style="padding:8px 14px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:13.5px;font-weight:600;cursor:pointer;color:#44403C">Export CSV</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <div style="min-width:860px">
+              <div style="display:grid;grid-template-columns:120px 90px minmax(0,1.3fr) minmax(0,1fr) 56px 80px 100px 110px;gap:8px;padding:10px 20px;font-size:12px;font-weight:600;color:#78716C;text-transform:uppercase;letter-spacing:.05em;background:#FAFAF9;border-bottom:1px solid #E7E5E4">
+                <span>เวลา</span><span>Session</span><span>Layout</span><span>Frame</span><span style="text-align:right">พิมพ์</span><span style="text-align:right">ราคา</span><span>ชำระ</span><span>สถานะปริ้น</span>
+              </div>
+              <sc-for list="{{ pageRows }}" as="x" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:120px 90px minmax(0,1.3fr) minmax(0,1fr) 56px 80px 100px 110px;gap:8px;align-items:center;padding:11px 20px;border-bottom:1px solid #F5F5F4;font-size:13.5px">
+                  <span style="color:#57534E;font-variant-numeric:tabular-nums">{{ x.time }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#78716C">{{ x.sid }}</span>
+                  <span>{{ x.layout }}</span>
+                  <span style="color:#57534E">{{ x.frame }}</span>
+                  <span style="text-align:right;font-variant-numeric:tabular-nums">{{ x.copies }}</span>
+                  <span style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500">{{ x.priceLabel }}</span>
+                  <span style="color:#57534E">{{ x.pay }}</span>
+                  <span><span style="display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:{{ x.sBg }};color:{{ x.sFg }}">{{ x.status }}</span></span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-if value="{{ noRows }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:48px;text-align:center;color:#78716C;font-size:14px">ยังไม่มีประวัติการถ่ายรูป</div>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;background:#FAFAF9;flex-wrap:wrap">
+            <span style="font-size:13px;color:#78716C">แสดง {{ showFrom }}–{{ showTo }} จากทั้งหมด {{ totalRows }}</span>
+            <span style="display:flex;gap:4px;align-items:center">
+              <button onClick="{{ prevPage }}" style="width:30px;height:30px;border:1px solid #E7E5E4;border-radius:7px;background:#fff;cursor:pointer;color:#57534E">‹</button>
+              <sc-for list="{{ pages }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.go }}" style="min-width:30px;height:30px;padding:0 8px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;border:1px solid {{ p.border }};background:{{ p.bg }};color:{{ p.color }}">{{ p.n }}</button>
+              </sc-for>
+              <button onClick="{{ nextPage }}" style="width:30px;height:30px;border:1px solid #E7E5E4;border-radius:7px;background:#fff;cursor:pointer;color:#57534E">›</button>
+            </span>
+          </div>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ isPayment }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ isSuper }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#78716C">เลือก Booth
+              <select value="{{ payBoothId }}" onChange="{{ setPayBooth }}" style="padding:8px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;background:#fff;min-width:220px">
+                <sc-for list="{{ boothOpts }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}" selected="{{ o.sel }}">{{ o.name }}</option></sc-for>
+              </select>
+            </label>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#78716C">booth_id: {{ payBoothId }}</span>
+            <span style="font-size:12.5px;color:#A8A29E">ตั้งค่า Payment แยกตามตู้ — แต่ละ booth_id มี QR / ราคาเป็นของตัวเอง</span>
+          </div>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+          <div style="padding:16px 20px;border-right:1px solid #F5F5F4">
+            <div style="font-size:13px;color:#78716C">Payment Tiers</div>
+            <div style="font-size:24px;font-weight:700;margin-top:4px;color:{{ tierColor }}">{{ tierValue }}</div>
+            <div style="font-size:12.5px;color:#78716C;margin-top:2px">{{ tierSub }}</div>
+          </div>
+          <div style="padding:16px 20px">
+            <div style="font-size:13px;color:#78716C">Mode</div>
+            <div style="font-size:24px;font-weight:700;margin-top:4px">{{ modeValue }}</div>
+            <div style="font-size:12.5px;color:#78716C;margin-top:2px">{{ modeSub }}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:11px 14px;border-radius:10px;background:#FEF2F2;border:1px solid #FECACA;font-size:13px;color:#991B1B">ตรวจสอบราคาและสถานะการเรียกเก็บเงินก่อนบันทึก — booth จะ sync ภายใน ~15 วินาที</div>
+        <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div onClick="{{ toggleBill }}" style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;cursor:pointer">
+              <div>
+                <div style="font-size:12px;color:#78716C;text-transform:uppercase;letter-spacing:.05em">สถานะการเรียกเก็บเงิน</div>
+                <div style="font-size:15px;font-weight:600;margin-top:4px">เปิดการเรียกเก็บเงิน</div>
+                <div style="font-size:13px;color:#78716C;margin-top:2px">{{ billDesc }}</div>
+              </div>
+              <span style="width:44px;height:24px;border-radius:999px;position:relative;flex:none;transition:background .15s;background:{{ billTrack }}">
+                <span style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:{{ billKnob }}"></span>
+              </span>
+            </div>
+            <sc-if value="{{ billOff }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px;color:#78716C;padding:0 4px">ปิดการเรียกเก็บเงินอยู่ — เปิดก่อนเพื่อแก้ราคาและช่องทางชำระเงิน</div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:16px;transition:opacity .15s;opacity:{{ lockOpacity }};pointer-events:{{ lockPE }}">
+              <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+                <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                  <div style="font-weight:600">ตั้งค่าราคาแพ็ก</div>
+                  <div style="font-size:13px;color:#78716C;margin-top:2px">กำหนดราคาที่แสดงบนหน้า Package ของ booth</div>
+                </div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <sc-for list="{{ tierOpts }}" as="t" hint-placeholder-count="2">
+                      <button onClick="{{ t.go }}" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:13.5px;border:1px solid {{ t.border }};background:{{ t.bg }};color:#1C1917">
+                        <div style="font-weight:600">{{ t.title }}</div>
+                        <div style="font-size:12.5px;color:#78716C;margin-top:1px">{{ t.sub }}</div>
+                      </button>
+                    </sc-for>
+                  </div>
+                  <sc-for list="{{ priceRows }}" as="p" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 14px;border:1px solid #E7E5E4;border-radius:10px">
+                      <span style="font-size:14px;font-weight:600">{{ p.label }}</span>
+                      <span style="display:flex;align-items:center;gap:8px">
+                        <input type="number" min="1" value="{{ p.value }}" onChange="{{ p.set }}" style="width:110px;padding:8px 10px;border:1px solid {{ p.border }};border-radius:8px;font-size:14px;text-align:right;outline:none">
+                        <span style="font-size:13px;color:#78716C;width:28px">บาท</span>
+                      </span>
+                    </div>
+                  </sc-for>
+                  <div style="font-size:12.5px;color:{{ priceHintColor }}">ขั้นต่ำ 1 บาท</div>
+                </div>
+              </div>
+              <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+                <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                  <div style="font-weight:600">ช่องทางชำระเงิน</div>
+                  <div style="font-size:13px;color:#78716C;margin-top:2px">เลือกวิธีรับชำระเมื่อเปิดการเรียกเก็บเงิน</div>
+                </div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:6px">
+                  <label style="font-size:13px;font-weight:600;color:#44403C">Payment mode</label>
+                  <select value="{{ payCfg.mode }}" onChange="{{ setMode }}" style="padding:10px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;background:#fff">
+                    <sc-for list="{{ modeOpts }}" as="m" hint-placeholder-count="2"><option value="{{ m }}">{{ m }}</option></sc-for>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                <div style="font-weight:600">QR PromptPay ของร้าน</div>
+                <div style="font-size:13px;color:#78716C;margin-top:2px">อัปโหลด QR จากAppธนาคาร/แม่มณี — ลูกค้าสแกนแล้วโอนตามยอดที่แสดงบนหน้าจอ</div>
+              </div>
+              <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                <div style="aspect-ratio:1/1;max-width:240px;width:100%;margin:0 auto;border:1px solid #E7E5E4;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:repeating-linear-gradient(45deg,#FAFAF9 0 8px,#F5F5F4 8px 16px)">
+                  <sc-if value="{{ hasQrImg }}" hint-placeholder-val="{{ false }}">
+                    <div role="img" aria-label="QR PromptPay" style="width:100%;height:100%;background-color:#fff;background-size:contain;background-repeat:no-repeat;background-position:center;background-image:{{ qrBg }}"></div>
+                  </sc-if>
+                  <sc-if value="{{ noQrImg }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#A8A29E;text-align:center;padding:12px">{{ qrPlaceholder }}</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:12.5px;color:#78716C;text-align:center">{{ qrMeta }}</div>
+                <label style="display:flex;justify-content:center;align-items:center;gap:8px;padding:9px 14px;border:1px dashed #D6D3D1;border-radius:8px;font-size:13.5px;font-weight:600;color:#44403C;cursor:pointer;background:#FAFAF9">อัปโหลด QR (PNG/JPG)
+                  <input type="file" accept="image/png,image/jpeg" onChange="{{ onQrFile }}" style="display:none">
+                </label>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #E7E5E4;border-radius:14px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid #E7E5E4">
+                <div style="font-weight:600">Webhook / Server</div>
+                <div style="font-size:13px;color:#78716C;margin-top:2px">ตั้ง BANK_WEBHOOK_SECRET บน Render — แอปตู้ sync อัตโนมัติ</div>
+              </div>
+              <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;gap:6px">
+                  <span style="flex:1;min-width:0;padding:8px 10px;border:1px solid #E7E5E4;border-radius:8px;background:#FAFAF9;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#57534E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">https://shoot-receipt-boot.onrender.com/api/webhook/bank-notify</span>
+                  <button onClick="{{ copyWebhook }}" style="padding:6px 12px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:12.5px;cursor:pointer;color:#44403C">Copy</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ hookDot }}"></span>
+                  <span style="font-weight:600">{{ hookTitle }}</span>
+                  <span style="color:#78716C">· {{ hookSub }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="position:sticky;bottom:16px;margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid {{ payBarBorder }};background:{{ payBarBg }};box-shadow:0 4px 16px rgba(0,0,0,.06)">
+          <span style="font-size:13px;color:{{ payBarFg }}">{{ payMsg }}</span>
+          <span style="display:flex;gap:8px">
+            <button onClick="{{ resetPay }}" disabled="{{ payClean }}" style="padding:8px 14px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:13.5px;cursor:pointer;color:#44403C">ยกเลิก</button>
+            <button onClick="{{ savePay }}" disabled="{{ payBlocked }}" style="padding:8px 18px;border:0;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;color:#fff;background:{{ paySaveBg }}">บันทึก</button>
+          </span>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(28,25,23,.35)"></div>
+    <div style="position:relative;width:420px;max-width:100%;height:100%;background:#fff;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,.08)">
+      <div style="padding:20px 24px;border-bottom:1px solid #E7E5E4;display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:18px;font-weight:700">สร้าง owner</div>
+          <div style="font-size:13px;color:#78716C;margin-top:2px">รหัสผ่านอย่างน้อย 8 ตัวอักษร</div>
+        </div>
+        <button onClick="{{ closeDrawer }}" style="border:0;background:transparent;font-size:20px;cursor:pointer;color:#78716C">×</button>
+      </div>
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;flex:1;overflow:auto">
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#44403C">Username
+          <input value="{{ form.username }}" onChange="{{ setUsername }}" placeholder="เช่น shop-a-admin" style="padding:10px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;font-weight:400;outline:none">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#44403C">Password
+          <input type="password" value="{{ form.password }}" onChange="{{ setPassword }}" placeholder="••••••••" style="padding:10px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;font-weight:400;outline:none">
+          <span style="font-size:12px;font-weight:400;color:{{ pwColor }}">{{ pwHint }}</span>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#44403C">Tenant (ร้าน)
+          <select value="{{ form.tenant }}" onChange="{{ setTenant }}" style="padding:10px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;font-weight:400;background:#fff">
+            <option value="Default tenant">Default tenant</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#44403C">Email (ไม่บังคับ)
+          <input value="{{ form.email }}" onChange="{{ setEmail }}" placeholder="ops@example.com" style="padding:10px 12px;border:1px solid #E7E5E4;border-radius:8px;font-size:14px;font-weight:400;outline:none">
+        </label>
+        <sc-if value="{{ formErr }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:13px;color:#B91C1C;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 12px">{{ formErr }}</div>
+        </sc-if>
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid #E7E5E4;display:flex;justify-content:flex-end;gap:8px">
+        <button onClick="{{ closeDrawer }}" style="padding:10px 16px;border:1px solid #E7E5E4;border-radius:8px;background:#fff;font-size:14px;cursor:pointer">ยกเลิก</button>
+        <button onClick="{{ createOwner }}" style="padding:10px 18px;border:0;border-radius:8px;background:#DC2626;color:#fff;font-weight:600;font-size:14px;cursor:pointer" style-hover="background:#B91C1C">สร้าง owner</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:30;background:#1C1917;color:#fff;font-size:13.5px;padding:10px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15)">{{ toast }}</div>
+</sc-if>
+<div style="position:fixed;right:16px;bottom:16px;z-index:25;display:flex;align-items:center;gap:4px;padding:4px 4px 4px 12px;background:#1C1917;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.18)">
+  <span style="font-size:12px;color:#A8A29E;margin-right:4px">Demo · login เป็น</span>
+  <sc-for list="{{ roleOpts }}" as="r" hint-placeholder-count="3">
+    <button onClick="{{ r.go }}" style="border:0;cursor:pointer;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;background:{{ r.bg }};color:{{ r.color }}">{{ r.label }}</button>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;super&quot;,&quot;the-receipt-club&quot;,&quot;snap-on-receipt&quot;],&quot;default&quot;:&quot;super&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const BASE = 'https://shoot-receipt-boot.onrender.com';
+const BOOTHS = [
+  { name: 'Snap on Receipt', id: 'snap-on-receipt', status: 'Active', payment: 'Static QR' },
+  { name: 'The Receipt Club', id: 'the-receipt-club', status: 'Active', payment: 'Free' }
+];
+const FEATURES = [
+  { key: 'name', label: 'กรอกชื่อ', desc: 'หน้า Enter your name หลังชำระเงิน' },
+  { key: 'frame', label: 'เลือก Frame', desc: 'หน้า Frame หลังเลือก Layout' },
+  { key: 'hideBack', label: 'ซ่อน Back หลังชำระ (หน้าชื่อ)', desc: 'ไม่ให้ย้อนกลับไป Payment หลังชำระสำเร็จ' },
+  { key: 'qrDownload', label: 'QR ดาวน์โหลดรูป', desc: 'หน้า QR Download หลังพิมพ์' },
+  { key: 'qrPrint', label: 'QR บนใบพิมพ์', desc: 'พิมพ์ QR ลงบน receipt' },
+  { key: 'discount', label: 'ช่องส่วนลด', desc: 'ฟิลด์ discount (ถ้ามีในตู้)' }
+];
+const INIT = { name: true, frame: false, hideBack: true, qrDownload: true, qrPrint: true, discount: false };
+const NAV = [['dashboard', 'Dashboard'], ['booths', 'Booths'], ['payment', 'Payment'], ['owners', 'Owners']];
+const TABS = [['overview', 'ภาพรวม'], ['flow', 'Flow & Features'], ['device', 'Device'], ['config', 'Config']];
+const ROLES = [['super', 'Super admin'], ['the-receipt-club', 'The Receipt Club'], ['snap-on-receipt', 'Snap on Receipt']];
+const RANGES = [['today', 'Today', 12, 0.4], ['7d', '7 Days', 68, 7], ['month', 'Monthly', 264, 30], ['custom', 'Custom', 41, 3], ['all', 'All time', 930, 180]];
+const LAYOUTS = ['Strip 4 ช่อง', 'Grid 2×2', 'Classic 3 ช่อง', 'Polaroid 1 ช่อง'];
+const MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const MODES = ['Static QR + Bank notification (แนะนำ)', 'Static QR (พนักงานยืนยันยอดเอง)'];
+const PAY_INIT = {
+  'snap-on-receipt': { enabled: true, tier: '3', prices: [49, 90, 130], single: 49, mode: MODES[0], qrUrl: null, qrAt: '12 ก.ย. 2569 10:02' },
+  'the-receipt-club': { enabled: false, tier: '3', prices: [49, 90, 130], single: 49, mode: MODES[0], qrUrl: null, qrAt: '18 ก.ย. 2569 15:33' }
+};
+const pad = n => String(n).padStart(2, '0');
+const baht = n => '฿' + n.toLocaleString('en-US');
+function rng(seed) { let s = seed % 2147483647 || 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function hash(str) { let h = 7; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % 2147483647; return h; }
+function makeSessions(boothId, rangeKey) {
+  const [, , n, days] = RANGES.find(r => r[0] === rangeKey);
+  const booth = BOOTHS.find(b => b.id === boothId);
+  const r = rng(hash(boothId + rangeKey));
+  const now = new Date(2026, 9, 2, 12, 20).getTime();
+  const count = Math.round(n * (boothId === 'snap-on-receipt' ? 1 : 0.7));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const ts = now - r() * days * 86400000;
+    const copies = 1 + Math.floor(r() * 3);
+    const free = booth.payment === 'Free';
+    const p = r();
+    out.push({ ts, boothId, sid: 'S-' + Math.floor(r() * 1e6).toString(36).toUpperCase().padStart(4, '0'),
+      layout: LAYOUTS[Math.floor(r() * 4)], frame: free ? '—' : ['—', 'Bloomi', 'Minimal'][Math.floor(r() * 3)],
+      copies, price: free ? 0 : [49, 90, 130][copies - 1], pay: free ? 'Free' : 'PromptPay',
+      status: p < 0.04 ? 'ล้มเหลว' : p < 0.08 ? 'รอพิมพ์' : 'พิมพ์แล้ว' });
+  }
+  return out;
+}
+const STATUS_STYLE = { 'พิมพ์แล้ว': ['#F0FDF4', '#15803D'], 'รอพิมพ์': ['#FEF3C7', '#92400E'], 'ล้มเหลว': ['#FEF2F2', '#B91C1C'] };
+
+class Component extends DCLogic {
+  state = {
+    page: 'booths', boothId: 'the-receipt-club', tab: 'overview', q: '',
+    features: { ...INIT }, saved: { ...INIT },
+    pairing: null, tokenStatus: 'None', tokenAt: '—', confirmClear: false,
+    drawer: false, form: { username: '', password: '', tenant: 'Default tenant', email: '' }, formErr: '',
+    owners: [
+      { username: 'snap-on-receipt', tenant: 'Default tenant', email: '—', created: '30 ก.ย. 2569 20:20' },
+      { username: 'the-receipt-club', tenant: 'Default tenant', email: '—', created: '30 ก.ย. 2569 20:20' }
+    ],
+    toast: '',
+    role: this.props.role ?? 'super', dashBooth: 'all', range: 'today', dq: '', dpage: 1,
+    payBoothId: 'the-receipt-club',
+    pay: JSON.parse(JSON.stringify(PAY_INIT)), paySaved: JSON.parse(JSON.stringify(PAY_INIT))
+  };
+  componentDidMount() { if (this.state.role !== 'super') this.setState({ page: 'dashboard' }); }
+  sessionsFor(boothId, range) {
+    this._c = this._c || {};
+    const k = boothId + range;
+    if (!this._c[k]) this._c[k] = (boothId === 'all' ? BOOTHS.flatMap(b => makeSessions(b.id, range)) : makeSessions(boothId, range)).sort((a, b) => b.ts - a.ts);
+    return this._c[k];
+  }
+  setPay(patch) { this.setState(st => { const id = st.role === 'super' ? st.payBoothId : st.role; return { pay: { ...st.pay, [id]: { ...st.pay[id], ...patch } } }; }); }
+  flash(msg) { this.setState({ toast: msg }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: '' }), 1800); }
+  copy(t) { try { navigator.clipboard.writeText(t).catch(() => {}); } catch (e) {} this.flash('คัดลอกแล้ว'); }
+  setForm(k, v) { this.setState(s => ({ form: { ...s.form, [k]: v }, formErr: '' })); }
+  renderVals() {
+    const s = this.state;
+    const isSuper = s.role === 'super';
+    const page = isSuper ? s.page : (s.page === 'payment' ? 'payment' : 'dashboard');
+    const ctxBooth = BOOTHS.find(b => b.id === s.role) || BOOTHS[1];
+    const nav = isSuper ? NAV : NAV.filter(n => n[0] === 'dashboard' || n[0] === 'payment');
+    // dashboard
+    const dBooth = isSuper ? s.dashBooth : s.role;
+    const dq = s.dq.trim().toLowerCase();
+    const all = this.sessionsFor(dBooth, s.range).filter(x => !dq || x.layout.toLowerCase().includes(dq) || x.sid.toLowerCase().includes(dq));
+    const isToday = s.range === 'today';
+    const revenue = all.reduce((a, x) => a + x.price, 0);
+    const prints = all.filter(x => x.status === 'พิมพ์แล้ว').reduce((a, x) => a + x.copies, 0);
+    const PER = 10, totalPages = Math.max(1, Math.ceil(all.length / PER)), cur = Math.min(s.dpage, totalPages);
+    const start = Math.max(1, Math.min(cur - 2, totalPages - 4));
+    const pageNums = []; for (let i = start; i <= Math.min(totalPages, start + 4); i++) pageNums.push(i);
+    const dName = dBooth === 'all' ? 'ทุกตู้' : BOOTHS.find(b => b.id === dBooth).name;
+    // payment
+    const pid = isSuper ? s.payBoothId : s.role;
+    const cfg = s.pay[pid];
+    const payDirty = JSON.stringify(cfg) !== JSON.stringify(s.paySaved[pid]);
+    const priceList = cfg.tier === '3' ? cfg.prices : [cfg.single];
+    const priceBad = cfg.enabled && priceList.some(v => !(v >= 1));
+    const booth = BOOTHS.find(b => b.id === s.boothId) || BOOTHS[1];
+    const q = s.q.trim().toLowerCase();
+    const filtered = BOOTHS.filter(b => !q || b.name.toLowerCase().includes(q) || b.id.includes(q));
+    const navActive = page === 'detail' ? 'booths' : page;
+    const f = s.features;
+    const dirty = FEATURES.some(x => f[x.key] !== s.saved[x.key]);
+    const steps = ['Home / START'];
+    if (booth.payment !== 'Free') steps.push('Payment');
+    if (f.name) steps.push('Enter name');
+    steps.push('Layout');
+    if (f.frame) steps.push('Frame');
+    steps.push('Camera', 'Preview / Print');
+    if (f.qrDownload) steps.push('QR Download');
+    const isKiki = booth.id === 'the-receipt-club';
+    const pw = s.form.password;
+    return {
+      isSuper, isOwnerRole: !isSuper, ctxBooth,
+      userName: isSuper ? 'superadmin' : ctxBooth.id, userRole: isSuper ? 'Super admin' : 'Booth owner',
+      userInitial: isSuper ? 'SA' : ctxBooth.name[0],
+      roleOpts: ROLES.map(([k, l]) => ({ label: l, bg: s.role === k ? '#DC2626' : 'transparent', color: s.role === k ? '#fff' : '#D6D3D1',
+        go: () => this.setState({ role: k, page: k === 'super' ? 'booths' : 'dashboard', dpage: 1, drawer: false }) })),
+      isDashboard: page === 'dashboard', isPayment: page === 'payment',
+      ranges: RANGES.map(([k, l]) => ({ label: l, weight: s.range === k ? 600 : 500, bg: s.range === k ? '#DC2626' : 'transparent', color: s.range === k ? '#fff' : '#57534E', go: () => this.setState({ range: k, dpage: 1 }) })),
+      isCustom: s.range === 'custom',
+      dashBooth: s.dashBooth, setDashBooth: e => this.setState({ dashBooth: e.target.value, dpage: 1 }),
+      dashBoothOpts: [{ id: 'all', name: 'ทุกตู้' }, ...BOOTHS].map(o => ({ ...o, sel: o.id === s.dashBooth })),
+      dashBoothName: dName, rangeLabel: RANGES.find(r => r[0] === s.range)[1],
+      kRevenue: baht(revenue),
+      kpis: [
+        { label: 'Total Sessions', value: all.length.toLocaleString('en-US'), sub: 'จำนวนครั้งที่ถ่าย' },
+        { label: 'Total Prints', value: prints.toLocaleString('en-US'), sub: 'จำนวนใบที่พิมพ์' }
+      ],
+      dq: s.dq, setDq: e => this.setState({ dq: e.target.value, dpage: 1 }),
+      pageRows: all.slice((cur - 1) * PER, cur * PER).map(x => {
+        const d = new Date(x.ts); const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const [sBg, sFg] = STATUS_STYLE[x.status];
+        return { ...x, time: isToday ? t : `${d.getDate()} ${MONTHS[d.getMonth()]} ${t}`, priceLabel: x.price ? baht(x.price) : '—', sBg, sFg,
+          frame: x.frame, layout: dBooth === 'all' ? x.layout + ' · ' + BOOTHS.find(b => b.id === x.boothId).name : x.layout };
+      }),
+      noRows: all.length === 0, totalRows: all.length.toLocaleString('en-US'),
+      showFrom: all.length ? (cur - 1) * PER + 1 : 0, showTo: Math.min(cur * PER, all.length),
+      pages: pageNums.map(n => ({ n, bg: n === cur ? '#DC2626' : '#fff', color: n === cur ? '#fff' : '#44403C', border: n === cur ? '#DC2626' : '#E7E5E4', go: () => this.setState({ dpage: n }) })),
+      prevPage: () => this.setState({ dpage: Math.max(1, cur - 1) }),
+      nextPage: () => this.setState({ dpage: Math.min(totalPages, cur + 1) }),
+      exportCsv: () => {
+        const rows = [['time', 'session', 'booth', 'layout', 'frame', 'copies', 'price', 'payment', 'status'], ...all.map(x => [new Date(x.ts).toISOString(), x.sid, x.boothId, x.layout, x.frame, x.copies, x.price, x.pay, x.status])];
+        const blob = new Blob(['\ufeff' + rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `sessions-${dBooth}-${s.range}.csv`; a.click();
+        this.flash('ดาวน์โหลด CSV แล้ว');
+      },
+      payBoothId: pid, setPayBooth: e => this.setState({ payBoothId: e.target.value }), boothOpts: BOOTHS.map(o => ({ ...o, sel: o.id === pid })),
+      qrBg: cfg.qrUrl ? `url(${cfg.qrUrl})` : 'none',
+      payCfg: cfg,
+      tierValue: !cfg.enabled ? 'Free' : cfg.tier === '3' ? cfg.prices.join(' / ') + ' ฿' : cfg.single + ' ฿',
+      tierSub: !cfg.enabled ? 'ไม่เรียกเก็บเงิน' : cfg.tier === '3' ? '3 แพ็ก (Copies 1 / 2 / 3)' : 'ราคาเดียว',
+      tierColor: cfg.enabled ? '#1C1917' : '#DC2626',
+      modeValue: cfg.enabled ? 'Static QR' : 'Free', modeSub: cfg.enabled ? cfg.mode : 'ข้ามหน้า payment',
+      toggleBill: () => this.setPay({ enabled: !cfg.enabled }),
+      billDesc: cfg.enabled ? 'ลูกค้าต้องชำระก่อนถ่ายรูป' : 'ไม่มีการคิดเงิน — ข้ามหน้า Package/Payment',
+      billTrack: cfg.enabled ? '#DC2626' : '#D6D3D1', billKnob: cfg.enabled ? 'translateX(20px)' : 'translateX(0)',
+      billOff: !cfg.enabled, lockOpacity: cfg.enabled ? 1 : 0.5, lockPE: cfg.enabled ? 'auto' : 'none',
+      tierOpts: [['3', '3 แพ็ก', 'Copies 1 / 2 / 3'], ['1', 'ราคาเดียว', 'แสดงแพ็กเดียวบน booth']].map(([k, title, sub]) => ({ title, sub,
+        border: cfg.tier === k ? '#DC2626' : '#E7E5E4', bg: cfg.tier === k ? '#FEF2F2' : '#fff', go: () => this.setPay({ tier: k }) })),
+      priceRows: cfg.tier === '3'
+        ? cfg.prices.map((v, i) => ({ label: 'Copies ' + (i + 1), value: v, border: v >= 1 ? '#E7E5E4' : '#DC2626',
+            set: e => { const p = [...cfg.prices]; p[i] = e.target.value === '' ? '' : Number(e.target.value); this.setPay({ prices: p }); } }))
+        : [{ label: 'ราคาต่อครั้ง', value: cfg.single, border: cfg.single >= 1 ? '#E7E5E4' : '#DC2626', set: e => this.setPay({ single: e.target.value === '' ? '' : Number(e.target.value) }) }],
+      priceHintColor: priceBad ? '#B91C1C' : '#78716C',
+      modeOpts: MODES, setMode: e => this.setPay({ mode: e.target.value }),
+      hasQrImg: !!cfg.qrUrl, noQrImg: !cfg.qrUrl,
+      qrPlaceholder: cfg.qrAt ? 'QR PromptPay\n(อัปโหลดแล้ว)' : 'ยังไม่มี QR',
+      qrMeta: cfg.qrAt ? `อัปโหลดแล้ว — ${cfg.qrAt} · booth: ${pid}` : 'ยังไม่ได้อัปโหลด',
+      onQrFile: e => { const f = e.target.files && e.target.files[0]; if (!f) return; const d = new Date();
+        this.setPay({ qrUrl: URL.createObjectURL(f), qrAt: `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear() + 543} ${pad(d.getHours())}:${pad(d.getMinutes())} (ยังไม่บันทึก)` }); },
+      copyWebhook: () => this.copy('https://shoot-receipt-boot.onrender.com/api/webhook/bank-notify'),
+      hookDot: cfg.enabled ? '#16A34A' : '#A8A29E', hookTitle: cfg.enabled ? 'Payment enabled' : 'Payment disabled',
+      hookSub: cfg.enabled ? 'รอ bank notification จากธนาคาร' : 'Booth ข้ามหน้าชำระเงิน',
+      payClean: !payDirty, payBlocked: !payDirty || priceBad,
+      payMsg: priceBad ? 'ราคาต้องไม่ต่ำกว่า 1 บาท' : payDirty ? 'มีการเปลี่ยนแปลงที่ยังไม่บันทึก' : 'บันทึกล่าสุดแล้ว',
+      payBarBg: payDirty ? '#FEF2F2' : '#FFFFFF', payBarBorder: payDirty ? '#FECACA' : '#E7E5E4', payBarFg: payDirty || priceBad ? '#B91C1C' : '#78716C',
+      paySaveBg: payDirty && !priceBad ? '#DC2626' : '#E7E5E4',
+      resetPay: () => this.setState(st => ({ pay: { ...st.pay, [pid]: { ...st.paySaved[pid] } } })),
+      savePay: () => { this.setState(st => ({ paySaved: { ...st.paySaved, [pid]: { ...st.pay[pid], qrAt: (st.pay[pid].qrAt || '').replace(' (ยังไม่บันทึก)', '') } }, pay: { ...st.pay, [pid]: { ...st.pay[pid], qrAt: (st.pay[pid].qrAt || '').replace(' (ยังไม่บันทึก)', '') } } })); this.flash('บันทึกแล้ว — booth จะ sync ภายใน ~15 วินาที'); },
+      navItems: nav.map(([k, l]) => {
+        const a = k === navActive;
+        return { label: l, bg: a ? '#FEF2F2' : 'transparent', color: a ? '#DC2626' : '#44403C', weight: a ? 600 : 400, dot: a ? '#DC2626' : '#D6D3D1', go: () => this.setState({ page: k }) };
+      }),
+      crumb: page === 'detail' ? 'Booths / ' + booth.name : (NAV.find(n => n[0] === page) || [])[1],
+      title: page === 'booths' ? 'Booth Overview' : page === 'detail' ? 'Booth Detail' : page === 'owners' ? 'Owner Accounts' : page === 'dashboard' ? (isSuper ? 'Control Tower' : 'Dashboard') : 'Payment Settings',
+      isBooths: page === 'booths', isDetail: page === 'detail', isOwners: page === 'owners',
+      q: s.q, setQ: e => this.setState({ q: e.target.value }),
+      boothCount: BOOTHS.length, noBooths: filtered.length === 0,
+      boothRows: filtered.map(b => ({ ...b, open: () => this.setState({ page: 'detail', boothId: b.id, tab: 'overview', confirmClear: false }) })),
+      goBooths: () => this.setState({ page: 'booths' }),
+      booth, copyId: () => this.copy(booth.id),
+      tabs: TABS.map(([k, l]) => {
+        const a = s.tab === k;
+        return { label: l, weight: a ? 600 : 500, color: a ? '#DC2626' : '#78716C', line: a ? '#DC2626' : 'transparent', go: () => this.setState({ tab: k }) };
+      }),
+      tabOverview: s.tab === 'overview', tabFlow: s.tab === 'flow', tabDevice: s.tab === 'device', tabConfig: s.tab === 'config',
+      links: [
+        ['หน้าบูธ (Frontend)', `${BASE}/?booth=${booth.id}`],
+        ['Backoffice ตู้นี้', `${BASE}/admin/${booth.id}`],
+        ['API Booth settings', `${BASE}/api/booth/settings?booth_id=${booth.id}`],
+        ['API Admin payment', `${BASE}/api/admin/payment?booth_id=${booth.id}`]
+      ].map(([label, url]) => ({ label, url, copy: () => this.copy(url) })),
+      apk: [
+        { k: 'APK version', v: 'โหลดไม่ได้ — ไม่พบข้อมูลเวอร์ชัน' },
+        { k: 'APK booth_id (build)', v: '—' },
+        { k: 'Application ID', v: '—' },
+        { k: 'ที่มาข้อมูล', v: 'unavailable' },
+        { k: 'Gradle config', v: 'android/app/build.gradle.kts' }
+      ],
+      flow: steps.map((label, i) => {
+        const last = i === steps.length - 1;
+        return { label, n: i + 1, bg: last ? '#DC2626' : '#FEF2F2', fg: last ? '#fff' : '#DC2626', line: last ? 'transparent' : '#FECACA' };
+      }),
+      featureRows: FEATURES.map(x => {
+        const on = f[x.key];
+        return { ...x, stateLabel: on ? 'เปิด' : 'ปิด', track: on ? '#DC2626' : '#D6D3D1', knob: on ? 'translateX(18px)' : 'translateX(0)',
+          toggle: () => this.setState(st => ({ features: { ...st.features, [x.key]: !st.features[x.key] } })) };
+      }),
+      notDirty: !dirty,
+      saveMsg: dirty ? 'มีการเปลี่ยนแปลงที่ยังไม่บันทึก' : 'บันทึกล่าสุดแล้ว',
+      saveBarBg: dirty ? '#FEF2F2' : '#FAFAF9', saveBarFg: dirty ? '#B91C1C' : '#78716C',
+      saveBtnBg: dirty ? '#DC2626' : '#E7E5E4',
+      resetFeatures: () => this.setState(st => ({ features: { ...st.saved } })),
+      saveFeatures: () => { this.setState(st => ({ saved: { ...st.features } })); this.flash('บันทึก features แล้ว'); },
+      tokenStatus: s.tokenStatus, tokenAt: s.tokenAt,
+      hasPairing: !!s.pairing, noPairing: !s.pairing, pairing: s.pairing,
+      genPairing: () => this.setState({ pairing: String(Math.floor(100000 + Math.random() * 900000)) }),
+      revoke: () => { this.setState({ pairing: null, tokenStatus: 'None', tokenAt: '—' }); this.flash('เพิกถอน token แล้ว'); },
+      hasNote: isKiki,
+      config: [
+        { k: 'Layout set', v: isKiki ? 'KiKi — artwork/layout สำหรับ event (The Receipt Club)' : 'Default' },
+        { k: 'Theme', v: isKiki ? 'KiKi (event theme) — ตู้เดียวกับ The Receipt Club' : 'Default' },
+        { k: 'Payment mode', v: booth.payment },
+        { k: 'Supabase bucket', v: booth.id },
+        { k: 'Home image', v: `img/booths/${booth.id}/index-bloomi.png` },
+        { k: 'Home logo', v: `img/booths/${booth.id}/logo-bloomi.png` }
+      ],
+      confirmClear: s.confirmClear, notConfirming: !s.confirmClear,
+      askClear: () => this.setState({ confirmClear: true }),
+      cancelClear: () => this.setState({ confirmClear: false }),
+      doClear: () => { this.setState({ confirmClear: false }); this.flash('ล้างประวัติ Dashboard แล้ว'); },
+      ownerCount: s.owners.length,
+      ownerRows: s.owners.map((o, i) => ({ ...o,
+        reset: () => this.flash('ส่งลิงก์เปลี่ยนรหัสให้ ' + o.username),
+        remove: () => { this.setState(st => ({ owners: st.owners.filter((_, j) => j !== i) })); this.flash('ลบ ' + o.username + ' แล้ว'); } })),
+      drawer: s.drawer,
+      openDrawer: () => this.setState({ drawer: true, formErr: '' }),
+      closeDrawer: () => this.setState({ drawer: false }),
+      form: s.form, formErr: s.formErr,
+      setUsername: e => this.setForm('username', e.target.value),
+      setPassword: e => this.setForm('password', e.target.value),
+      setTenant: e => this.setForm('tenant', e.target.value),
+      setEmail: e => this.setForm('email', e.target.value),
+      pwHint: pw.length === 0 ? 'อย่างน้อย 8 ตัวอักษร' : pw.length < 8 ? `อีก ${8 - pw.length} ตัวอักษร` : 'ใช้ได้',
+      pwColor: pw.length === 0 ? '#78716C' : pw.length < 8 ? '#B91C1C' : '#15803D',
+      createOwner: () => {
+        const fm = this.state.form;
+        if (!fm.username.trim()) return this.setState({ formErr: 'กรุณากรอก Username' });
+        if (fm.password.length < 8) return this.setState({ formErr: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' });
+        const d = new Date();
+        const created = `${d.getDate()} ต.ค. ${d.getFullYear() + 543} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        this.setState(st => ({ owners: [...st.owners, { username: fm.username.trim(), tenant: fm.tenant, email: fm.email || '—', created }],
+          drawer: false, form: { username: '', password: '', tenant: 'Default tenant', email: '' } }));
+        this.flash('สร้าง owner แล้ว');
+      },
+      toast: s.toast
+    };
+  }
+}
+</script>
+</body>
+</html>

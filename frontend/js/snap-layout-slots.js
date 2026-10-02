@@ -66,7 +66,21 @@ function normalizeUniformSnapSlots(slots) {
   }
 
   const lefts = normalized.map((slot) => slot.left);
+  const tops = normalized.map((slot) => slot.top);
   const leftSpread = Math.max(...lefts) - Math.min(...lefts);
+  const topSpread = Math.max(...tops) - Math.min(...tops);
+
+  // Vertically stacked slots — share left/width only (keep each top + height)
+  if (topSpread > 3 && leftSpread <= 5) {
+    const left = Math.min(...lefts);
+    const width = Math.max(...normalized.map((slot) => slot.left + slot.width)) - left;
+    return normalized.map((slot) => ({
+      ...slot,
+      left,
+      width,
+    }));
+  }
+
   // Grid / side-by-side cells — keep each slot's own box
   if (leftSpread > 5) {
     const height = Math.max(...normalized.map((slot) => slot.height));
@@ -113,7 +127,9 @@ const SNAP_LAYOUT_DEFAULT_SLOTS = {
 /** Per-frame artwork overrides — keyed by layout folder + filename. */
 const SNAP_FRAME_FILE_SLOTS = {
   "layout1/layout1-5.jpg": [SNAP_LAYOUT1_5_SLOT],
-  "layout1/layout1-1.jpg": [snapSlot(11.89, 9.91, 75.99, 41.59, 0, { expandPct: 0 })],
+  "layout1/layout1-1.jpg": [
+    snapSlot(11.89, 10.09, 75.99, 42.15, 0, { expandPct: 0.45, noBleed: false }),
+  ],
   /** Bleed + expand — ทับเส้นกรอบม่วง/ฟ้าด้านบนช่องรูป (layout1-2 มี lip บางๆ เหนือ fill) */
   "layout1/layout1-2.jpg": [
     snapSlot(10.11, 14.42, 79.78, 58.55, 0, { expandPct: 1.2, noBleed: false }),
@@ -121,9 +137,10 @@ const SNAP_FRAME_FILE_SLOTS = {
   "layout1/layout1-3.jpg": [snapSlot(10.35, 33.63, 79.07, 38.54, 0, { expandPct: 0.5 })],
   "layout1/layout1-4.jpg": [snapSlot(12.09, 31.22, 75.82, 56.84, 0, { expandPct: 0 })],
 
+  /** เต็มกรอบฟ้า/ชมพูใน artwork + expand ทับเส้นขอบสี */
   "layout2/layout2-1.jpg": [
-    snapSlot(11.89, 7.9, 75.99, 23.88, 0, { expandPct: 0 }),
-    snapSlot(12.11, 32.4, 75.77, 23.44, 0, { expandPct: 0 }),
+    snapSlot(11.89, 7.29, 75.99, 23.79, 0, { expandPct: 0.95, noBleed: false }),
+    snapSlot(11.89, 31.69, 75.99, 23.53, 0, { expandPct: 0.95, noBleed: false }),
   ],
   "layout2/layout2-2.jpg": [
     snapSlot(9.89, 11.24, 79.78, 33.2, 0, { expandPct: 0.5 }),
