@@ -150,10 +150,13 @@ function hideDevicePairGate() {
 
 function getSettingsProbeUrl() {
   const params = new URLSearchParams({ t: String(Date.now()) });
-  const boothId =
-    typeof getBoothId === "function" ? String(getBoothId() || "").trim() : "";
-  if (boothId && !isPlaceholderPairBoothId(boothId)) {
-    params.set("booth_id", boothId);
+  const token = readDeviceTokenFromBridgeLocal();
+  if (!token) {
+    const boothId =
+      typeof getBoothId === "function" ? String(getBoothId() || "").trim() : "";
+    if (boothId && !isPlaceholderPairBoothId(boothId)) {
+      params.set("booth_id", boothId);
+    }
   }
   return `${API_URL}/api/booth/settings?${params.toString()}`;
 }
@@ -245,6 +248,9 @@ async function bootstrapDevicePairing() {
     if (typeof initBoothProfile === "function") {
       initBoothProfile();
     }
+    if (typeof fetchBoothSettings === "function") {
+      void fetchBoothSettings({ retries: 4 });
+    }
     markPairingReady();
   } catch (error) {
     console.warn("[device-pair] token validation failed — allow offline", error);
@@ -288,7 +294,7 @@ function initDevicePairGateUi() {
         initBoothProfile();
       }
       if (typeof fetchBoothSettings === "function") {
-        void fetchBoothSettings();
+        void fetchBoothSettings({ retries: 4 });
       }
     } catch (err) {
       if (error) {

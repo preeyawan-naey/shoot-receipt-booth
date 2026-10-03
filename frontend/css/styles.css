@@ -2524,6 +2524,12 @@ body.device-pair-locked .viewport {
   display: block;
 }
 
+.home-start--settings-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: wait;
+}
+
 .device-pair-gate__logo--brand {
   width: min(92%, 340px);
   margin-bottom: 16px;

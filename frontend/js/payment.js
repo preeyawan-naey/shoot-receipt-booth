@@ -524,6 +524,23 @@ async function loadPaymentQrImage(qrImage, qrUrl) {
   }
 }
 
+function refreshPaymentAmountFromSettings() {
+  if (typeof getCurrentPage !== "function" || getCurrentPage() !== "payment") {
+    return;
+  }
+  const tiers =
+    typeof getPaymentTiersFromSettings === "function" ? getPaymentTiersFromSettings() : [];
+  const tier =
+    selectedPaymentTier ||
+    (tiers.length === 1 ? tiers[0] : null) ||
+    resolvePaymentTierFromSelection({});
+  const amount = tier?.amount ?? boothSettingsState?.payment_amount;
+  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+    return;
+  }
+  renderPaymentPage(amount);
+}
+
 function renderPaymentPage(sessionAmount, session = activePaymentSession) {
   const amount = sessionAmount ?? session?.amount ?? boothSettingsState?.payment_amount ?? 49;
   const amountEl = document.getElementById("payment-amount-text");
@@ -960,7 +977,15 @@ async function selectPaymentTierAndPay(tier) {
   const clickedPrints = Math.max(1, Math.round(Number(tier?.prints) || 1));
   const clickedAmount = Math.max(1, Math.round(Number(tier?.amount) || 0));
 
-  await fetchBoothSettings();
+  if (typeof ensureBoothSettingsLoaded === "function") {
+    const settingsOk = await ensureBoothSettingsLoaded();
+    if (!settingsOk) {
+      window.alert("โหลดการตั้งค่าตู้ไม่สำเร็จ — ตรวจสอบ Wi‑Fi แล้วลองใหม่");
+      return;
+    }
+  } else {
+    await fetchBoothSettings();
+  }
   if (!isBoothPaymentRequired()) {
     if (typeof goToPostPaymentOrNameStep === "function") {
       goToPostPaymentOrNameStep();
@@ -987,7 +1012,15 @@ function goToPayment(amount = selectedPaymentTier?.amount, prints = selectedPaym
     const requestedAmount = Math.round(Number(amount));
     const requestedPrints = Math.max(1, Math.round(Number(prints) || 0));
 
-    await fetchBoothSettings();
+    if (typeof ensureBoothSettingsLoaded === "function") {
+      const settingsOk = await ensureBoothSettingsLoaded();
+      if (!settingsOk) {
+        window.alert("โหลดการตั้งค่าตู้ไม่สำเร็จ — ตรวจสอบ Wi‑Fi แล้วลองใหม่");
+        return;
+      }
+    } else {
+      await fetchBoothSettings();
+    }
     if (!isBoothPaymentRequired()) {
       if (typeof goToPostPaymentOrNameStep === "function") {
         goToPostPaymentOrNameStep();
@@ -1063,3 +1096,4 @@ window.clearSelectedPaymentTier = clearSelectedPaymentTier;
 window.getSelectedPaymentTier = () => selectedPaymentTier;
 window.getActivePaymentSessionAmount = getActivePaymentSessionAmount;
 window.refreshStaticPaymentQrImage = refreshStaticPaymentQrImage;
+window.refreshPaymentAmountFromSettings = refreshPaymentAmountFromSettings;

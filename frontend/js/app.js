@@ -89,12 +89,12 @@ function handleNativePrintResumeOnInit() {
   }
 }
 
-function initAppCore() {
+async function initAppCore() {
   initNavigation();
   handleNativePrintResumeOnInit();
   initLayoutGrid();
   bindEvents();
-  void initBoothSettings();
+  await initBoothSettings();
   if (typeof isReceiptClubApp === "function" && isReceiptClubApp()) {
     const bridge = typeof getReceiptClubBridge === "function" ? getReceiptClubBridge() : null;
     console.info(
@@ -109,10 +109,12 @@ function initAppCore() {
 
 function initApp() {
   if (typeof whenDevicePairingReady === "function") {
-    whenDevicePairingReady(initAppCore);
+    whenDevicePairingReady(() => {
+      void initAppCore();
+    });
     return;
   }
-  initAppCore();
+  void initAppCore();
 }
 
 function initLayoutGrid() {
