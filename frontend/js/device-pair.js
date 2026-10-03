@@ -1,9 +1,8 @@
 /**
- * Device pairing gate — Snap on Receipt booth APK only.
+ * Device pairing gate — The Receipt Club booth APK.
  * Full-screen until EncryptedSharedPreferences has a valid device token.
+ * Pairing code from admin determines which booth profile the tablet runs.
  */
-
-const DEVICE_PAIR_BOOTH_ID = "snap-on-receipt";
 
 function isReceiptClubNativeApp() {
   try {
@@ -14,28 +13,40 @@ function isReceiptClubNativeApp() {
   }
 }
 
-function requiresDevicePairingGate() {
-  if (!isReceiptClubNativeApp()) {
-    return false;
+function isPlaceholderPairBoothId(value) {
+  if (typeof isPlaceholderBoothId === "function") {
+    return isPlaceholderBoothId(value);
   }
-  const boothId =
-    typeof getBoothId === "function"
-      ? getBoothId()
-      : window.__BOOT_BOOTH_ID__ || DEVICE_PAIR_BOOTH_ID;
-  return normalizePairBoothId(boothId) === DEVICE_PAIR_BOOTH_ID;
+  const id = String(value || "")
+    .trim()
+    .toLowerCase();
+  return !id || id === "unpaired";
+}
+
+function requiresDevicePairingGate() {
+  return isReceiptClubNativeApp();
 }
 
 function normalizePairBoothId(value) {
   const id = String(value || "")
     .trim()
     .toLowerCase();
-  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) ? id : DEVICE_PAIR_BOOTH_ID;
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) ? id : "";
 }
 
 function setDeviceTokenOnBridge(token) {
   const bridge = window.ReceiptClubBridge;
   if (bridge && typeof bridge.setDeviceToken === "function") {
     bridge.setDeviceToken(String(token || "").trim());
+    return true;
+  }
+  return false;
+}
+
+function setBoothIdOnBridge(boothId) {
+  const bridge = window.ReceiptClubBridge;
+  if (bridge && typeof bridge.setBoothId === "function") {
+    bridge.setBoothId(String(boothId || "").trim());
     return true;
   }
   return false;
@@ -48,6 +59,13 @@ function clearDeviceTokenOnBridge() {
     return true;
   }
   return false;
+}
+
+function clearPairedBoothIdentity() {
+  clearDeviceTokenOnBridge();
+  if (typeof clearStoredBoothId === "function") {
+    clearStoredBoothId();
+  }
 }
 
 function readDeviceTokenFromBridgeLocal() {
@@ -131,9 +149,25 @@ function hideDevicePairGate() {
 }
 
 function getSettingsProbeUrl() {
-  const boothId = DEVICE_PAIR_BOOTH_ID;
-  const params = new URLSearchParams({ booth_id: boothId, t: String(Date.now()) });
+  const params = new URLSearchParams({ t: String(Date.now()) });
+  const boothId =
+    typeof getBoothId === "function" ? String(getBoothId() || "").trim() : "";
+  if (boothId && !isPlaceholderPairBoothId(boothId)) {
+    params.set("booth_id", boothId);
+  }
   return `${API_URL}/api/booth/settings?${params.toString()}`;
+}
+
+function applyPairedBoothId(boothId) {
+  const normalized = normalizePairBoothId(boothId);
+  if (!normalized || isPlaceholderPairBoothId(normalized)) {
+    return null;
+  }
+  setBoothIdOnBridge(normalized);
+  if (typeof persistBoothId === "function") {
+    persistBoothId(normalized);
+  }
+  return normalized;
 }
 
 async function validateDeviceTokenOnServer(token) {
@@ -142,13 +176,20 @@ async function validateDeviceTokenOnServer(token) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (response.status === 401) {
-    return false;
-  }
-  if (!response.ok) {
-    return true;
+    return { valid: false };
   }
   const data = await response.json().catch(() => ({}));
-  return data.success === true;
+  if (!response.ok) {
+    return { valid: true };
+  }
+  if (data.success !== true) {
+    return { valid: false };
+  }
+  const boothId = data.settings?.booth_id || data.booth_id || null;
+  if (boothId) {
+    applyPairedBoothId(boothId);
+  }
+  return { valid: true, boothId };
 }
 
 async function submitDevicePairCode(codeRaw) {
@@ -170,16 +211,13 @@ async function submitDevicePairCode(codeRaw) {
     throw new Error(data.message || "จับคู่ไม่สำเร็จ");
   }
 
-  if (data.booth_id && normalizePairBoothId(data.booth_id) !== DEVICE_PAIR_BOOTH_ID) {
-    throw new Error("รหัสนี้ไม่ใช่ของตู้ Snap on Receipt");
+  const boothId = applyPairedBoothId(data.booth_id);
+  if (!boothId) {
+    throw new Error("รหัสจับคู่ไม่ระบุตู้ — ลองสร้างรหัสใหม่จาก admin");
   }
 
   if (!setDeviceTokenOnBridge(data.device_token)) {
     throw new Error("แอpp ไม่รองรับการเก็บ token — ใช้ APK booth ล่าสุด");
-  }
-
-  if (typeof persistBoothId === "function") {
-    persistBoothId(DEVICE_PAIR_BOOTH_ID);
   }
 
   return data;
@@ -198,11 +236,14 @@ async function bootstrapDevicePairing() {
   }
 
   try {
-    const valid = await validateDeviceTokenOnServer(token);
-    if (!valid) {
-      clearDeviceTokenOnBridge();
+    const result = await validateDeviceTokenOnServer(token);
+    if (!result.valid) {
+      clearPairedBoothIdentity();
       showDevicePairGate("Token ถูกเพิกถอน — กรอกรหัสจับคู่ใหม่จาก admin");
       return;
+    }
+    if (typeof initBoothProfile === "function") {
+      initBoothProfile();
     }
     markPairingReady();
   } catch (error) {
@@ -215,7 +256,7 @@ function triggerDevicePairingRequired(reason = "") {
   if (!requiresDevicePairingGate()) {
     return;
   }
-  clearDeviceTokenOnBridge();
+  clearPairedBoothIdentity();
   const message =
     reason === "revoked"
       ? "Token ถูกเพิกถอน — กรอกรหัสจับคู่ใหม่จาก admin"
@@ -243,11 +284,11 @@ function initDevicePairGateUi() {
       await submitDevicePairCode(input.value);
       input.value = "";
       markPairingReady();
-      if (typeof fetchBoothSettings === "function") {
-        void fetchBoothSettings();
-      }
       if (typeof initBoothProfile === "function") {
         initBoothProfile();
+      }
+      if (typeof fetchBoothSettings === "function") {
+        void fetchBoothSettings();
       }
     } catch (err) {
       if (error) {
@@ -274,4 +315,5 @@ if (document.readyState === "loading") {
 window.whenDevicePairingReady = whenDevicePairingReady;
 window.triggerDevicePairingRequired = triggerDevicePairingRequired;
 window.clearDeviceTokenOnBridge = clearDeviceTokenOnBridge;
+window.clearPairedBoothIdentity = clearPairedBoothIdentity;
 window.requiresDevicePairingGate = requiresDevicePairingGate;

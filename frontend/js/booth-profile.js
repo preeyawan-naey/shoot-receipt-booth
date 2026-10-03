@@ -4,6 +4,7 @@
 
 const BOOTH_ID_STORAGE_KEY = "SHOOT_BOOTH_ID";
 const DEFAULT_BOOTH_ID = "the-receipt-club";
+const PLACEHOLDER_BOOTH_ID = "unpaired";
 const LEGACY_BOOTH_IDS = {
   kiki: DEFAULT_BOOTH_ID,
 };
@@ -61,14 +62,35 @@ function normalizeBoothId(value) {
   return migrateLegacyBoothId(id);
 }
 
+function isPlaceholderBoothId(value) {
+  const id = String(value || "")
+    .trim()
+    .toLowerCase();
+  return !id || id === PLACEHOLDER_BOOTH_ID;
+}
+
 function persistBoothId(id) {
+  if (isPlaceholderBoothId(id)) {
+    resolvedBoothId = PLACEHOLDER_BOOTH_ID;
+    return PLACEHOLDER_BOOTH_ID;
+  }
   const normalized = normalizeBoothId(id);
   try {
     localStorage.setItem(BOOTH_ID_STORAGE_KEY, normalized);
   } catch {
     /* ignore */
   }
+  resolvedBoothId = normalized;
   return normalized;
+}
+
+function clearStoredBoothId() {
+  try {
+    localStorage.removeItem(BOOTH_ID_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+  resolvedBoothId = isBoothAppShell() ? PLACEHOLDER_BOOTH_ID : DEFAULT_BOOTH_ID;
 }
 
 function readBoothIdFromQuery() {
@@ -138,17 +160,28 @@ function hasExplicitBoothQuery() {
 
 function resolveBoothId() {
   const fromQuery = readBoothIdFromQuery();
-  if (fromQuery) return fromQuery;
-
-  const fromBridge = readBoothIdFromBridge();
-  if (fromBridge) return persistBoothId(fromBridge);
-
-  const fromBoot = readBoothIdFromBoot();
-  if (fromBoot) return persistBoothId(fromBoot);
+  if (fromQuery && !isPlaceholderBoothId(fromQuery)) return fromQuery;
 
   if (isBoothAppShell()) {
     const stored = readStoredBoothId();
-    if (stored) return stored;
+    if (stored && !isPlaceholderBoothId(stored)) return stored;
+
+    const fromBridge = readBoothIdFromBridge();
+    if (fromBridge && !isPlaceholderBoothId(fromBridge)) {
+      return persistBoothId(fromBridge);
+    }
+
+    return PLACEHOLDER_BOOTH_ID;
+  }
+
+  const fromBridge = readBoothIdFromBridge();
+  if (fromBridge && !isPlaceholderBoothId(fromBridge)) {
+    return persistBoothId(fromBridge);
+  }
+
+  const fromBoot = readBoothIdFromBoot();
+  if (fromBoot && !isPlaceholderBoothId(fromBoot)) {
+    return persistBoothId(fromBoot);
   }
 
   // Root URL (browser, ไม่มี ?booth=) → The Receipt Club
@@ -156,11 +189,15 @@ function resolveBoothId() {
     return persistBoothId(DEFAULT_BOOTH_ID);
   }
 
-  return readStoredBoothId() || DEFAULT_BOOTH_ID;
+  const stored = readStoredBoothId();
+  if (stored && !isPlaceholderBoothId(stored)) return stored;
+
+  return DEFAULT_BOOTH_ID;
 }
 
 function getBoothId() {
-  return resolvedBoothId || DEFAULT_BOOTH_ID;
+  if (resolvedBoothId) return resolvedBoothId;
+  return isBoothAppShell() ? PLACEHOLDER_BOOTH_ID : DEFAULT_BOOTH_ID;
 }
 
 function getBoothProfile() {
@@ -250,6 +287,9 @@ function applyBoothThemeToDom(boothId) {
 }
 
 function getBuiltinBoothProfile(boothId) {
+  if (isPlaceholderBoothId(boothId)) {
+    return null;
+  }
   const normalized = normalizeBoothId(boothId);
   return BOOTH_BUILTIN_PROFILES[normalized] || BOOTH_BUILTIN_PROFILES[DEFAULT_BOOTH_ID];
 }
@@ -338,9 +378,15 @@ function applyBootProfileIfPresent() {
 
 function bootstrapBoothProfile(attempt = 0) {
   resolvedBoothId = resolveBoothId();
+  if (isPlaceholderBoothId(resolvedBoothId)) {
+    console.info("[booth] unpaired — device pairing required");
+    return;
+  }
   const builtin = getBuiltinBoothProfile(resolvedBoothId);
   boothProfileState = builtin;
-  applyBoothProfileToDom(builtin);
+  if (builtin) {
+    applyBoothProfileToDom(builtin);
+  }
 
   const bridgeId = readBoothIdFromBridge();
   const queryId = readBoothIdFromQuery();
@@ -382,5 +428,7 @@ window.setBoothProfileState = setBoothProfileState;
 window.applyBoothThemeToDom = applyBoothThemeToDom;
 window.applyBoothProfileToDom = applyBoothProfileToDom;
 window.initBoothProfile = initBoothProfile;
+window.isPlaceholderBoothId = isPlaceholderBoothId;
+window.clearStoredBoothId = clearStoredBoothId;
 
 initBoothProfile();
