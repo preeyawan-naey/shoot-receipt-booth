@@ -31,7 +31,7 @@ const PAYMENT_MODES = ["free", "static_qr", "omise"];
 const DEFAULT_PAYMENT_MODE = "static_qr";
 const PAYMENT_SOURCES = ["macrodroid", "listener"];
 const DEFAULT_PAYMENT_SOURCE = "macrodroid";
-const LISTENER_BOOTH_IDS = ["snap-on-receipt"];
+const LISTENER_BOOTH_IDS = ["snap-on-receipt", "the-receipt-club"];
 
 function resolveBoothId(boothIdRaw) {
   return boothProfiles.normalizeBoothId(boothIdRaw);
@@ -134,6 +134,13 @@ async function getPaymentMode(boothIdRaw) {
   return buffer && buffer.length > 0 ? "static_qr" : "free";
 }
 
+async function setPaymentSource(boothIdRaw, source) {
+  const boothId = resolveBoothId(boothIdRaw);
+  const normalized = normalizePaymentSource(source);
+  await setSettingValue(boothId, PAYMENT_SOURCE_KEY, normalized);
+  return normalized;
+}
+
 async function setPaymentMode(boothIdRaw, mode) {
   const boothId = resolveBoothId(boothIdRaw);
   const normalized = normalizePaymentMode(mode);
@@ -143,6 +150,10 @@ async function setPaymentMode(boothIdRaw, mode) {
     await setOmisePaymentEnabled(boothId, true);
   } else if (normalized === "free" || normalized === "static_qr") {
     await setOmisePaymentEnabled(boothId, false);
+  }
+
+  if (normalized === "static_qr") {
+    await setPaymentSource(boothId, "listener");
   }
 
   return normalized;
@@ -331,6 +342,7 @@ module.exports = {
   getPaymentSource,
   ensureDefaultPaymentSources,
   setPaymentMode,
+  setPaymentSource,
   setPaymentAmount,
   setOmisePaymentEnabled,
   isOmisePaymentEnabled,

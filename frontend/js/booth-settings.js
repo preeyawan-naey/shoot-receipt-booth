@@ -13,7 +13,7 @@ let boothSettingsState = {
   ],
   payment_qr_url: null,
   payment_mode: "static_qr",
-  payment_source: "macrodroid",
+  payment_source: "listener",
   omise_enabled: false,
   payment_required: true,
 };
